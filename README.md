@@ -28,6 +28,9 @@ This feature allows you to inspect all the classes loaded by the process, decomp
 - Enter the pid of the process you want to attach JPI to (confirm with enter)
 - Enter the full path to the dll file "injector.dll" (confirm with enter) `Example: C:\\Users\\whitedev\\Files\\injector.dll`
 
+## Disclaimer
+Remember that modifying memory, dynamically injecting new classes and various modifications in the running java process are quite dangerous and can cause various errors with your application, use this with caution.
+
 ## Project Suppot
 If you need help, join to our community:
 - Discord Server: https://discord.gg/KhExwvqZb5
