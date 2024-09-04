@@ -1,6 +1,15 @@
 #include <windows.h>
 #include <jni.h>
 #include <iostream>
+#include <string>
+
+std::string GetDllDirectory(HMODULE hModule) {
+    char path[MAX_PATH];
+    GetModuleFileName(hModule, path, MAX_PATH);
+    std::string fullPath(path);
+    size_t pos = fullPath.find_last_of("\\/");
+    return (std::string::npos == pos) ? "" : fullPath.substr(0, pos + 1);
+}
 
 void LoadJarToJVM(JNIEnv* env, const char* jarPath, const char* mainClassName) {
     jclass classLoaderClass = env->FindClass("java/net/URLClassLoader");
@@ -77,12 +86,14 @@ extern "C" __declspec(dllexport) void InjectJar(const char* jarPath, const char*
     LoadJarToJVM(env, jarPath, mainClassName);
 }
 
-
-BOOL APIENTRY DllMain(HMODULE hModule, DWORD  ul_reason_for_call, LPVOID lpReserved) {
+BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved) {
     switch (ul_reason_for_call) {
-    case DLL_PROCESS_ATTACH:
-        LoadJarToJVM(GetJNIEnv(), "JPI-1.0.jar", "uk.whitedev.InjectableMain");
+    case DLL_PROCESS_ATTACH: {
+        std::string dllDir = GetDllDirectory(hModule);
+        std::string jarFullPath = dllDir + "JPI-1.0.jar";
+        LoadJarToJVM(GetJNIEnv(), jarFullPath.c_str(), "uk.whitedev.InjectableMain");
         break;
+    }
     case DLL_THREAD_ATTACH:
     case DLL_THREAD_DETACH:
     case DLL_PROCESS_DETACH:
