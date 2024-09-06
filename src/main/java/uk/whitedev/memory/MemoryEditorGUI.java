@@ -21,7 +21,7 @@ public class MemoryEditorGUI {
     private MemoryLocation[] memoryLocations;
 
     public void runMemoryEditGui() {
-        new Thread(() -> new MemoryEditorGUI().createAndShowGUI()).start();
+        new Thread(this::createAndShowGUI).start();
     }
 
     private void createAndShowGUI() {

@@ -7,17 +7,16 @@ import java.awt.*;
 
 public class InjectorGui {
     private final DLLInjector injector = new DLLInjector();
+    private final Color backgroundColor = new Color(50, 50, 50);
+    private final Color textColor = Color.WHITE;
+    private final Color buttonColor = new Color(80, 80, 80);
+    private final Color buttonTextColor = Color.WHITE;
 
     public void runInjectorGui() {
-        new Thread(() -> new InjectorGui().createAndShowGUI()).start();
+        new Thread(this::createAndShowGUI).start();
     }
 
     private void createAndShowGUI(){
-        Color backgroundColor = new Color(50, 50, 50);
-        Color textColor = Color.WHITE;
-        Color buttonColor = new Color(80, 80, 80);
-        Color buttonTextColor = Color.WHITE;
-
         JFrame frame = new JFrame("DLL Injector [Java Process Inspector]");
         JPanel jPanel = new JPanel(new GridLayout(5, 1, 10, 10));
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);

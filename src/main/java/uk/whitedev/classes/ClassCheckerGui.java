@@ -26,7 +26,7 @@ public class ClassCheckerGui {
     private final Color buttonTextColor = Color.WHITE;
 
     public void runClassEditGui() {
-        new Thread(() -> new ClassCheckerGui().createAndShowGUI()).start();
+        new Thread(this::createAndShowGUI).start();
     }
 
     private void createAndShowGUI() {
@@ -129,12 +129,16 @@ public class ClassCheckerGui {
     }
 
     private void reloadClassList() {
-        List<String> loadedClasses = classUtil.getLoadedClassesFromJMap();
+        List<String> loadedClasses = classUtil.getLoadedClasses();
         listModel.clear();
-        for (String className : loadedClasses) {
-            if (!listModel.contains(className)) {
-                listModel.addElement(className);
+        if (!loadedClasses.isEmpty()) {
+            for (String className : loadedClasses) {
+                if (!listModel.contains(className)) {
+                    listModel.addElement(className);
+                }
             }
+        } else {
+            JOptionPane.showMessageDialog(frame, "Cannot access loaded classes!", "Classes Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 
@@ -182,17 +186,20 @@ public class ClassCheckerGui {
         int result = fileChooser.showSaveDialog(frame);
         if (result == JFileChooser.APPROVE_OPTION) {
             File selectedDirectory = fileChooser.getSelectedFile();
-            List<String> loadedClasses = classUtil.getLoadedClassesFromJMap();
-
-            for (String className : loadedClasses) {
-                try {
-                    classUtil.dumpClass(className, selectedDirectory);
-                } catch (IOException e) {
-                    System.out.println("[JPI Class Dumper] Ignoring unreachable class: " + className);
+            List<String> loadedClasses = classUtil.getLoadedClasses();
+            if (!loadedClasses.isEmpty()) {
+                for (String className : loadedClasses) {
+                    try {
+                        classUtil.dumpClass(className, selectedDirectory);
+                    } catch (IOException e) {
+                        System.out.println("[JPI Class Dumper] Ignoring unreachable class: " + className);
+                    }
                 }
+                JOptionPane.showMessageDialog(frame, "Classes dumped successfully!", "Success", JOptionPane.INFORMATION_MESSAGE);
+            }else{
+                JOptionPane.showMessageDialog(frame, "Cannot access loaded classes!", "Classes Error", JOptionPane.ERROR_MESSAGE);
             }
 
-            JOptionPane.showMessageDialog(frame, "Classes dumped successfully!", "Success", JOptionPane.INFORMATION_MESSAGE);
         }
     }
 }

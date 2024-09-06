@@ -1,17 +1,33 @@
 package uk.whitedev.utils;
 
 import java.io.*;
+import java.lang.reflect.Field;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
+import java.net.URLClassLoader;
 import java.nio.file.Files;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
+import java.util.function.Supplier;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 
 public class ClassUtil {
-    public List<String> getLoadedClassesFromJMap() {
+
+    public List<String> getLoadedClasses() {
+        List<Supplier<List<String>>> loaders = Arrays.asList(
+                this::getLoadedClassesFromJMap,
+                this::getLoadedClassesFromLoader,
+                this::getLoadedClassesFromUrlLoader
+        );
+        return loaders.stream()
+                .map(Supplier::get)
+                .filter(classNames -> !classNames.isEmpty())
+                .findFirst()
+                .orElse(Collections.emptyList());
+    }
+
+    private List<String> getLoadedClassesFromJMap() {
         List<String> classNames = new ArrayList<>();
         try {
             Process process = new ProcessBuilder("jmap", "-histo:live", ProcessUtil.getProcessPid()).start();
@@ -24,13 +40,56 @@ public class ClassUtil {
                     String className = parts[3];
                     int dollarIndex = className.indexOf('$');
                     if (dollarIndex != -1) className = className.substring(0, dollarIndex);
-                    if(className.startsWith("[")) className = className.substring(2);
+                    if (className.startsWith("[")) className = className.substring(2);
                     classNames.add(className);
                 }
             }
             int exitCode = process.waitFor();
             if (exitCode != 0) {
                 System.err.println("Error: jmap command failed with exit code " + exitCode);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return classNames;
+    }
+
+    private List<String> getLoadedClassesFromLoader() {
+        ClassLoader classLoader = ClassLoader.getSystemClassLoader();
+        List<String> classNames = new ArrayList<>();
+        try {
+            Field classesField;
+            classesField = ClassLoader.class.getDeclaredField("classes");
+            classesField.setAccessible(true);
+            Vector<Class<?>> classes;
+            classes = (Vector<Class<?>>) classesField.get(classLoader);
+            for (Class<?> clazz : classes) {
+                classNames.add(clazz.getName());
+            }
+        } catch (IllegalAccessException | NoSuchFieldException e) {
+            e.printStackTrace();
+        }
+        return classNames;
+    }
+
+    private List<String> getLoadedClassesFromUrlLoader() {
+        ClassLoader classLoader = ClassLoader.getSystemClassLoader();
+        List<String> classNames = new ArrayList<>();
+        try {
+            if (classLoader instanceof URLClassLoader) {
+                URLClassLoader urlClassLoader = (URLClassLoader) classLoader;
+                URL[] urls = urlClassLoader.getURLs();
+                for (URL url : urls) {
+                    if (url.getFile().endsWith(".jar")) {
+                        try (JarFile jarFile = new JarFile(url.getFile())) {
+                            Enumeration<JarEntry> entries = jarFile.entries();
+                            while (entries.hasMoreElements()) {
+                                JarEntry entry = entries.nextElement();
+                                classNames.add(entry.getName());
+                            }
+                        }
+                    }
+                }
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -82,7 +141,6 @@ public class ClassUtil {
     }
 
 
-
     public String decompileClass(URL classFilePath) throws IOException, InterruptedException, URISyntaxException {
         File classFile = new File(getClassFilePathFromURL(classFilePath));
         ProcessBuilder processBuilder = new ProcessBuilder(
@@ -128,7 +186,7 @@ public class ClassUtil {
         return null;
     }
 
-    private String loadCFR(){
+    private String loadCFR() {
         try (InputStream is = ClassUtil.class.getResourceAsStream("/assets/cfr-0.152.jar")) {
             if (is == null) {
                 throw new IOException("CFR not found in JAR: /assets/cfr-0.152.jar");

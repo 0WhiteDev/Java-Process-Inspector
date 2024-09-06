@@ -3,6 +3,7 @@ package uk.whitedev;
 import uk.whitedev.classes.ClassCheckerGui;
 import uk.whitedev.injector.InjectorGui;
 import uk.whitedev.memory.MemoryEditorGUI;
+import uk.whitedev.monitor.ProcessProfilerGui;
 import uk.whitedev.utils.ColorUtils;
 import uk.whitedev.utils.ProcessUtil;
 
@@ -14,9 +15,9 @@ import javax.swing.event.DocumentListener;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.StyledDocument;
 import javax.tools.*;
+import java.lang.reflect.Field;
 import java.nio.file.Files;
-import java.util.Arrays;
-import java.util.Collections;
+import java.util.*;
 
 public class InjectableMain extends JFrame {
     private final JTextPane codeArea;
@@ -25,7 +26,7 @@ public class InjectableMain extends JFrame {
 
     public InjectableMain() {
         setTitle("Dynamic Java Code Executor [Java Process Inspector]");
-        setSize(800, 400);
+        setSize(850, 400);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLayout(new BorderLayout());
 
@@ -115,11 +116,17 @@ public class InjectableMain extends JFrame {
         pidButton.setBackground(Color.GRAY);
         pidButton.setForeground(Color.WHITE);
 
+        JButton profilerButton = new JButton("Process Profiler");
+        profilerButton.addActionListener(e -> new ProcessProfilerGui().runProfilerGui());
+        profilerButton.setBackground(Color.GRAY);
+        profilerButton.setForeground(Color.WHITE);
+
         buttonSubPanel.add(runButton);
         buttonSubPanel.add(memoryButton);
         buttonSubPanel.add(injectButton);
         buttonSubPanel.add(classesButton);
         buttonSubPanel.add(pidButton);
+        buttonSubPanel.add(profilerButton);
 
         buttonPanel.add(buttonSubPanel, BorderLayout.CENTER);
 
@@ -199,7 +206,7 @@ public class InjectableMain extends JFrame {
         });
     }
 
-    private enum EditFunc{
+    private enum EditFunc {
         INSERT, REMOVE
     }
 

@@ -22,6 +22,9 @@ A straightforward tool designed to inject DLL files into the process. This funct
 #### 🔍 Loaded Class Checker: 
 This feature allows you to inspect all the classes loaded by the process, decompile them, and view their source code. Additionally, it provides the capability to dump all loaded classes to a specified folder.
 
+#### 💻 Process Profiler:
+Real-time Java process monitoring and profiling solution. Displays performance metrics, resource utilization, process details and enables field inspection, providing a comprehensive overview of the running process.
+
 ## How to inject JPI
 - To attach JPI to a java process, run Process Injector.exe
 - Find the pid of the process you are interested in (java/javaw)
