@@ -35,11 +35,15 @@ public final class SessionSnapshotExporter {
 
         try (ZipOutputStream zip = new ZipOutputStream(Files.newOutputStream(destination), StandardCharsets.UTF_8)) {
             for (Map.Entry<String, String> report : reports.entrySet()) {
-                zip.putNextEntry(new ZipEntry(report.getKey()));
-                zip.write(report.getValue().getBytes(StandardCharsets.UTF_8));
-                zip.closeEntry();
+                writeEntry(zip, report);
             }
         }
         return destination;
+    }
+
+    private static void writeEntry(ZipOutputStream zip, Map.Entry<String, String> report) throws IOException {
+        zip.putNextEntry(new ZipEntry(report.getKey()));
+        zip.write(report.getValue().getBytes(StandardCharsets.UTF_8));
+        zip.closeEntry();
     }
 }

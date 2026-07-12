@@ -25,11 +25,15 @@ public final class InspectorSession implements Closeable {
     public JvmDescriptor target() { return target; }
 
     public synchronized byte[] request(Operation operation, String payload) throws IOException {
-        if (closed) throw new IOException("Inspector session is closed");
+        ensureOpen();
         WireProtocol.writeRequest(output, operation, WireProtocol.utf8(payload == null ? "" : payload));
         WireProtocol.Response response = WireProtocol.readResponse(input);
         if (!response.success()) throw new IOException(response.text());
         return response.payload();
+    }
+
+    private void ensureOpen() throws IOException {
+        if (closed) throw new IOException("Inspector session is closed");
     }
 
     public String requestText(Operation operation, String payload) throws IOException {

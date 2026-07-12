@@ -21,18 +21,18 @@ public final class CommandLineTokenizer {
             } else if (value == '"') {
                 quoted = !quoted;
             } else if (Character.isWhitespace(value) && !quoted) {
-                add(result, current);
+                flush(result, current);
             } else {
                 current.append(value);
             }
         }
         if (escaping) current.append('\\');
         if (quoted) throw new IllegalArgumentException("Unclosed quote in arguments");
-        add(result, current);
+        flush(result, current);
         return result;
     }
 
-    private static void add(List<String> result, StringBuilder value) {
+    private static void flush(List<String> result, StringBuilder value) {
         if (value.length() == 0) return;
         result.add(value.toString());
         value.setLength(0);

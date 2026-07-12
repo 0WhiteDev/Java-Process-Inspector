@@ -10,7 +10,7 @@ public enum DecompilerEngine {
 
     DecompilerEngine(String displayName, String... resources) {
         this.displayName = displayName;
-        this.resources = resources;
+        this.resources = resources.clone();
     }
 
     String[] resources() {

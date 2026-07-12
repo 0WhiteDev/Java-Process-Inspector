@@ -25,13 +25,14 @@ public final class AgentOptions {
             String host = required(values, "host");
             String token = required(values, "token");
             int port = Integer.parseInt(required(values, "port"));
-            if (!InetAddress.getByName(host).isLoopbackAddress()) {
+            InetAddress address = InetAddress.getByName(host);
+            if (!address.isLoopbackAddress()) {
                 throw new IllegalArgumentException("Agent only accepts a loopback host");
             }
             if (port < 1 || port > 65535 || token.length() < 16) {
                 throw new IllegalArgumentException("Invalid agent port or token");
             }
-            return new AgentOptions(InetAddress.getByName(host), port, token);
+            return new AgentOptions(address, port, token);
         } catch (Exception exception) {
             if (exception instanceof IllegalArgumentException) throw (IllegalArgumentException) exception;
             throw new IllegalArgumentException("Invalid agent options", exception);
