@@ -1,17 +1,151 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0"
-         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
-
-    <groupId>uk.whitedev</groupId>
-    <artifactId>JPI</artifactId>
-    <version>1.0.2</version>
-
+    <groupId>dev.whitedev</groupId>
+    <artifactId>java-process-inspector</artifactId>
+    <version>2.0.0</version>
+    <name>Java Process Inspector</name>
+    <description>Attach-based JVM inspection and diagnostics desktop application.</description>
     <properties>
-        <maven.compiler.source>8</maven.compiler.source>
-        <maven.compiler.target>8</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.compiler.release>21</maven.compiler.release>
+        <jna.version>5.17.0</jna.version>
+        <flatlaf.version>3.7.2</flatlaf.version>
+        <rsyntaxtextarea.version>3.6.3</rsyntaxtextarea.version>
+        <junit.version>5.10.2</junit.version>
+        <javassist.version>3.32.0-GA</javassist.version>
+        <asm.version>9.10.1</asm.version>
+        <ecj.version>3.26.0</ecj.version>
+        <jpi.finalName>jpi</jpi.finalName>
     </properties>
-
+    <dependencies>
+        <dependency>
+            <groupId>com.formdev</groupId><artifactId>flatlaf</artifactId><version>${flatlaf.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.formdev</groupId><artifactId>flatlaf-extras</artifactId><version>${flatlaf.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.fifesoft</groupId><artifactId>rsyntaxtextarea</artifactId><version>${rsyntaxtextarea.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>net.java.dev.jna</groupId><artifactId>jna-platform</artifactId><version>${jna.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.javassist</groupId><artifactId>javassist</artifactId><version>${javassist.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.ow2.asm</groupId><artifactId>asm-tree</artifactId><version>${asm.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.google.code.findbugs</groupId><artifactId>jsr305</artifactId><version>3.0.2</version>
+        </dependency>
+        <dependency>
+            <groupId>org.eclipse.jdt</groupId><artifactId>ecj</artifactId><version>${ecj.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId><artifactId>junit-jupiter</artifactId><version>${junit.version}</version><scope>test</scope>
+        </dependency>
+    </dependencies>
+    <build>
+        <finalName>${jpi.finalName}</finalName>
+        <resources>
+            <resource><directory>src/main/resources</directory></resource>
+            <resource>
+                <directory>docs</directory>
+                <includes><include>logo.svg</include></includes>
+                <targetPath>assets</targetPath>
+            </resource>
+        </resources>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId><artifactId>maven-compiler-plugin</artifactId><version>3.15.0</version>
+                <configuration>
+                    <encoding>UTF-8</encoding>
+                    <release>${maven.compiler.release}</release>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>compile-agent-java8</id>
+                        <phase>process-classes</phase>
+                        <goals><goal>compile</goal></goals>
+                        <configuration>
+                            <release>8</release>
+                            <useIncrementalCompilation>false</useIncrementalCompilation>
+                            <outputDirectory>${project.build.directory}/agent-classes</outputDirectory>
+                            <includes>
+                                <include>dev/whitedev/jpi/agent/**/*.java</include>
+                                <include>dev/whitedev/jpi/protocol/**/*.java</include>
+                            </includes>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId><artifactId>maven-resources-plugin</artifactId><version>3.3.1</version>
+                <executions>
+                    <execution>
+                        <id>copy-agent-java8</id>
+                        <phase>process-classes</phase>
+                        <goals><goal>copy-resources</goal></goals>
+                        <configuration>
+                            <outputDirectory>${project.build.outputDirectory}</outputDirectory>
+                            <overwrite>true</overwrite>
+                            <resources>
+                                <resource><directory>${project.build.directory}/agent-classes</directory></resource>
+                            </resources>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId><artifactId>maven-surefire-plugin</artifactId><version>3.5.6</version>
+                <configuration><useModulePath>false</useModulePath></configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId><artifactId>maven-failsafe-plugin</artifactId><version>3.5.6</version>
+                <executions><execution><goals><goal>integration-test</goal><goal>verify</goal></goals></execution></executions>
+                <configuration>
+                    <useModulePath>false</useModulePath>
+                    <systemPropertyVariables>
+                        <jpi.agent.jar>${project.build.directory}/${project.build.finalName}.jar</jpi.agent.jar>
+                        <jpi.test.classes>${project.build.testOutputDirectory}</jpi.test.classes>
+                    </systemPropertyVariables>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId><artifactId>maven-jar-plugin</artifactId><version>3.4.1</version>
+                <configuration><forceCreation>true</forceCreation></configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId><artifactId>maven-shade-plugin</artifactId><version>3.6.0</version>
+                <executions><execution><phase>package</phase><goals><goal>shade</goal></goals><configuration>
+                    <createDependencyReducedPom>false</createDependencyReducedPom>
+                    <filters>
+                        <filter>
+                            <artifact>*:*</artifact>
+                            <excludes>
+                                <exclude>module-info.class</exclude>
+                                <exclude>META-INF/versions/*/module-info.class</exclude>
+                                <exclude>META-INF/*.SF</exclude>
+                                <exclude>META-INF/*.RSA</exclude>
+                                <exclude>META-INF/*.DSA</exclude>
+                            </excludes>
+                        </filter>
+                    </filters>
+                    <transformers><transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                        <manifestEntries>
+                            <Main-Class>dev.whitedev.jpi.JpiApplication</Main-Class>
+                            <Agent-Class>dev.whitedev.jpi.agent.InspectorAgent</Agent-Class>
+                            <Premain-Class>dev.whitedev.jpi.agent.InspectorAgent</Premain-Class>
+                            <Can-Redefine-Classes>true</Can-Redefine-Classes>
+                            <Can-Retransform-Classes>true</Can-Retransform-Classes>
+                            <Enable-Native-Access>ALL-UNNAMED</Enable-Native-Access>
+                        </manifestEntries>
+                    </transformer></transformers>
+                </configuration></execution></executions>
+            </plugin>
+        </plugins>
+    </build>
 </project>

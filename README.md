@@ -1,45 +1,315 @@
-# Java Process Inspector [JPI] 🖥️
+<p align="center">
+  <img src="docs/logo.svg" width="128" height="128" alt="Java Process Inspector logo">
+</p>
 
-This is a sophisticated tool designed for dynamically browsing, analyzing, and modifying a running Java process ⚡
+<h1 align="center">Java Process Inspector</h1>
 
-## Basic information
+<p align="center">
+  <strong>Attach, inspect, diagnose, and experiment with a running JVM from one desktop application.</strong><br>
+  JPI v2 replaces the DLL-based proof of concept with a JVM agent, an authenticated local session, and a unified GUI.
+</p>
 
-It allows users to interact with the Java application's live state, inspect its code, and make changes in real-time, offering a powerful solution for everyone, who need deep insights and control over Java applications during execution.
+<p align="center">
+  <a href="#quick-start">Quick Start</a> &bull;
+  <a href="#features">Features</a> &bull;
+  <a href="#desktop-application">GUI</a> &bull;
+  <a href="#architecture">Architecture</a> &bull;
+  <a href="#development">Development</a>
+</p>
 
-The program has a basic GUI that is easy to use and does not take up much memory.
+<p align="center">
+  <img src="https://img.shields.io/badge/Java-21%2B-grey.svg" alt="Java 21+">
+  <img src="https://img.shields.io/badge/platform-JVM%20%7C%20Windows%20native%20tools-lightgrey.svg" alt="Platform">
+  <a href="https://github.com/0WhiteDev/Java-Process-Inspector/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/0WhiteDev/Java-Process-Inspector/ci.yml?branch=main&label=CI" alt="CI status"></a>
+  <a href="https://github.com/0WhiteDev/Java-Process-Inspector/releases/latest"><img src="https://img.shields.io/github/v/release/0WhiteDev/Java-Process-Inspector?label=release" alt="Latest release"></a>
+</p>
 
-## Functions
+---
 
-#### 🔧 Dynamic Executor for Java Code: 
-This feature allows you to force the program, to which JPI is attached, to execute specific lines of code written in the built-in code editor provided with JPI. It offers full access to use any classes and methods, enabling real-time manipulation and testing of the application’s behavior.
+## What is JPI?
 
-#### ✏️ Memory Editor: 
-The Memory Editor is a powerful tool that enables you to search for specific values within the process's memory and dynamically modify them while the process is running. This function provides direct access to the internal state of the application, allowing precise and immediate adjustments.
+Java Process Inspector is a desktop diagnostics workspace for a JVM that is already running. Select a local Java process, attach the embedded JPI agent, and inspect it without copying an injector EXE, injector DLL, JNI helper DLLs, or a second application JAR next to the target.
 
-#### 🔌 DLL Injector: 
-A straightforward tool designed to inject DLL files into the process. This function simplifies the process of adding external libraries, enabling extended functionality or modifications to the running application.
+The controller stays outside the inspected JVM. A small agent uses the Java Instrumentation API and communicates only through an authenticated loopback connection. Closing the session removes the control channel, it does not terminate the target.
 
-#### 🔍 Loaded Class Checker: 
-This feature allows you to inspect all the classes loaded by the process, decompile them, and view their source code. Additionally, it provides the capability to dump all loaded classes to a specified folder.
+> Use JPI only with software and processes you are authorized to inspect. Code execution, memory writes, and DLL injection can change or crash the target.
 
-#### 💻 Process Profiler:
-Real-time Java process monitoring and profiling solution. Displays performance metrics, resource utilization, process details and enables field inspection, providing a comprehensive overview of the running process.
+## Quick Start
 
-## How to inject JPI
-- To attach JPI to a java process, run Process Injector.exe
-- Find the pid of the process you are interested in (java/javaw)
-- Enter the pid of the process you want to attach JPI to (confirm with enter)
-- Enter the full path to the dll file "injector.dll" (confirm with enter) `Example: C:\\Users\\whitedev\\Files\\injector.dll`
+### Requirements
 
-## Disclaimer
-Remember that modifying memory, dynamically injecting new classes and various modifications in the running java process are quite dangerous and can cause various errors with your application, use this with caution.
+| Component | Required | Notes                                                                            |
+|---|---:|----------------------------------------------------------------------------------|
+| Controller JDK | Yes | Run the JPI desktop application with Java 21 or newer. |
+| Target JVM | Yes | The embedded agent uses Java 8 bytecode and supports Java 8 or newer targets. |
+| Maven | Build only | Maven 3.8+ is recommended.                                                       |
+| Windows | Native tools only | JVM attach and inspection features are platform-independent.                     |
+| Same user | Usually | The OS and target JVM must allow local attach.                                   |
 
-## Project Suppot
-If you need help, join to our community:
-- Discord Server: https://discord.gg/KhExwvqZb5
-- WebSite: https://devsmarket.eu/
+### Build and run
+
+```powershell
+git clone https://github.com/0WhiteDev/Java-Process-Inspector.git
+cd Java-Process-Inspector
+mvn verify
+java -jar target/jpi.jar
+```
+
+`mvn verify` runs unit tests and a real end-to-end attach test against a temporary child JVM.
+
+### Attach to a JVM
+
+1. Start JPI from `target/jpi.jar`.
+2. Select an attachable JVM in the top bar and click **Attach**.
+3. Work in the Overview, Classes, Executor, Fields, or Native tools tabs.
+4. Click **Disconnect** before closing the target when possible.
+
+No files need to be copied to the target directory. The same `jpi.jar` is both the desktop controller and the Java agent.
+
+The shaded JAR intentionally contains two bytecode levels. Desktop and GUI classes use Java 21, while `dev.whitedev.jpi.agent` and `dev.whitedev.jpi.protocol` are rebuilt as Java 8 bytecode before packaging. This allows the Java 21 desktop application to attach to targets such as older app installations running Java 8 or Java 17.
+
+### Applications that disable late attach
+
+When you control application startup, use **Launch with early agent...** and select its executable JAR. JPI starts it with `-javaagent:jpi.jar`, installs class tracking before `main()`, and opens the authenticated session automatically. This supported mode works when a JVM intentionally disables late Attach API.
+
+For IDEs, Gradle, application servers, native launchers, or non-executable class paths, use **Manual agent...**. JPI generates a one-use authenticated `-javaagent` argument, copies it to the clipboard, and waits up to two minutes for the target to start. Supplying the optional PID also enables the native memory and network views.
+
+### Agent JAR loaded but agent failed to initialize
+
+This message commonly appears when a Java 21 agent is loaded into a target running Java 8 or Java 17. JPI now rebuilds its embedded agent and protocol as Java 8 bytecode while keeping the desktop application on Java 21.
+
+---
+
+## Desktop application
+
+| Tab | Purpose |
+|---|---|
+| Overview | Live heap, non-heap, class, thread, GC, uptime, and full thread-dump data |
+| Classes | Paged live definitions, background search, full-source HotSwap, modern method patches, raw bytecode editing, rollback, dumps, and selectable CFR, Vineflower, or Procyon decompilation |
+| Constant search | Global search through strings, descriptors, class names, methods, and fields in available class constant pools |
+| Executor | Java editor with syntax highlighting, line numbers, folding, bracket matching, and Ctrl+Enter execution |
+| Fields | Inspect existing static fields without constructing arbitrary target classes |
+| VM environment | VM arguments, redacted system properties, command line, and classloader inventory |
+| Session snapshot | One ZIP containing metrics, environment, class inventory, load events, and a thread dump |
+| Network activity | Live process-owned TCP/UDP IPv4/IPv6 endpoints, states, filtering, and open/close timeline |
+| Memory scanner | Search, refine, and explicitly confirm writes to another Windows process |
+| DLL injector | Optional compatibility tool for loading a user-selected DLL on Windows |
+
+The interface uses FlatLaf with a focused sidebar workspace instead of nested utility windows. Java sources use RSyntaxTextArea for syntax highlighting, line numbers, folding, occurrence marking, and bracket matching. All slow operations run outside Swing's event-dispatch thread.
+
+## Features
+
+<details open>
+<summary><strong>JVM attach foundation</strong></summary>
+
+- Standard `VirtualMachine.loadAgent` attach instead of `CreateRemoteThread` + `DllMain`
+- Early `-javaagent` launch mode for applications that disable late attach
+- Manual one-use early-agent argument for IDEs, build tools, application servers, and custom launchers
+- One distributable shaded JAR with controller and agent manifests
+- Loopback-only socket, random session token, protocol magic, version, and payload limits
+- Minimal agent thread, the GUI never runs inside the target process
+- Re-attach support and deterministic disconnect handling
+
+</details>
+
+<details>
+<summary><strong>Inspection and diagnostics</strong></summary>
+
+- Instrumentation-backed inventory that preserves duplicate names from different classloaders
+- Debounced background filtering across the complete class index with at most 500 Swing rows rendered per page
+- Load-time transformer for dynamically defined classes and bounded original-bytecode retention
+- Live definition/retransformation timeline with loader, byte size, and timestamp
+- Retransformation-backed bytecode fallback for classes loaded before late attach
+- Selectable CFR 0.152, Vineflower 1.12.0, and Procyon 0.6.0 class decompilation with all engines embedded
+- SHA-256 and byte-size fingerprinting for selected definitions
+- Bounded global constant-pool search without initializing application classes
+- Java source compilation inside the target JVM with live class redefinition
+- Structural compatibility validation before HotSwap and rollback to the first captured definition
+- Method-only body replacement without recompiling incomplete CFR output
+- Interactive hexadecimal class editing and validated replacement `.class` imports
+- Java syntax highlighting in decompiled sources and the live executor
+- Heap, non-heap, GC, thread, class-loading, runtime, and uptime metrics
+- Monitor/lock-aware thread dumps and deadlock detection
+- Process-owned TCP/UDP endpoint inventory and live connection timeline on Windows
+- Portable ZIP session snapshots for comparison and offline analysis
+- Bounded static-field inspection with failures isolated per field
+
+</details>
+
+<details>
+<summary><strong>Runtime Java HotSwap</strong></summary>
+
+- Decompile a selected definition, edit normal Java source, and apply it while the application keeps running
+- Select one existing method and compile its body with real javac, with Javassist retained as a compatibility fallback
+- Load the current implementation automatically after selecting a method
+- Use the selected decompiler and the JVM descriptor parameter count to select an overload
+- Convert decompiler parameter names to stable `$1`, `$2`, and following values understood by both patch backends
+- Keep the apply action available after the implementation loads and report parser or JVM errors when a patch is attempted
+- Use `$0` for the current instance, `$1`, `$2` for parameters, and `$$` for all parameters
+- Continue using method patches when a decompiler reports missing dependencies or emits invalid full-class source
+- Compile against the target JVM, loaded class definitions from the selected classloader, and bundled javax.annotation compatibility types
+- Validate class name, superclass, interfaces, modifiers, fields, and method signatures before applying changes
+- Keep the first captured definition separately from the active definition
+- Restore the original definition with one confirmed rollback action
+- Preserve duplicate class names by targeting the selected class and classloader identity
+- Reject source that generates extra nested or anonymous class files
+- Edit a complete class file as hexadecimal bytes or import a replacement `.class` produced by Recaf, ASM, or another editor
+- Validate raw bytecode against the active class schema before sending it to the JVM
+
+Standard JVM HotSwap is intentionally limited to method-body changes. Adding or removing fields or methods, changing descriptors, changing hierarchy, and redefining unmodifiable or hidden VM classes is rejected.
+
+The full-source mode depends on valid Java emitted by the selected decompiler. Obfuscated applications can contain missing annotations, unresolved generics, synthetic variables, or decompiler artifacts that make the whole class impossible to compile. In that situation use **Method patch**. It reads the method list directly from bytecode and compiles only the selected body in the context of the existing class.
+
+Selecting a patchable method decompiles it with the selected engine and places the current body directly in the editor. The apply action becomes available as soon as the implementation is loaded. JPI first compiles the body with the compiler from the target JDK or the embedded ECJ fallback, builds a donor method, and uses ASM to transplant only its bytecode into the original definition. Existing lambda implementation methods are mapped back to their original synthetic slots so the class schema stays HotSwap-compatible. Javassist remains available as a fallback for older targets or simple legacy bodies. If extraction fails, JPI loads an editable return-type-aware template. Read-only classes, constructors, class initializers, abstract methods, and native methods display their specific restriction.
+
+The **Raw bytecode** tab displays the current class file as editable hexadecimal bytes. Classes larger than 4 MiB can still be dumped and reapplied through **Apply .class file** without rendering the complete hex document.
+The loaded-class browser keeps the complete searchable index in memory but renders no more than 500 rows at once. Search input is debounced and evaluated outside Swing's event thread. Previous and Next controls provide access to every matching page without constructing tens of thousands of Swing list cells.
+The decompiler selector is available in the class toolbar:
+
+| Engine | Embedded files | Best use |
+|---|---|---|
+| CFR 0.152 | **cfr-0.152.jar** | Fast default and focused method decompilation |
+| Vineflower 1.12.0 | **vineflower-1.12.0.jar** | Modern Java syntax and readable output |
+| Procyon 0.6.0 | **procyon-compilertools-0.6.0.jar**, **procyon-core-0.6.0.jar** | Useful alternative for code that other engines reconstruct poorly |
+
+Changing the engine immediately reloads the selected class and its selected method. The JAR files are stored under **src/main/resources/assets** and extracted only to temporary files while JPI is running.
+
+</details>
+
+<details>
+<summary><strong>Controlled modification tools</strong></summary>
+
+- Java snippet execution without replacing global `System.out`
+- Typed little-endian Windows memory search with chunk overlap and readable-page checks
+- Address-based scan refinement and confirmed writes only to explicitly selected results
+- Real `WriteProcessMemory` test against an allocated buffer in the test JVM
+- DLL loading with minimal process rights, UTF-16 paths, timeout, and handle cleanup
+
+</details>
+
+---
+
+## Architecture
+
+```mermaid
+flowchart LR
+  subgraph controller [JPI desktop process]
+    GUI[Unified Swing workspace]
+    ATTACH[JVM discovery and Attach API]
+    CLIENT[Versioned session client]
+    WIN[Windows tools via JNA]
+  end
+  subgraph target [Target JVM]
+    AGENT[Embedded Instrumentation agent]
+    INSPECT[Metrics, classes, fields, bytecode]
+    EXEC[Isolated source executor]
+  end
+  GUI --> ATTACH
+  ATTACH -->|load the same jpi.jar| AGENT
+  GUI --> CLIENT
+  CLIENT <-->|authenticated loopback| AGENT
+  AGENT --> INSPECT
+  AGENT --> EXEC
+  GUI --> WIN
+  WIN -->|explicit native operation| OS[Selected Windows process]
+```
+
+### Package map
+
+| Package | Responsibility |
+|---|---|
+| `dev.whitedev.jpi.attach` | JVM discovery, agent loading, session lifecycle |
+| `dev.whitedev.jpi.agent` | Target entry point, dispatcher, instrumentation and execution |
+| `dev.whitedev.jpi.protocol` | Binary protocol with stable operations and bounds |
+| `dev.whitedev.jpi.nativeaccess` | Typed JNA boundary for process, memory, and DLL operations |
+| `dev.whitedev.jpi.decompile` | Embedded CFR lifecycle and decompilation |
+| `dev.whitedev.jpi.ui` | Unified workspace and asynchronous presentation layer |
+
+### Why there is no C++ directory anymore
+
+The old repository committed C++ sources and opaque prebuilt JNI DLLs that could drift apart. JPI v2 removes that delivery problem:
+
+- JVM attachment uses the supported Attach and Instrumentation APIs.
+- Windows APIs use versioned JNA dependencies included in `jpi.jar`.
+- There is no injector EXE, JNI header coupling, compiler runtime, or manually refreshed native binary in source control.
+
+The release is reproducible and has one application artifact to build, verify, and distribute.
+
+## Protocol and security model
+
+The controller binds an ephemeral loopback listener before loading the agent. Agent options contain the endpoint and a random one-use token. The first agent message authenticates the session. Every frame has a magic value, version, operation code, and bounded payload length. There is no wildcard bind, discovery file, default password, or remote service.
+
+---
+
+## Development
+
+### Verification
+
+```powershell
+mvn test
+mvn verify
+java -jar target/jpi.jar
+```
+
+Integration tests cover both late attach and an executable JAR launched with the early agent. The early-agent test verifies that the application class is captured before `main()` and appears in the dynamic load timeline. A Windows-only test allocates a native buffer, writes through the production `WriteProcessMemory` path, and reads the replacement value back from the same address.
+
+The late-attach integration test compiles replacement Java source inside the running target, patches ordinary and lambda-based methods through the live Java compiler backend, exports the changed class bytes, reapplies them through the raw bytecode path, verifies each behavior change, and verifies rollback after every mode.
+
+### Build output
+
+| File | Purpose |
+|---|---|
+| `target/jpi.jar` | Controller + Java 8 agent + UI/runtime dependencies + embedded CFR, Vineflower, and Procyon resources |
+| `target/surefire-reports/` | Unit-test reports |
+| `target/failsafe-reports/` | End-to-end attach-test report |
+
+### Release process
+
+The release workflow runs on Windows with Java 21 when a semantic version tag is pushed. It rejects snapshot versions and tags that do not exactly match **pom.xml**, runs all unit and attach integration tests, validates the shaded JAR contents, creates a versioned JAR and SHA-256 file, builds a changelog from commits since the previous tag, and publishes a GitHub Release.
+
+For JPI v2.0.0:
+
+<pre><code>mvn clean verify
+git add -A
+git commit -m "Release JPI v2.0.0"
+git push origin main
+git tag -a v2.0.0 -m "JPI v2.0.0"
+git push origin v2.0.0</code></pre>
+
+A manual run of the Release workflow builds downloadable workflow artifacts without publishing a GitHub Release.
+
+### Design rules
+
+- Desktop code remains Java 21 bytecode compatible.
+- Agent and protocol code remain Java 8 bytecode compatible.
+- Protocol operations need a stable number and round-trip tests.
+- UI work must not block the Swing event-dispatch thread.
+- Native handles and temporary files need deterministic cleanup.
+- Target reflection must not instantiate application classes.
+
+## Limitations
+
+- Attach can be disabled by JVM flags, container boundaries, OS policy, or a different user account.
+- A JVM that already attempted to load an incompatible older JPI agent must be restarted before retrying with a rebuilt JAR.
+- Early-agent mode requires control over the target launch command and is not a security-boundary bypass.
+- The executor requires `JavaCompiler` in the target and compiles against its visible compiler class path.
+- Hidden classes are listed when the JVM exposes them, definitions that never pass through Java Instrumentation may remain unavailable.
+- Runtime source editing uses the target JDK compiler when present and an embedded Java 8-compatible ECJ fallback otherwise. JPI exposes loaded class definitions and bundled javax.annotation types to the compiler, but invalid source emitted by a decompiler can still require manual correction or a different decompiler.
+- Standard HotSwap changes method bodies only and does not add fields, methods, interfaces, superclasses, or generated nested classes.
+- Existing lambdas can be edited with the Java compiler backend when their synthetic method count and captured-variable shape remain compatible. Adding more lambda bodies or changing their capture signature would add or change methods and is rejected by standard HotSwap.
+- Constructors, class initializers, abstract methods, and native methods are not available in method-only mode.
+- Raw `.class` replacements must preserve the exact class name and HotSwap-compatible schema.
+- Strong module boundaries can prevent reading selected fields, those fields are skipped.
+- Memory scanning and DLL injection are Windows-only and may require elevated rights.
+- A DLL must match the target process architecture.
+
+## Third-party components
+
+Embedded decompiler versions, licenses, source projects, and verified artifact hashes are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## Authors
 
 - [@0WhiteDev](https://github.com/0WhiteDev)
 - [@DevsMarket](https://github.com/DEVS-MARKET)
+
+---
