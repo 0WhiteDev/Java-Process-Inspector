@@ -9,6 +9,7 @@ import javax.swing.border.EmptyBorder;
 import java.awt.*;
 import java.awt.datatransfer.StringSelection;
 import java.io.File;
+import java.util.Locale;
 
 final class EnvironmentPanel extends JPanel implements SessionAware {
     private final JTextArea output = Ui.outputArea();
@@ -73,7 +74,7 @@ final class EnvironmentPanel extends JPanel implements SessionAware {
         chooser.setSelectedFile(new File("jpi-snapshot-" + current.target().id() + ".zip"));
         if (chooser.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) return;
         File selected = chooser.getSelectedFile();
-        if (!selected.getName().toLowerCase().endsWith(".zip")) selected = new File(selected.getParentFile(), selected.getName() + ".zip");
+        if (!selected.getName().toLowerCase(Locale.ROOT).endsWith(".zip")) selected = new File(selected.getParentFile(), selected.getName() + ".zip");
         final File destination = selected;
         refresh.setEnabled(false);
         output.setText("Collecting session snapshot...");

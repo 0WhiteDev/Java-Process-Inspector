@@ -47,7 +47,7 @@ public final class MethodSourceExtractor {
     }
 
     private static int sourceParameterCount(String source, int start, int end) {
-        if (source.substring(start, end).trim().isEmpty()) return 0;
+        if (source.substring(start, end).isBlank()) return 0;
         int count = 1;
         int round = 0;
         int square = 0;
@@ -75,7 +75,7 @@ public final class MethodSourceExtractor {
 
     private static String normalizeParameters(String body, String parameters) {
         Map<String, String> replacements = new LinkedHashMap<>();
-        String[] values = parameters.trim().isEmpty() ? new String[0] : parameters.split(",");
+        String[] values = parameters.isBlank() ? new String[0] : parameters.split(",");
         for (int index = 0; index < values.length; index++) {
             String value = values[index].trim();
             int end = value.length() - 1;

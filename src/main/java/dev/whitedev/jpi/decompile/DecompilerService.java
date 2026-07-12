@@ -10,6 +10,7 @@ import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 public final class DecompilerService {
@@ -116,7 +117,7 @@ public final class DecompilerService {
         for (String resource : engine.resources()) {
             InputStream input = DecompilerService.class.getResourceAsStream(resource);
             if (input == null) throw new FileNotFoundException("Embedded resource is missing: " + resource);
-            File file = File.createTempFile("jpi-" + engine.name().toLowerCase() + "-", ".jar");
+            File file = File.createTempFile("jpi-" + engine.name().toLowerCase(Locale.ROOT) + "-", ".jar");
             try {
                 Files.copy(input, file.toPath(), StandardCopyOption.REPLACE_EXISTING);
             } finally {

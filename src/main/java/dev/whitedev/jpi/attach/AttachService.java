@@ -20,6 +20,7 @@ import java.nio.file.Files;
 import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 public final class AttachService {
@@ -71,7 +72,7 @@ public final class AttachService {
     public LaunchResult launch(File targetJar, List<String> vmArguments,
                                List<String> applicationArguments) throws Exception {
         File canonicalTarget = targetJar.getCanonicalFile();
-        if (!canonicalTarget.isFile() || !canonicalTarget.getName().toLowerCase().endsWith(".jar")) {
+        if (!canonicalTarget.isFile() || !canonicalTarget.getName().toLowerCase(Locale.ROOT).endsWith(".jar")) {
             throw new IOException("Select an existing executable JAR");
         }
         File agentJar = applicationJar();

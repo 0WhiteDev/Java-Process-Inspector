@@ -8,6 +8,7 @@ import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
 import java.io.File;
+import java.util.Locale;
 
 final class DllPanel extends JPanel implements SessionAware {
     private final WindowsNativeAccess windows;
@@ -131,7 +132,7 @@ final class DllPanel extends JPanel implements SessionAware {
             return;
         }
         final File library = new File(path.getText());
-        if (!library.isFile() || !library.getName().toLowerCase().endsWith(".dll")) {
+        if (!library.isFile() || !library.getName().toLowerCase(Locale.ROOT).endsWith(".dll")) {
             Ui.error(this, new IllegalArgumentException("Choose an existing DLL file"));
             return;
         }

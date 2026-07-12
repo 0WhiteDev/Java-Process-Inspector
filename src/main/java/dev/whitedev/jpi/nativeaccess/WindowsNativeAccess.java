@@ -21,6 +21,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 
 public final class WindowsNativeAccess {
     private static final Kernel32 KERNEL = Kernel32.INSTANCE;
@@ -67,7 +68,7 @@ public final class WindowsNativeAccess {
     public void injectDll(int pid, File library) throws IOException {
         requireWindows();
         File dll = library.getCanonicalFile();
-        if (!dll.isFile() || !dll.getName().toLowerCase().endsWith(".dll")) throw new IOException("Select an existing DLL file");
+        if (!dll.isFile() || !dll.getName().toLowerCase(Locale.ROOT).endsWith(".dll")) throw new IOException("Select an existing DLL file");
         int rights = WinNT.PROCESS_CREATE_THREAD | WinNT.PROCESS_QUERY_INFORMATION | WinNT.PROCESS_VM_OPERATION
                 | WinNT.PROCESS_VM_WRITE | WinNT.PROCESS_VM_READ;
         WinNT.HANDLE process = KERNEL.OpenProcess(rights, false, pid);

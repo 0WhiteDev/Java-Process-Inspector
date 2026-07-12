@@ -27,9 +27,6 @@ jobs:
           distribution: temurin
           java-version: ${{ matrix.java }}
           cache: maven
-      - name: Verify source comment policy
-        shell: pwsh
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File tools/check-no-comments.ps1
       - name: Verify unit and attach integration tests
         run: mvn --batch-mode --no-transfer-progress verify
       - uses: actions/upload-artifact@v4

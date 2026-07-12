@@ -160,7 +160,7 @@ final class MemoryPanel extends JPanel implements SessionAware {
             return;
         }
         final String query = value.getText();
-        if (query.trim().isEmpty()) {
+        if (query.isBlank()) {
             Ui.error(this, new IllegalArgumentException("Enter a value to scan"));
             return;
         }

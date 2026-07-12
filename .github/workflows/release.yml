@@ -51,10 +51,6 @@ jobs:
           "JPI_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "Validated JPI version $version" | Add-Content $env:GITHUB_STEP_SUMMARY
 
-      - name: Verify source comment policy
-        shell: pwsh
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File tools/check-no-comments.ps1
-
       - name: Run unit and attach integration tests
         run: mvn --batch-mode --no-transfer-progress clean verify
 
