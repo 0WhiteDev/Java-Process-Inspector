@@ -120,7 +120,7 @@ jobs:
             ""
           )
           if ($previousTag) {
-            $lines += "Changes since $previousTag:"
+            $lines += "Changes since ${previousTag}:"
           } else {
             $lines += "Changes included in the first tagged release:"
           }
