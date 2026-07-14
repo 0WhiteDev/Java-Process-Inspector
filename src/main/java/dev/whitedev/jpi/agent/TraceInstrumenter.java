@@ -9,6 +9,7 @@ import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.InsnList;
 import org.objectweb.asm.tree.InsnNode;
 import org.objectweb.asm.tree.IntInsnNode;
+import org.objectweb.asm.tree.InvokeDynamicInsnNode;
 import org.objectweb.asm.tree.LabelNode;
 import org.objectweb.asm.tree.LdcInsnNode;
 import org.objectweb.asm.tree.MethodInsnNode;
@@ -25,6 +26,7 @@ final class TraceInstrumenter {
     private static final String ENTER_DESCRIPTOR = "(Ljava/lang/String;Ljava/lang/Object;[Ljava/lang/Object;)J";
     private static final String EXIT_DESCRIPTOR = "(JLjava/lang/Object;)V";
     private static final String FAIL_DESCRIPTOR = "(JLjava/lang/Throwable;)V";
+    private static final String EDGE_DESCRIPTOR = "(JLjava/lang/String;Ljava/lang/String;Ljava/lang/String;Z)V";
 
     private TraceInstrumenter() {}
 
@@ -84,6 +86,15 @@ final class TraceInstrumenter {
         selected.instructions.insert(entry);
 
         for (AbstractInsnNode instruction : original) {
+            if (instruction instanceof MethodInsnNode) {
+                MethodInsnNode call = (MethodInsnNode) instruction;
+                selected.instructions.insertBefore(instruction, edge(tokenLocal, call.owner, call.name,
+                        call.desc, reflective(call.owner)));
+            } else if (instruction instanceof InvokeDynamicInsnNode) {
+                InvokeDynamicInsnNode call = (InvokeDynamicInsnNode) instruction;
+                selected.instructions.insertBefore(instruction, edge(tokenLocal, "<dynamic>", call.name,
+                        call.desc, false));
+            }
             int opcode = instruction.getOpcode();
             if (opcode == Opcodes.RETURN) {
                 InsnList exit = new InsnList();
@@ -114,6 +125,23 @@ final class TraceInstrumenter {
         selected.instructions.add(new VarInsnNode(Opcodes.ALOAD, exceptionLocal));
         selected.instructions.add(new InsnNode(Opcodes.ATHROW));
         selected.tryCatchBlocks.add(new TryCatchBlockNode(start, end, handler, "java/lang/Throwable"));
+    }
+
+    private static InsnList edge(int tokenLocal, String owner, String method,
+                                 String descriptor, boolean reflective) {
+        InsnList output = new InsnList();
+        output.add(new VarInsnNode(Opcodes.LLOAD, tokenLocal));
+        output.add(new LdcInsnNode(owner));
+        output.add(new LdcInsnNode(method));
+        output.add(new LdcInsnNode(descriptor));
+        output.add(new InsnNode(reflective ? Opcodes.ICONST_1 : Opcodes.ICONST_0));
+        output.add(new MethodInsnNode(Opcodes.INVOKESTATIC, RUNTIME, "edge", EDGE_DESCRIPTOR, false));
+        return output;
+    }
+
+    private static boolean reflective(String owner) {
+        return owner.startsWith("java/lang/reflect/") || owner.startsWith("jdk/internal/reflect/")
+                || owner.startsWith("java/lang/invoke/");
     }
 
     private static void appendArguments(InsnList output, MethodNode method) {

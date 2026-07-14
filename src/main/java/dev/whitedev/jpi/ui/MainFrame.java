@@ -50,7 +50,9 @@ public final class MainFrame extends JFrame {
 
         OverviewPanel overview = new OverviewPanel();
         LiveTracerPanel tracer = new LiveTracerPanel();
-        ClassesPanel classes = new ClassesPanel(tracer, () -> selectView("Live tracer"));
+        XrefsPanel xrefs = new XrefsPanel();
+        ClassesPanel classes = new ClassesPanel(tracer, xrefs,
+                () -> selectView("Live tracer"), () -> selectView("Xrefs"));
         ExecutorPanel executor = new ExecutorPanel();
         FieldsPanel fields = new FieldsPanel();
         EnvironmentPanel environment = new EnvironmentPanel();
@@ -59,11 +61,12 @@ public final class MainFrame extends JFrame {
         NetworkPanel network = new NetworkPanel(new WindowsNetworkAccess());
         MemoryPanel memory = new MemoryPanel(windows);
         DllPanel dll = new DllPanel(windows);
-        views = Arrays.asList(overview, classes, tracer, constantSearch, executor, fields, environment, network, memory, dll);
+        views = Arrays.asList(overview, classes, tracer, xrefs, constantSearch, executor, fields, environment, network, memory, dll);
 
         addCard("Overview", overview);
         addCard("Loaded classes", classes);
         addCard("Live tracer", tracer);
+        addCard("Xrefs", xrefs);
         addCard("Constant search", constantSearch);
         addCard("Code executor", executor);
         addCard("Static fields", fields);
@@ -134,6 +137,7 @@ public final class MainFrame extends JFrame {
         addNavigation(sidebar, "Overview");
         addNavigation(sidebar, "Loaded classes");
         addNavigation(sidebar, "Live tracer");
+        addNavigation(sidebar, "Xrefs");
         addNavigation(sidebar, "Constant search");
         addNavigation(sidebar, "Code executor");
         addNavigation(sidebar, "Static fields");

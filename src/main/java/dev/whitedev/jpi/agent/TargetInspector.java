@@ -182,6 +182,66 @@ final class TargetInspector {
         return traceManager.events();
     }
 
+    String methodXrefs(String payload) throws Exception {
+        String[] values = payload.split("\\n", 3);
+        if (values.length != 3 || values[0].isEmpty() || values[1].isEmpty() || values[2].isEmpty()) {
+            throw new IOException("Missing class, method, or descriptor");
+        }
+        Class<?> target = resolveClass(values[0]);
+        StringBuilder output = new StringBuilder();
+        for (XrefAnalyzer.Reference reference : XrefAnalyzer.references(classBytes(values[0]), values[1], values[2])) {
+            appendXref(output, "STATIC", reference);
+        }
+        String owner = target.getName().replace('.', '/');
+        int scanned = 0;
+        int results = 0;
+        long deadline = System.nanoTime() + 10_000_000_000L;
+        for (Class<?> candidate : instrumentation.getAllLoadedClasses()) {
+            if (++scanned > 5000 || System.nanoTime() > deadline || results >= 1000) break;
+            byte[] bytecode = availableBytes(candidate);
+            if (bytecode == null) continue;
+            String id = index(candidate);
+            try {
+                List<XrefAnalyzer.Reference> callers = XrefAnalyzer.callers(bytecode, id,
+                        candidate.getName(), owner, values[1], values[2]);
+                for (XrefAnalyzer.Reference reference : callers) {
+                    appendXref(output, "STATIC", reference);
+                    results++;
+                    if (results >= 1000) break;
+                }
+            } catch (IOException ignored) {
+            }
+        }
+        output.append(TraceRuntime.dynamicGraph(target.getName(), values[1], values[2]));
+        return output.toString();
+    }
+
+    String xrefSearch(String query) throws IOException {
+        String needle = query == null ? "" : query.trim();
+        if (needle.length() < 2) throw new IOException("Enter at least two characters");
+        if (needle.length() > 200) throw new IOException("Search query is limited to 200 characters");
+        StringBuilder output = new StringBuilder();
+        int scanned = 0;
+        int results = 0;
+        long deadline = System.nanoTime() + 10_000_000_000L;
+        for (Class<?> candidate : instrumentation.getAllLoadedClasses()) {
+            if (++scanned > 5000 || System.nanoTime() > deadline || results >= 1000) break;
+            byte[] bytecode = availableBytes(candidate);
+            if (bytecode == null) continue;
+            String id = index(candidate);
+            try {
+                for (XrefAnalyzer.Reference reference : XrefAnalyzer.stringUsers(
+                        bytecode, id, candidate.getName(), needle)) {
+                    appendXref(output, "STATIC", reference);
+                    results++;
+                    if (results >= 1000) break;
+                }
+            } catch (IOException ignored) {
+            }
+        }
+        return output.toString();
+    }
+
     void close() {
         traceManager.close();
     }
@@ -407,6 +467,32 @@ final class TargetInspector {
             return null;
         }
     }
+    private byte[] availableBytes(Class<?> type) {
+        byte[] bytecode = registry.bytecodeFor(type);
+        return bytecode == null ? resourceBytes(type) : bytecode;
+    }
+
+    private String index(Class<?> type) {
+        String id = "c:" + Integer.toHexString(System.identityHashCode(type));
+        classIndex.put(id, new WeakReference<Class<?>>(type));
+        return id;
+    }
+
+    private static void appendXref(StringBuilder output, String layer, XrefAnalyzer.Reference reference) {
+        output.append('R').append('\t').append(layer).append('\t')
+                .append(reference.relation).append('\t').append(reference.count).append('\t')
+                .append(encoded(reference.targetIdentifier)).append('\t')
+                .append(encoded(reference.className)).append('\t')
+                .append(encoded(reference.member)).append('\t')
+                .append(encoded(reference.descriptor)).append('\t')
+                .append(encoded(reference.detail)).append('\n');
+    }
+
+    private static String encoded(String value) {
+        if (value == null || value.isEmpty()) return "";
+        return Base64.getEncoder().encodeToString(value.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    }
+
     private Class<?> resolveClass(String identifier) throws ClassNotFoundException {
         WeakReference<Class<?>> reference = classIndex.get(identifier);
         Class<?> indexed = reference == null ? null : reference.get();

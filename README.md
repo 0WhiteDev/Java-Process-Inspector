@@ -88,6 +88,7 @@ This message commonly appears when a Java 21 agent is loaded into a target runni
 | Overview | Live heap, non-heap, class, thread, GC, uptime, and full thread-dump data |
 | Classes | Paged live definitions, background search, full-source HotSwap, modern method patches, raw bytecode editing, rollback, dumps, and selectable CFR, Vineflower, or Procyon decompilation |
 | Live tracer | Bounded runtime probes with arguments, results, exceptions, duration, threads, object identity, caller stacks, Time Tunnel, and an interactive call tree |
+| Xrefs | Static and observed Called by and Calls edges, field and type references, constants, and method-level string or endpoint users |
 | Constant search | Global search through strings, descriptors, class names, methods, and fields in available class constant pools |
 | Executor | Java editor with syntax highlighting, line numbers, folding, bracket matching, and Ctrl+Enter execution |
 | Fields | Inspect existing static fields without constructing arbitrary target classes |
@@ -201,6 +202,24 @@ Bootstrap classes, constructors, class initializers, native methods, abstract me
 </details>
 
 <details>
+<summary><strong>Xrefs and dynamic call graph</strong></summary>
+
+- Show <strong>Called by</strong> and <strong>Calls</strong> for the selected classloader-specific method
+- Analyze <code>invoke*</code>, <code>invokedynamic</code>, field access, referenced types, and loaded constants directly from bytecode
+- Scan loaded definitions for reverse callers without initializing application classes
+- Add calls observed by Live Tracer to the same method graph
+- Mark static references in gray, executed edges in green, reflection paths in yellow, and calls followed by an uncaught exception in red
+- Search string and endpoint fragments and return the exact methods that load them
+- Double-click a method edge or string result to continue analysis from that method
+- Bound reverse analysis to 5,000 classes, 1,000 results, and 10 seconds per request
+- Bound the session dynamic graph to 20,000 aggregated edges instead of retaining every call
+
+Select a method in <strong>Loaded classes</strong> and click <strong>Xrefs</strong>. Static results appear immediately. Start a Live Tracer probe on a relevant entry point, perform the action in the target application, then use <strong>Refresh Xrefs</strong> to merge the observed graph. A dynamic incoming caller discovered from a stack frame may not expose a JVM descriptor; double-clicking it resolves the first matching loaded method.
+
+Dynamic edges are collected only inside methods instrumented by Live Tracer. The red state identifies the last observed call site before an uncaught exception left the traced method. It is a useful lead, not proof that the callee itself threw the exception. Reflection is recognized from standard reflection and method-handle frames and call sites.
+
+</details>
+<details>
 <summary><strong>Controlled modification tools</strong></summary>
 
 - Java snippet execution without replacing global `System.out`
@@ -227,6 +246,7 @@ flowchart LR
     AGENT[Embedded Instrumentation agent]
     INSPECT[Metrics, classes, fields, bytecode]
     TRACE[Bounded live method probes]
+    XREF[Static and observed Xrefs]
     EXEC[Isolated source executor]
   end
   GUI --> ATTACH
@@ -235,6 +255,8 @@ flowchart LR
   CLIENT <-->|authenticated loopback| AGENT
   AGENT --> INSPECT
   AGENT --> TRACE
+  TRACE --> XREF
+  INSPECT --> XREF
   AGENT --> EXEC
   GUI --> WIN
   WIN -->|explicit native operation| OS[Selected Windows process]
@@ -279,7 +301,7 @@ java -jar target/jpi.jar
 
 Integration tests cover both late attach and an executable JAR launched with the early agent. The early-agent test verifies that the application class is captured before `main()` and appears in the dynamic load timeline. A Windows-only test allocates a native buffer, writes through the production `WriteProcessMemory` path, and reads the replacement value back from the same address.
 
-The late-attach integration test installs a live trace probe, captures a real invocation, restores the traced definition, compiles replacement Java source inside the running target, patches ordinary and lambda-based methods, reapplies raw class bytes, and verifies rollback after every mode.
+The late-attach integration test installs a live trace probe, captures a real invocation, verifies static and dynamic Xrefs plus method-level string search, restores the traced definition, compiles replacement Java source inside the running target, patches ordinary and lambda-based methods, reapplies raw class bytes, and verifies rollback after every mode.
 
 ### Build output
 
@@ -325,6 +347,7 @@ A manual run of the Release workflow builds downloadable workflow artifacts with
 - Existing lambdas can be edited with the Java compiler backend when their synthetic method count and captured-variable shape remain compatible. Adding more lambda bodies or changing their capture signature would add or change methods and is rejected by standard HotSwap.
 - Constructors, class initializers, abstract methods, and native methods are not available in method-only mode or Live Tracer.
 - Live Tracer currently targets modifiable non-bootstrap classes whose classloader can resolve the JPI trace runtime.
+- Dynamic Xrefs cover traced methods and aggregate observed call sites for the active session. Static reverse scans are bounded and can omit definitions whose bytecode is unavailable.
 - Raw `.class` replacements must preserve the exact class name and HotSwap-compatible schema.
 - Strong module boundaries can prevent reading selected fields, those fields are skipped.
 - Memory scanning and DLL injection are Windows-only and may require elevated rights.

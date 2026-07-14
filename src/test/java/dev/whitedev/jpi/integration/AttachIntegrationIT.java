@@ -61,6 +61,13 @@ class AttachIntegrationIT {
                 assertTrue(traceEvents.contains("S\t" + traceId + "\t"));
                 assertTrue(traceEvents.contains("E\t"));
                 assertTrue(traceEvents.contains("\treturn\t"));
+                String xrefs = session.requestText(Operation.METHOD_XREFS,
+                        classId + "\nruntimeValue\n()Ljava/lang/String;");
+                assertTrue(xrefs.contains("R\tSTATIC\t"));
+                assertTrue(xrefs.contains("R\tDYNAMIC\tCALLED_BY\t"));
+                assertTrue(session.requestText(Operation.XREF_SEARCH, "before")
+                        .contains(Base64.getEncoder().encodeToString(
+                                AttachTarget.class.getName().getBytes("UTF-8"))));
                 assertTrue(session.requestText(Operation.TRACE_STOP, traceId).contains("Stopped"));
                 assertEquals("before", session.requestText(Operation.EXECUTE, probe));
                 String methodPatch = classId + "\nruntimeValue\n()Ljava/lang/String;\n{ return \"method-patched\"; }";

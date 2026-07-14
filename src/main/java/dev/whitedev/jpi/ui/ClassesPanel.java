@@ -26,7 +26,9 @@ final class ClassesPanel extends JPanel implements SessionAware {
     private static final int MAX_HEX_BYTES = 4 * 1024 * 1024;
     private static final int CLASS_PAGE_SIZE = 500;
     private final LiveTracerPanel liveTracer;
+    private final XrefsPanel xrefs;
     private final Runnable openLiveTracer;
+    private final Runnable openXrefs;
     private final DefaultListModel<LoadedClassInfo> model = new DefaultListModel<>();
     private final JList<LoadedClassInfo> list = new JList<>(model);
     private final JTextField search = new JTextField();
@@ -37,6 +39,7 @@ final class ClassesPanel extends JPanel implements SessionAware {
     private final JComboBox<MethodInfo> methodSelector = new JComboBox<>();
     private final JButton patchMethod = Ui.primaryButton("Apply method body");
     private final JButton traceMethod = Ui.secondaryButton("Trace method");
+    private final JButton showXrefs = Ui.secondaryButton("Xrefs");
     private final JButton applyHex = Ui.primaryButton("Apply hex bytecode");
     private final JLabel methodStatus = new JLabel("Select a class and method");
     private final JLabel classCount = new JLabel("0 classes");
@@ -68,10 +71,13 @@ final class ClassesPanel extends JPanel implements SessionAware {
     private boolean methodBodyReady;
     private boolean redefinitionControlsEnabled = true;
 
-    ClassesPanel(LiveTracerPanel liveTracer, Runnable openLiveTracer) {
+    ClassesPanel(LiveTracerPanel liveTracer, XrefsPanel xrefs,
+                 Runnable openLiveTracer, Runnable openXrefs) {
         super(new BorderLayout(0, 16));
         this.liveTracer = liveTracer;
+        this.xrefs = xrefs;
         this.openLiveTracer = openLiveTracer;
+        this.openXrefs = openXrefs;
         setBorder(new EmptyBorder(4, 0, 0, 0));
         setOpaque(false);
         add(Ui.sectionHeader("Loaded classes",
@@ -195,6 +201,7 @@ final class ClassesPanel extends JPanel implements SessionAware {
         rollback.setEnabled(false);
         patchMethod.setEnabled(false);
         traceMethod.setEnabled(false);
+        showXrefs.setEnabled(false);
         applyHex.setEnabled(false);
         live.setEnabled(connected);
         if (connected) {
@@ -438,7 +445,9 @@ final class ClassesPanel extends JPanel implements SessionAware {
         refresh.addActionListener(event -> loadMethods(true));
         patchMethod.addActionListener(event -> patchSelectedMethod());
         traceMethod.addActionListener(event -> traceSelectedMethod());
+        showXrefs.addActionListener(event -> showSelectedXrefs());
         controls.add(refresh);
+        controls.add(showXrefs);
         controls.add(traceMethod);
         controls.add(patchMethod);
         header.add(methodSelector, BorderLayout.CENTER);
@@ -586,7 +595,9 @@ final class ClassesPanel extends JPanel implements SessionAware {
         MethodInfo method = (MethodInfo) methodSelector.getSelectedItem();
         String reason = methodPatchUnavailableReason(selected, method);
         boolean available = reason == null;
-        traceMethod.setEnabled(methodUnavailableReason(selected, method) == null);
+        boolean methodAvailable = methodUnavailableReason(selected, method) == null;
+        traceMethod.setEnabled(methodAvailable);
+        showXrefs.setEnabled(methodAvailable);
         patchMethod.setEnabled(available);
         if (available) {
             String warning = MethodBodyCompatibility.unsupportedReason(methodBody.getText());
@@ -607,6 +618,18 @@ final class ClassesPanel extends JPanel implements SessionAware {
         if (methodBodyLoading) return "Loading the selected method implementation";
         if (!methodBodyReady) return "The selected method implementation is not ready";
         return null;
+    }
+
+    private void showSelectedXrefs() {
+        LoadedClassInfo selected = list.getSelectedValue();
+        MethodInfo method = (MethodInfo) methodSelector.getSelectedItem();
+        String unavailable = methodUnavailableReason(selected, method);
+        if (unavailable != null) {
+            Ui.error(this, new IllegalStateException(unavailable));
+            return;
+        }
+        xrefs.selectTarget(selected.id, selected.name, method.name, method.descriptor);
+        openXrefs.run();
     }
 
     private void traceSelectedMethod() {

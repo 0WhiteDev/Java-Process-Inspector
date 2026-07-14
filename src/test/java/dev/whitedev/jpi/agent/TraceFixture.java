@@ -8,4 +8,14 @@ final class TraceFixture {
     String fail(String message) {
         throw new IllegalStateException(message);
     }
+
+    String analyze(String input) {
+        StringBuilder value = new StringBuilder("https://example.test/api/");
+        value.append(input);
+        return helper(value.toString());
+    }
+
+    String helper(String value) {
+        return value.trim();
+    }
 }

@@ -50,6 +50,13 @@ class TraceInstrumenterTest {
         assertTrue(output.contains("\tthrow\t"));
         assertTrue(output.contains(encoded("$1 = \"token\"")));
         assertTrue(output.contains(encoded("java.lang.IllegalStateException: expected")));
+
+        String successGraph = TraceRuntime.dynamicGraph(TraceFixture.class.getName(),
+                "combine", "(Ljava/lang/String;I)Ljava/lang/String;");
+        assertTrue(successGraph.contains("R\tDYNAMIC\tCALLS\t"));
+        String failureGraph = TraceRuntime.dynamicGraph(TraceFixture.class.getName(),
+                "fail", "(Ljava/lang/String;)Ljava/lang/String;");
+        assertTrue(failureGraph.contains("R\tFAILED\tCALLS\t"));
     }
 
     private byte[] fixtureBytes() throws Exception {
