@@ -48,6 +48,21 @@ class AttachIntegrationIT {
                 assertEquals("before", session.requestText(Operation.EXECUTE, probe));
                 assertTrue(session.requestText(Operation.CLASS_METHODS, classId)
                         .contains("runtimeValue\t()Ljava/lang/String;"));
+                String traceSettings = "captureArguments=true\ncaptureReturn=true\ncaptureException=true"
+                        + "\ncaptureDuration=true\ncaptureThread=true\ncaptureStack=true\ncaptureIdentity=true"
+                        + "\nsampleEvery=1\nrateLimit=100\nmaxEvents=10\nstopAfterMillis=60000"
+                        + "\nmaxValueLength=2048\nmaxArrayElements=32\nmaxStackDepth=24\ncondition=";
+                String traceResponse = session.requestText(Operation.TRACE_START,
+                        classId + "\nruntimeValue\n()Ljava/lang/String;\n" + traceSettings);
+                String traceId = traceResponse.split("\t", 2)[0];
+                assertTrue(traceId.startsWith("trace-"));
+                assertEquals("before", session.requestText(Operation.EXECUTE, probe));
+                String traceEvents = session.requestText(Operation.TRACE_EVENTS, "");
+                assertTrue(traceEvents.contains("S\t" + traceId + "\t"));
+                assertTrue(traceEvents.contains("E\t"));
+                assertTrue(traceEvents.contains("\treturn\t"));
+                assertTrue(session.requestText(Operation.TRACE_STOP, traceId).contains("Stopped"));
+                assertEquals("before", session.requestText(Operation.EXECUTE, probe));
                 String methodPatch = classId + "\nruntimeValue\n()Ljava/lang/String;\n{ return \"method-patched\"; }";
                 assertTrue(session.requestText(Operation.PATCH_METHOD, methodPatch).contains("Patched"));
                 assertEquals("method-patched", session.requestText(Operation.EXECUTE, probe));

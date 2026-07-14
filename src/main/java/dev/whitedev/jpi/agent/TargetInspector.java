@@ -33,11 +33,13 @@ final class TargetInspector {
 
     private final Instrumentation instrumentation;
     private final ClassRegistry registry;
+    private final TraceManager traceManager;
     private final Map<String, WeakReference<Class<?>>> classIndex = new ConcurrentHashMap<>();
 
     TargetInspector(Instrumentation instrumentation, ClassRegistry registry) {
         this.instrumentation = instrumentation;
         this.registry = registry;
+        this.traceManager = new TraceManager(instrumentation);
     }
 
     String loadedClasses() {
@@ -156,6 +158,34 @@ final class TargetInspector {
         return "Patched " + target.getName() + "." + method + descriptor + " with " + compiler;
     }
 
+    String startTrace(String payload) throws Exception {
+        int first = payload.indexOf('\n');
+        int second = first < 0 ? -1 : payload.indexOf('\n', first + 1);
+        int third = second < 0 ? -1 : payload.indexOf('\n', second + 1);
+        if (first <= 0 || second <= first || third <= second) {
+            throw new IOException("Missing class, method, descriptor, or trace settings");
+        }
+        String identifier = payload.substring(0, first);
+        String method = payload.substring(first + 1, second);
+        String descriptor = payload.substring(second + 1, third);
+        String settings = payload.substring(third + 1);
+        Class<?> target = resolveClass(identifier);
+        requireRedefinable(target);
+        return traceManager.start(target, identifier, method, descriptor, settings, classBytes(identifier));
+    }
+
+    String stopTrace(String probeId) throws Exception {
+        return traceManager.stop(probeId);
+    }
+
+    String traceEvents() {
+        return traceManager.events();
+    }
+
+    void close() {
+        traceManager.close();
+    }
+
     String applyClassBytes(String payload) throws Exception {
         int separator = payload.indexOf('\n');
         if (separator <= 0 || separator == payload.length() - 1) throw new IOException("Missing class identifier or bytecode");
@@ -179,6 +209,7 @@ final class TargetInspector {
     String rollbackClass(String identifier) throws Exception {
         Class<?> target = resolveClass(identifier);
         requireRedefinable(target);
+        traceManager.stopForClass(target);
         if (registry.originalBytecodeFor(target) == null) classBytes(identifier);
         byte[] original = registry.originalBytecodeFor(target);
         if (original == null) throw new IOException("Original bytecode is unavailable for " + target.getName());
@@ -398,6 +429,7 @@ final class TargetInspector {
     }
 
     private void applyDefinition(Class<?> target, byte[] current, byte[] replacement) throws Exception {
+        traceManager.stopForClass(target);
         ClassSchema.verifyCompatible(current, replacement);
         instrumentation.redefineClasses(new ClassDefinition(target, replacement));
         registry.recordApplied(target, replacement);

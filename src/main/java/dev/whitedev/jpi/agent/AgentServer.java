@@ -68,6 +68,9 @@ final class AgentServer implements Runnable {
             case CLASS_METHODS: return WireProtocol.utf8(inspector.classMethods(payload));
             case PATCH_METHOD: return WireProtocol.utf8(inspector.patchMethod(payload));
             case APPLY_CLASS_BYTES: return WireProtocol.utf8(inspector.applyClassBytes(payload));
+            case TRACE_START: return WireProtocol.utf8(inspector.startTrace(payload));
+            case TRACE_STOP: return WireProtocol.utf8(inspector.stopTrace(payload));
+            case TRACE_EVENTS: return WireProtocol.utf8(inspector.traceEvents());
             case DISCONNECT: return WireProtocol.utf8("disconnected");
             default: throw new IllegalArgumentException("Unsupported operation: " + request.operation());
         }
@@ -79,7 +82,9 @@ final class AgentServer implements Runnable {
     }
 
     void close() {
+        if (closed) return;
         closed = true;
+        inspector.close();
         Socket current = socket;
         socket = null;
         if (current != null) try { current.close(); } catch (IOException ignored) {}

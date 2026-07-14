@@ -66,6 +66,8 @@ jobs:
             "META-INF/MANIFEST.MF",
             "dev/whitedev/jpi/JpiApplication.class",
             "dev/whitedev/jpi/agent/InspectorAgent.class",
+            "dev/whitedev/jpi/agent/TraceRuntime.class",
+            "dev/whitedev/jpi/ui/LiveTracerPanel.class",
             "org/objectweb/asm/tree/ClassNode.class",
             "org/eclipse/jdt/internal/compiler/tool/EclipseCompiler.class",
             "javax/annotation/Nullable.class",

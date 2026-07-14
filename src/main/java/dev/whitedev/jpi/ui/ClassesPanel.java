@@ -25,6 +25,8 @@ import java.util.*;
 final class ClassesPanel extends JPanel implements SessionAware {
     private static final int MAX_HEX_BYTES = 4 * 1024 * 1024;
     private static final int CLASS_PAGE_SIZE = 500;
+    private final LiveTracerPanel liveTracer;
+    private final Runnable openLiveTracer;
     private final DefaultListModel<LoadedClassInfo> model = new DefaultListModel<>();
     private final JList<LoadedClassInfo> list = new JList<>(model);
     private final JTextField search = new JTextField();
@@ -34,6 +36,7 @@ final class ClassesPanel extends JPanel implements SessionAware {
     private final RSyntaxTextArea methodBody = CodeEditors.javaEditor(true);
     private final JComboBox<MethodInfo> methodSelector = new JComboBox<>();
     private final JButton patchMethod = Ui.primaryButton("Apply method body");
+    private final JButton traceMethod = Ui.secondaryButton("Trace method");
     private final JButton applyHex = Ui.primaryButton("Apply hex bytecode");
     private final JLabel methodStatus = new JLabel("Select a class and method");
     private final JLabel classCount = new JLabel("0 classes");
@@ -65,8 +68,10 @@ final class ClassesPanel extends JPanel implements SessionAware {
     private boolean methodBodyReady;
     private boolean redefinitionControlsEnabled = true;
 
-    ClassesPanel() {
+    ClassesPanel(LiveTracerPanel liveTracer, Runnable openLiveTracer) {
         super(new BorderLayout(0, 16));
+        this.liveTracer = liveTracer;
+        this.openLiveTracer = openLiveTracer;
         setBorder(new EmptyBorder(4, 0, 0, 0));
         setOpaque(false);
         add(Ui.sectionHeader("Loaded classes",
@@ -189,6 +194,7 @@ final class ClassesPanel extends JPanel implements SessionAware {
         applySource.setEnabled(false);
         rollback.setEnabled(false);
         patchMethod.setEnabled(false);
+        traceMethod.setEnabled(false);
         applyHex.setEnabled(false);
         live.setEnabled(connected);
         if (connected) {
@@ -431,7 +437,9 @@ final class ClassesPanel extends JPanel implements SessionAware {
         JButton refresh = Ui.secondaryButton("Refresh methods");
         refresh.addActionListener(event -> loadMethods(true));
         patchMethod.addActionListener(event -> patchSelectedMethod());
+        traceMethod.addActionListener(event -> traceSelectedMethod());
         controls.add(refresh);
+        controls.add(traceMethod);
         controls.add(patchMethod);
         header.add(methodSelector, BorderLayout.CENTER);
         header.add(controls, BorderLayout.EAST);
@@ -578,6 +586,7 @@ final class ClassesPanel extends JPanel implements SessionAware {
         MethodInfo method = (MethodInfo) methodSelector.getSelectedItem();
         String reason = methodPatchUnavailableReason(selected, method);
         boolean available = reason == null;
+        traceMethod.setEnabled(methodUnavailableReason(selected, method) == null);
         patchMethod.setEnabled(available);
         if (available) {
             String warning = MethodBodyCompatibility.unsupportedReason(methodBody.getText());
@@ -598,6 +607,18 @@ final class ClassesPanel extends JPanel implements SessionAware {
         if (methodBodyLoading) return "Loading the selected method implementation";
         if (!methodBodyReady) return "The selected method implementation is not ready";
         return null;
+    }
+
+    private void traceSelectedMethod() {
+        LoadedClassInfo selected = list.getSelectedValue();
+        MethodInfo method = (MethodInfo) methodSelector.getSelectedItem();
+        String unavailable = methodUnavailableReason(selected, method);
+        if (unavailable != null) {
+            Ui.error(this, new IllegalStateException(unavailable));
+            return;
+        }
+        liveTracer.selectTarget(selected.id, selected.name, method.name, method.descriptor);
+        openLiveTracer.run();
     }
 
     private void patchSelectedMethod() {

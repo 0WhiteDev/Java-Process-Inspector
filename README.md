@@ -20,6 +20,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Java-21%2B-grey.svg" alt="Java 21+">
   <img src="https://img.shields.io/badge/platform-JVM%20%7C%20Windows%20native%20tools-lightgrey.svg" alt="Platform">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-lightgrey.svg" alt="MIT License"></a>
   <a href="https://github.com/0WhiteDev/Java-Process-Inspector/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/0WhiteDev/Java-Process-Inspector/ci.yml?branch=main&label=CI" alt="CI status"></a>
   <a href="https://github.com/0WhiteDev/Java-Process-Inspector/releases/latest"><img src="https://img.shields.io/github/v/release/0WhiteDev/Java-Process-Inspector?label=release" alt="Latest release"></a>
 </p>
@@ -86,6 +87,7 @@ This message commonly appears when a Java 21 agent is loaded into a target runni
 |---|---|
 | Overview | Live heap, non-heap, class, thread, GC, uptime, and full thread-dump data |
 | Classes | Paged live definitions, background search, full-source HotSwap, modern method patches, raw bytecode editing, rollback, dumps, and selectable CFR, Vineflower, or Procyon decompilation |
+| Live tracer | Bounded runtime probes with arguments, results, exceptions, duration, threads, object identity, caller stacks, Time Tunnel, and an interactive call tree |
 | Constant search | Global search through strings, descriptors, class names, methods, and fields in available class constant pools |
 | Executor | Java editor with syntax highlighting, line numbers, folding, bracket matching, and Ctrl+Enter execution |
 | Fields | Inspect existing static fields without constructing arbitrary target classes |
@@ -177,6 +179,28 @@ Changing the engine immediately reloads the selected class and its selected meth
 </details>
 
 <details>
+<summary><strong>Live Behavior Tracer</strong></summary>
+
+- Instrument a selected loaded method without restarting the target
+- Capture arguments, return values, uncaught exceptions, duration, thread, caller stack, and object identity
+- Keep a bounded Time Tunnel of concrete invocations with exact timestamps and parent call IDs
+- Build an interactive call tree when traced methods invoke other traced methods
+- Double-click a Time Tunnel or call-tree event to prepare that exact definition and method as the next probe
+- Filter calls with <code>$N == null</code>, <code>$N != null</code>, <code>$N.contains("text")</code>, return-value comparisons, exceptions, thread names, and duration comparisons
+- Combine filters with <code>&amp;&amp;</code>, for example <code>$1.contains("token") &amp;&amp; duration > 10ms</code>
+- Limit overhead with sampling, per-method rate limits, event caps, value limits, array limits, stack depth, and automatic expiration
+- Warn when a high-frequency method causes a large number of events to be dropped
+- Restore instrumented classes when a probe stops, expires, the session disconnects, or a class patch starts
+
+Open **Loaded classes**, select a modifiable class and method, then click **Trace method**. JPI opens the Live tracer with the exact classloader-specific definition selected. Choose capture fields and safety limits, optionally enter a condition, and start the probe. New calls appear in the Time Tunnel and call tree while the application continues running.
+
+The tracer does not call arbitrary application toString implementations while rendering captured objects. Strings, primitive wrappers, enums, arrays, and byte arrays receive bounded representations. Other objects are represented by type and identity. Replay is intentionally not automatic because invoking an observed method again can repeat network, file, state, or payment side effects.
+
+Bootstrap classes, constructors, class initializers, native methods, abstract methods, and JVM-unmodifiable classes are excluded from the current tracer backend. Application and child classloaders must be able to resolve the JPI trace runtime.
+
+</details>
+
+<details>
 <summary><strong>Controlled modification tools</strong></summary>
 
 - Java snippet execution without replacing global `System.out`
@@ -202,6 +226,7 @@ flowchart LR
   subgraph target [Target JVM]
     AGENT[Embedded Instrumentation agent]
     INSPECT[Metrics, classes, fields, bytecode]
+    TRACE[Bounded live method probes]
     EXEC[Isolated source executor]
   end
   GUI --> ATTACH
@@ -209,6 +234,7 @@ flowchart LR
   GUI --> CLIENT
   CLIENT <-->|authenticated loopback| AGENT
   AGENT --> INSPECT
+  AGENT --> TRACE
   AGENT --> EXEC
   GUI --> WIN
   WIN -->|explicit native operation| OS[Selected Windows process]
@@ -219,7 +245,7 @@ flowchart LR
 | Package | Responsibility |
 |---|---|
 | `dev.whitedev.jpi.attach` | JVM discovery, agent loading, session lifecycle |
-| `dev.whitedev.jpi.agent` | Target entry point, dispatcher, instrumentation and execution |
+| `dev.whitedev.jpi.agent` | Target entry point, dispatcher, inspection, live tracing, and execution |
 | `dev.whitedev.jpi.protocol` | Binary protocol with stable operations and bounds |
 | `dev.whitedev.jpi.nativeaccess` | Typed JNA boundary for process, memory, and DLL operations |
 | `dev.whitedev.jpi.decompile` | Embedded CFR lifecycle and decompilation |
@@ -253,7 +279,7 @@ java -jar target/jpi.jar
 
 Integration tests cover both late attach and an executable JAR launched with the early agent. The early-agent test verifies that the application class is captured before `main()` and appears in the dynamic load timeline. A Windows-only test allocates a native buffer, writes through the production `WriteProcessMemory` path, and reads the replacement value back from the same address.
 
-The late-attach integration test compiles replacement Java source inside the running target, patches ordinary and lambda-based methods through the live Java compiler backend, exports the changed class bytes, reapplies them through the raw bytecode path, verifies each behavior change, and verifies rollback after every mode.
+The late-attach integration test installs a live trace probe, captures a real invocation, restores the traced definition, compiles replacement Java source inside the running target, patches ordinary and lambda-based methods, reapplies raw class bytes, and verifies rollback after every mode.
 
 ### Build output
 
@@ -297,7 +323,8 @@ A manual run of the Release workflow builds downloadable workflow artifacts with
 - Runtime source editing uses the target JDK compiler when present and an embedded Java 8-compatible ECJ fallback otherwise. JPI exposes loaded class definitions and bundled javax.annotation types to the compiler, but invalid source emitted by a decompiler can still require manual correction or a different decompiler.
 - Standard HotSwap changes method bodies only and does not add fields, methods, interfaces, superclasses, or generated nested classes.
 - Existing lambdas can be edited with the Java compiler backend when their synthetic method count and captured-variable shape remain compatible. Adding more lambda bodies or changing their capture signature would add or change methods and is rejected by standard HotSwap.
-- Constructors, class initializers, abstract methods, and native methods are not available in method-only mode.
+- Constructors, class initializers, abstract methods, and native methods are not available in method-only mode or Live Tracer.
+- Live Tracer currently targets modifiable non-bootstrap classes whose classloader can resolve the JPI trace runtime.
 - Raw `.class` replacements must preserve the exact class name and HotSwap-compatible schema.
 - Strong module boundaries can prevent reading selected fields, those fields are skipped.
 - Memory scanning and DLL injection are Windows-only and may require elevated rights.
@@ -311,5 +338,9 @@ Embedded decompiler versions, licenses, source projects, and verified artifact h
 
 - [@0WhiteDev](https://github.com/0WhiteDev)
 - [@DevsMarket](https://github.com/DEVS-MARKET)
+
+## License
+
+Java Process Inspector is available under the [MIT License](LICENSE).
 
 ---

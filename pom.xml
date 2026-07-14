@@ -7,6 +7,13 @@
     <version>2.0.0</version>
     <name>Java Process Inspector</name>
     <description>Attach-based JVM inspection and diagnostics desktop application.</description>
+    <licenses>
+        <license>
+            <name>MIT License</name>
+            <url>https://opensource.org/license/mit</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.release>21</maven.compiler.release>
