@@ -44,9 +44,14 @@ final class LoadedClassInfo {
         return searchable.contains(query);
     }
 
-    @Override public String toString() {
+    String display(String visibleName) {
         String marker = captured ? "[B] " : "    ";
-        return marker + name + "  -  " + shortLoader();
+        String value = name.equals(visibleName) ? name : visibleName + "  [" + name + "]";
+        return marker + value + "  -  " + shortLoader();
+    }
+
+    @Override public String toString() {
+        return display(name);
     }
 
     private String shortLoader() {

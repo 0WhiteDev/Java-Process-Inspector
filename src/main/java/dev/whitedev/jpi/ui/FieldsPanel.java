@@ -1,6 +1,7 @@
 package dev.whitedev.jpi.ui;
 
 import dev.whitedev.jpi.attach.InspectorSession;
+import dev.whitedev.jpi.deobfuscation.DeobfuscationWorkspace;
 import dev.whitedev.jpi.protocol.Operation;
 
 import javax.swing.*;
@@ -9,6 +10,7 @@ import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 
 final class FieldsPanel extends JPanel implements SessionAware {
+    private final DeobfuscationWorkspace workspace;
     private final JTextField filter = new JTextField();
     private final DefaultTableModel model = new DefaultTableModel(
             new Object[]{"Class", "Field", "Type", "Value"}, 0) {
@@ -18,8 +20,9 @@ final class FieldsPanel extends JPanel implements SessionAware {
     private final JLabel resultCount = new JLabel("No results");
     private InspectorSession session;
 
-    FieldsPanel() {
+    FieldsPanel(DeobfuscationWorkspace workspace) {
         super(new BorderLayout(0, 16));
+        this.workspace = workspace;
         setBorder(new EmptyBorder(4, 0, 0, 0));
         setOpaque(false);
         add(Ui.sectionHeader("Static fields",
@@ -72,14 +75,20 @@ final class FieldsPanel extends JPanel implements SessionAware {
     private void inspect() {
         final InspectorSession current = session;
         if (current == null) return;
-        final String query = filter.getText();
+        final String query = workspace.translateSource(filter.getText()).source();
         inspect.setEnabled(false);
         resultCount.setText("Inspecting...");
         model.setRowCount(0);
         Async.run(() -> current.requestText(Operation.FIELDS, query), value -> {
             for (String line : value.split("\\n")) {
                 String[] columns = line.split("\\t", 4);
-                if (columns.length == 4) model.addRow(columns);
+                if (columns.length == 4) {
+                    String mappedClass = workspace.classAlias(columns[0]);
+                    String mappedField = workspace.fieldAlias(columns[0], columns[1]);
+                    if (!mappedClass.equals(columns[0])) columns[0] = mappedClass + " [" + columns[0] + "]";
+                    if (!mappedField.equals(columns[1])) columns[1] = mappedField + " [" + columns[1] + "]";
+                    model.addRow(columns);
+                }
             }
             resultCount.setText(model.getRowCount() + " fields");
             inspect.setEnabled(true);

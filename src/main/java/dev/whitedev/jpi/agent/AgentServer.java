@@ -73,6 +73,7 @@ final class AgentServer implements Runnable {
             case TRACE_EVENTS: return WireProtocol.utf8(inspector.traceEvents());
             case METHOD_XREFS: return WireProtocol.utf8(inspector.methodXrefs(payload));
             case XREF_SEARCH: return WireProtocol.utf8(inspector.xrefSearch(payload));
+            case DEOBFUSCATION_INVENTORY: return WireProtocol.utf8(inspector.deobfuscationInventory(payload));
             case DISCONNECT: return WireProtocol.utf8("disconnected");
             default: throw new IllegalArgumentException("Unsupported operation: " + request.operation());
         }

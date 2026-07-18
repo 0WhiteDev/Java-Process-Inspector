@@ -1,6 +1,7 @@
 package dev.whitedev.jpi.ui;
 
 import dev.whitedev.jpi.attach.InspectorSession;
+import dev.whitedev.jpi.deobfuscation.DeobfuscationWorkspace;
 import dev.whitedev.jpi.protocol.Operation;
 
 import javax.swing.*;
@@ -10,6 +11,7 @@ import java.awt.*;
 import java.awt.datatransfer.StringSelection;
 
 final class ConstantSearchPanel extends JPanel implements SessionAware {
+    private final DeobfuscationWorkspace workspace;
     private final JTextField query = new JTextField();
     private final JButton search = Ui.primaryButton("Search constants");
     private final JLabel resultCount = new JLabel("Not attached");
@@ -20,8 +22,9 @@ final class ConstantSearchPanel extends JPanel implements SessionAware {
     private final JTable results = new JTable(model);
     private InspectorSession session;
 
-    ConstantSearchPanel() {
+    ConstantSearchPanel(DeobfuscationWorkspace workspace) {
         super(new BorderLayout(0, 16));
+        this.workspace = workspace;
         setBorder(new EmptyBorder(4, 0, 0, 0));
         setOpaque(false);
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
@@ -60,7 +63,7 @@ final class ConstantSearchPanel extends JPanel implements SessionAware {
 
     private void search() {
         InspectorSession current = session;
-        String value = query.getText().trim();
+        String value = workspace.translateSource(query.getText().trim()).source();
         if (current == null) return;
         if (value.length() < 2) {
             resultCount.setText("Enter at least two characters");
@@ -84,7 +87,11 @@ final class ConstantSearchPanel extends JPanel implements SessionAware {
         for (String line : raw.split("\\n")) {
             if (line.isBlank()) continue;
             String[] columns = line.split("\\t", 3);
-            if (columns.length == 3) model.addRow(columns);
+            if (columns.length == 3) {
+                String mapped = workspace.classAlias(columns[0]);
+                if (!mapped.equals(columns[0])) columns[0] = mapped + " [" + columns[0] + "]";
+                model.addRow(columns);
+            }
         }
         resultCount.setText(model.getRowCount() + " matching constants");
     }

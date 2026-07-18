@@ -5,6 +5,8 @@ import dev.whitedev.jpi.decompile.DecompilerEngine;
 import dev.whitedev.jpi.decompile.DecompilerService;
 import dev.whitedev.jpi.decompile.MethodBodyCompatibility;
 import dev.whitedev.jpi.decompile.MethodSourceExtractor;
+import dev.whitedev.jpi.deobfuscation.DeobfuscationWorkspace;
+import dev.whitedev.jpi.deobfuscation.DisplayBytecodeRemapper;
 import dev.whitedev.jpi.protocol.Operation;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 
@@ -25,6 +27,7 @@ import java.util.*;
 final class ClassesPanel extends JPanel implements SessionAware {
     private static final int MAX_HEX_BYTES = 4 * 1024 * 1024;
     private static final int CLASS_PAGE_SIZE = 500;
+    private final DeobfuscationWorkspace mappingWorkspace;
     private final LiveTracerPanel liveTracer;
     private final XrefsPanel xrefs;
     private final Runnable openLiveTracer;
@@ -53,8 +56,10 @@ final class ClassesPanel extends JPanel implements SessionAware {
     private final JButton rollback = Ui.secondaryButton("Rollback original");
     private final JCheckBox live = new JCheckBox("Live tracking", true);
     private final JComboBox<DecompilerEngine> decompilerSelector = new JComboBox<>(DecompilerEngine.values());
+    private final JComboBox<SourceMode> sourceMode = new JComboBox<>(SourceMode.values());
     private final DecompilerService decompilerService = new DecompilerService();
     private final javax.swing.Timer classFilterTimer = new javax.swing.Timer(220, event -> filter(false, null));
+    private final javax.swing.Timer mappedSourceTimer = new javax.swing.Timer(350, event -> refreshMappedSource());
     private List<LoadedClassInfo> allClasses = new ArrayList<>();
     private List<LoadedClassInfo> filteredClasses = Collections.emptyList();
     private InspectorSession session;
@@ -71,15 +76,22 @@ final class ClassesPanel extends JPanel implements SessionAware {
     private boolean methodBodyReady;
     private boolean redefinitionControlsEnabled = true;
 
-    ClassesPanel(LiveTracerPanel liveTracer, XrefsPanel xrefs,
+    ClassesPanel(DeobfuscationWorkspace mappingWorkspace, LiveTracerPanel liveTracer, XrefsPanel xrefs,
                  Runnable openLiveTracer, Runnable openXrefs) {
         super(new BorderLayout(0, 16));
+        this.mappingWorkspace = mappingWorkspace;
         this.liveTracer = liveTracer;
         this.xrefs = xrefs;
         this.openLiveTracer = openLiveTracer;
         this.openXrefs = openXrefs;
         setBorder(new EmptyBorder(4, 0, 0, 0));
         setOpaque(false);
+        mappingWorkspace.addListener(() -> SwingUtilities.invokeLater(() -> {
+            filter(true, null);
+            list.repaint();
+            methodSelector.repaint();
+            if (isMappedSource()) mappedSourceTimer.restart();
+        }));
         add(Ui.sectionHeader("Loaded classes",
                 "Track definitions, duplicate names, classloaders, modules, and captured bytecode", null),
                 BorderLayout.NORTH);
@@ -107,15 +119,19 @@ final class ClassesPanel extends JPanel implements SessionAware {
         browser.add(classFooter, BorderLayout.SOUTH);
 
         JPanel detail = Ui.card(new BorderLayout(0, 10));
-        JPanel tools = new JPanel(new BorderLayout(8, 0));
+        JPanel tools = new JPanel(new GridLayout(2, 1, 0, 6));
         tools.setOpaque(false);
         metadata.setForeground(Ui.MUTED);
+        JPanel generalRow = new JPanel(new BorderLayout(8, 0));
+        generalRow.setOpaque(false);
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
         actions.setOpaque(false);
         JButton dump = Ui.secondaryButton("Dump selected");
         JButton dumpAll = Ui.secondaryButton("Dump all");
         JButton refreshEvents = Ui.secondaryButton("Refresh events");
-        decompilerSelector.setPreferredSize(new Dimension(170, 34));
+        decompilerSelector.setPreferredSize(new Dimension(150, 34));
+        sourceMode.setPreferredSize(new Dimension(150, 34));
+        sourceMode.setToolTipText("Original source can be edited; mapped source is a read-only analysis view");
         reload.addActionListener(e -> reload(true));
         decompile.addActionListener(e -> decompile());
         applySource.addActionListener(e -> applySource());
@@ -128,15 +144,24 @@ final class ClassesPanel extends JPanel implements SessionAware {
         actions.add(reload);
         actions.add(dump);
         actions.add(dumpAll);
-        actions.add(new JLabel("Decompiler"));
-        actions.add(decompilerSelector);
-        actions.add(decompile);
-        actions.add(rollback);
-        actions.add(applySource);
-        tools.add(metadata, BorderLayout.CENTER);
-        tools.add(actions, BorderLayout.EAST);
-        detail.add(tools, BorderLayout.NORTH);
+        generalRow.add(metadata, BorderLayout.CENTER);
+        generalRow.add(actions, BorderLayout.EAST);
 
+        JPanel sourceActions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+        sourceActions.setOpaque(false);
+        JLabel sourceHint = new JLabel("Mapped source is display-only and never changes the target");
+        sourceHint.setForeground(Ui.MUTED);
+        sourceActions.add(sourceHint);
+        sourceActions.add(new JLabel("Decompiler"));
+        sourceActions.add(decompilerSelector);
+        sourceActions.add(new JLabel("Source"));
+        sourceActions.add(sourceMode);
+        sourceActions.add(decompile);
+        sourceActions.add(rollback);
+        sourceActions.add(applySource);
+        tools.add(generalRow);
+        tools.add(sourceActions);
+        detail.add(tools, BorderLayout.NORTH);
         source.setText("Select a class and click Decompile.");
         events.setText("Class definition events will appear here.");
         bytecodeHex.setEditable(true);
@@ -157,6 +182,7 @@ final class ClassesPanel extends JPanel implements SessionAware {
         add(split, BorderLayout.CENTER);
 
         classFilterTimer.setRepeats(false);
+        mappedSourceTimer.setRepeats(false);
         previousClassPage.addActionListener(event -> changeClassPage(-1));
         nextClassPage.addActionListener(event -> changeClassPage(1));
         search.getDocument().addDocumentListener(new DocumentListener() {
@@ -174,6 +200,7 @@ final class ClassesPanel extends JPanel implements SessionAware {
         });
         methodSelector.addActionListener(event -> methodChanged());
         decompilerSelector.addActionListener(event -> decompilerChanged());
+        sourceMode.addActionListener(event -> sourceModeChanged());
         methodBody.getDocument().addDocumentListener(new DocumentListener() {
             public void insertUpdate(DocumentEvent event) { refreshMethodPatchState(); }
             public void removeUpdate(DocumentEvent event) { refreshMethodPatchState(); }
@@ -282,7 +309,8 @@ final class ClassesPanel extends JPanel implements SessionAware {
             if (query.isEmpty()) return snapshot;
             List<LoadedClassInfo> matches = new ArrayList<>();
             for (LoadedClassInfo info : snapshot) {
-                if (info.matches(query)) matches.add(info);
+                if (info.matches(query) || mappingWorkspace.classAlias(info.name)
+                        .toLowerCase(Locale.ROOT).contains(query)) matches.add(info);
             }
             return matches;
         }, matches -> {
@@ -365,13 +393,28 @@ final class ClassesPanel extends JPanel implements SessionAware {
             return;
         }
         boolean canRedefine = session != null && selected.modifiable && !"captured-only".equals(selected.kind);
-        applySource.setEnabled(canRedefine);
+        applySource.setEnabled(canRedefine && !isMappedSource());
         rollback.setEnabled(canRedefine);
         applyHex.setEnabled(canRedefine);
         metadata.setText(selected.kind + "  |  " + selected.module + "  |  "
                 + (selected.modifiable ? "modifiable" : "read-only") + "  |  "
                 + (selected.captured ? "bytecode captured" : "bytecode on demand"));
         loadMethods();
+    }
+
+    private boolean isMappedSource() {
+        return sourceMode.getSelectedItem() == SourceMode.MAPPED_READ_ONLY;
+    }
+
+    private void sourceModeChanged() {
+        source.setEditable(!isMappedSource());
+        decompileGeneration++;
+        setRedefinitionControls(true);
+        if (session != null && list.getSelectedValue() != null) decompile();
+    }
+
+    private void refreshMappedSource() {
+        if (isMappedSource() && session != null && list.getSelectedValue() != null) decompile();
     }
 
     private DecompilerEngine selectedDecompiler() {
@@ -393,43 +436,51 @@ final class ClassesPanel extends JPanel implements SessionAware {
         final LoadedClassInfo selected = list.getSelectedValue();
         final InspectorSession current = session;
         final DecompilerEngine engine = selectedDecompiler();
+        final SourceMode mode = (SourceMode) sourceMode.getSelectedItem();
         final long generation = ++decompileGeneration;
-        if (selected == null || current == null) return;
+        if (selected == null || current == null || mode == null) return;
         decompile.setEnabled(false);
-        source.setText("Reading bytecode and decompiling " + selected.name + " with " + engine + "...");
+        source.setEditable(mode != SourceMode.MAPPED_READ_ONLY);
+        String view = mode == SourceMode.MAPPED_READ_ONLY ? "mapped read-only" : "original editable";
+        source.setText("Reading bytecode and decompiling " + selected.name + " as " + view + " with " + engine + "...");
         Async.run(() -> {
             byte[] bytecode = current.request(Operation.CLASS_BYTES, selected.id);
+            byte[] displayBytecode = mode == SourceMode.MAPPED_READ_ONLY
+                    ? DisplayBytecodeRemapper.remap(bytecode, mappingWorkspace) : bytecode;
+            String displayName = mode == SourceMode.MAPPED_READ_ONLY
+                    ? mappingWorkspace.classAlias(selected.name) : selected.name;
             String decompiled;
             try {
-                decompiled = decompilerService.decompile(engine, selected.name, bytecode);
+                decompiled = decompilerService.decompile(engine, displayName, displayBytecode);
             } catch (Exception error) {
-                decompiled = engine + " could not produce compilable source for this class.\n"
+                decompiled = engine + " could not produce source for this class.\n"
                         + "Method patch and raw bytecode remain available.\n\n" + error.getMessage();
             }
             return new DecompiledResult(bytecode, decompiled);
         }, result -> {
-            if (!decompileMatches(generation, selected.id, engine)) return;
+            if (!decompileMatches(generation, selected.id, engine, mode)) return;
             source.setText(result.source);
             source.setCaretPosition(0);
             renderHex(result.bytecode);
             loadMethods();
-            metadata.setText(selected.kind + "  |  " + result.bytecode.length + " bytes  |  SHA-256 "
-                    + sha256(result.bytecode));
+            metadata.setText(selected.kind + "  |  " + view + "  |  " + result.bytecode.length
+                    + " bytes  |  SHA-256 " + sha256(result.bytecode));
+            setRedefinitionControls(true);
             decompile.setEnabled(true);
         }, error -> {
-            if (!decompileMatches(generation, selected.id, engine)) return;
+            if (!decompileMatches(generation, selected.id, engine, mode)) return;
             source.setText("Decompilation failed.\n" + error.getMessage());
             decompile.setEnabled(true);
             Ui.error(this, error);
         });
     }
 
-    private boolean decompileMatches(long generation, String classId, DecompilerEngine engine) {
+    private boolean decompileMatches(long generation, String classId, DecompilerEngine engine,
+                                     SourceMode mode) {
         LoadedClassInfo selected = list.getSelectedValue();
         return generation == decompileGeneration && selected != null && classId.equals(selected.id)
-                && engine == selectedDecompiler();
+                && engine == selectedDecompiler() && mode == sourceMode.getSelectedItem();
     }
-
     private JPanel methodPatchPanel() {
         JPanel panel = new JPanel(new BorderLayout(0, 10));
         panel.setOpaque(false);
@@ -505,7 +556,7 @@ final class ClassesPanel extends JPanel implements SessionAware {
             updatingMethodSelector = true;
             methodSelector.removeAllItems();
             for (String line : raw.split("\\n")) {
-                MethodInfo method = MethodInfo.parse(line);
+                MethodInfo method = parseMethodInfo(line, selected.name);
                 if (method != null) methodSelector.addItem(method);
             }
             updatingMethodSelector = false;
@@ -751,7 +802,7 @@ final class ClassesPanel extends JPanel implements SessionAware {
     private void applySource() {
         final LoadedClassInfo selected = list.getSelectedValue();
         final InspectorSession current = session;
-        if (selected == null || current == null || !selected.modifiable) return;
+        if (selected == null || current == null || !selected.modifiable || isMappedSource()) return;
         String javaSource = source.getText();
         if (javaSource.isBlank()) return;
         String message = "Compile and redefine " + selected.name + " in the running JVM?\n\n"
@@ -797,7 +848,7 @@ final class ClassesPanel extends JPanel implements SessionAware {
         LoadedClassInfo selected = list.getSelectedValue();
         boolean available = enabled && session != null && selected != null && selected.modifiable
                 && !"captured-only".equals(selected.kind);
-        applySource.setEnabled(available);
+        applySource.setEnabled(available && !isMappedSource());
         rollback.setEnabled(available);
         applyHex.setEnabled(available && bytecodeHex.getText().matches("(?s)[0-9a-fA-F\\s]+"));
         refreshMethodPatchState();
@@ -894,6 +945,20 @@ final class ClassesPanel extends JPanel implements SessionAware {
         }
     }
 
+    private enum SourceMode {
+        ORIGINAL_EDITABLE("Original, editable"),
+        MAPPED_READ_ONLY("Mapped, read-only");
+
+        private final String label;
+
+        SourceMode(String label) {
+            this.label = label;
+        }
+
+        @Override public String toString() {
+            return label;
+        }
+    }
     private static final class DecompiledResult {
         final byte[] bytecode;
         final String source;
@@ -904,23 +969,25 @@ final class ClassesPanel extends JPanel implements SessionAware {
         }
     }
 
-    private static final class MethodInfo {
+    private MethodInfo parseMethodInfo(String line, String owner) {
+        String[] values = line.split("\\t", -1);
+        if (values.length != 4) return null;
+        return new MethodInfo(owner, values[0], values[1], values[2], Boolean.parseBoolean(values[3]));
+    }
+
+    private final class MethodInfo {
+        final String owner;
         final String name;
         final String descriptor;
         final String modifiers;
         final boolean patchable;
 
-        MethodInfo(String name, String descriptor, String modifiers, boolean patchable) {
+        MethodInfo(String owner, String name, String descriptor, String modifiers, boolean patchable) {
+            this.owner = owner;
             this.name = name;
             this.descriptor = descriptor;
             this.modifiers = modifiers;
             this.patchable = patchable;
-        }
-
-        static MethodInfo parse(String line) {
-            String[] values = line.split("\\t", -1);
-            if (values.length != 4) return null;
-            return new MethodInfo(values[0], values[1], values[2], Boolean.parseBoolean(values[3]));
         }
 
         String template() {
@@ -936,7 +1003,9 @@ final class ClassesPanel extends JPanel implements SessionAware {
         }
 
         @Override public String toString() {
-            return (patchable ? "" : "[read-only] ") + name + descriptor + "  " + modifiers;
+            String alias = mappingWorkspace.methodAlias(owner, name, descriptor);
+            String visible = alias.equals(name) ? name : alias + " [" + name + "]";
+            return (patchable ? "" : "[read-only] ") + visible + descriptor + "  " + modifiers;
         }
     }
 
@@ -950,14 +1019,29 @@ final class ClassesPanel extends JPanel implements SessionAware {
         }
     }
 
-    private static final class ClassRenderer extends DefaultListCellRenderer {
+    private final class ClassRenderer extends DefaultListCellRenderer {
         @Override public Component getListCellRendererComponent(JList<?> list, Object value, int index,
                                                                  boolean selected, boolean focus) {
             JLabel label = (JLabel) super.getListCellRendererComponent(list, value, index, selected, focus);
             LoadedClassInfo info = value instanceof LoadedClassInfo ? (LoadedClassInfo) value : null;
-            if (!selected && info != null && "captured-only".equals(info.kind)) label.setForeground(Ui.WARNING);
+            if (info != null) {
+                label.setText(info.display(mappingWorkspace.classAlias(info.name)));
+                if (!selected) {
+                    Color mapped = color(mappingWorkspace.classColor(info.name));
+                    if (mapped != null) label.setForeground(mapped);
+                    else if ("captured-only".equals(info.kind)) label.setForeground(Ui.WARNING);
+                }
+            }
             label.setBorder(new EmptyBorder(0, 6, 0, 6));
             return label;
+        }
+
+        private Color color(String value) {
+            try {
+                return value != null && value.matches("#[0-9a-fA-F]{6}") ? Color.decode(value) : null;
+            } catch (RuntimeException ignored) {
+                return null;
+            }
         }
     }
 }

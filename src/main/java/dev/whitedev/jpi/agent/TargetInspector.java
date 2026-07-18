@@ -216,6 +216,45 @@ final class TargetInspector {
         return output.toString();
     }
 
+    String deobfuscationInventory(String payload) throws IOException {
+        String[] values = payload == null ? new String[0] : payload.split("\n", -1);
+        String scope = values.length == 0 ? "" : values[0].trim();
+        if (scope.isEmpty()) throw new IOException("Enter a package or class prefix for the mapping scope");
+        if (scope.length() > 300) throw new IOException("Mapping scope is limited to 300 characters");
+        List<String> exclusions = new ArrayList<String>();
+        if (values.length > 1) {
+            for (String value : values[1].split("[,;]")) {
+                String exclusion = value.trim();
+                if (!exclusion.isEmpty()) exclusions.add(exclusion);
+            }
+        }
+        StringBuilder output = new StringBuilder();
+        Set<String> visited = new HashSet<String>();
+        int classes = 0;
+        int entries = 0;
+        for (Class<?> type : instrumentation.getAllLoadedClasses()) {
+            if (output.length() >= 12 * 1024 * 1024) break;
+            String name = type.getName();
+            if (name.startsWith("[") || !within(name, scope) || excluded(name, exclusions)) continue;
+            if (!visited.add(name) || ++classes > 5000 || entries >= 100000) continue;
+            byte[] bytecode = availableBytes(type);
+            if (bytecode != null) entries += DeobfuscationInventory.append(output, bytecode, 100000 - entries);
+        }
+        return output.toString();
+    }
+
+    static boolean within(String className, String scope) {
+        if ("<default>".equals(scope)) return className.indexOf('.') < 0;
+        return className.equals(scope) || className.startsWith(scope + ".") || className.startsWith(scope + "$");
+    }
+
+    private static boolean excluded(String className, List<String> exclusions) {
+        for (String exclusion : exclusions) {
+            if (className.equals(exclusion) || className.startsWith(exclusion + ".")
+                    || className.startsWith(exclusion + "$")) return true;
+        }
+        return false;
+    }
     String xrefSearch(String query) throws IOException {
         String needle = query == null ? "" : query.trim();
         if (needle.length() < 2) throw new IOException("Enter at least two characters");

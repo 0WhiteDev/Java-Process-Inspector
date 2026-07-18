@@ -1,6 +1,7 @@
 package dev.whitedev.jpi.ui;
 
 import dev.whitedev.jpi.attach.InspectorSession;
+import dev.whitedev.jpi.deobfuscation.DeobfuscationWorkspace;
 import dev.whitedev.jpi.protocol.Operation;
 
 import javax.swing.*;
@@ -29,6 +30,7 @@ final class LiveTracerPanel extends JPanel implements SessionAware {
             .withZone(ZoneId.systemDefault());
     private static final int MAX_LOCAL_EVENTS = 10_000;
 
+    private final DeobfuscationWorkspace workspace;
     private final JTextField classIdentifier = new JTextField();
     private final JLabel classLabel = new JLabel("No class selected");
     private final JComboBox<TraceMethod> methods = new JComboBox<>();
@@ -70,9 +72,11 @@ final class LiveTracerPanel extends JPanel implements SessionAware {
     private InspectorSession session;
     private boolean loadingMethods;
     private boolean polling;
+    private String currentClassName = "";
 
-    LiveTracerPanel() {
+    LiveTracerPanel(DeobfuscationWorkspace workspace) {
         super(new BorderLayout(0, 16));
+        this.workspace = workspace;
         setBorder(new EmptyBorder(4, 0, 0, 0));
         setOpaque(false);
 
@@ -157,13 +161,17 @@ final class LiveTracerPanel extends JPanel implements SessionAware {
     }
 
     void selectTarget(String identifier, String className, String methodName, String descriptor) {
+        currentClassName = className;
         classIdentifier.setText(identifier);
-        classLabel.setText(className + "  |  " + identifier);
+        String mappedClass = workspace.classAlias(className);
+        classLabel.setText((mappedClass.equals(className) ? className : mappedClass + " [" + className + "]")
+                + "  |  " + identifier);
         methods.removeAllItems();
-        TraceMethod method = new TraceMethod(methodName, descriptor, "", true);
+        String mappedMethod = workspace.methodAlias(className, methodName, descriptor);
+        TraceMethod method = new TraceMethod(methodName, mappedMethod, descriptor, "", true);
         methods.addItem(method);
         methods.setSelectedItem(method);
-        status.setText("Ready to trace " + className + "." + methodName + descriptor);
+        status.setText("Ready to trace " + mappedClass + "." + mappedMethod + descriptor);
         start.setEnabled(session != null);
     }
 
@@ -292,10 +300,11 @@ final class LiveTracerPanel extends JPanel implements SessionAware {
             if (session != current) return;
             methods.removeAllItems();
             for (String line : raw.split("\n")) {
-                TraceMethod method = TraceMethod.parse(line);
+                TraceMethod method = TraceMethod.parse(line, workspace, currentClassName);
                 if (method != null && method.traceable()) methods.addItem(method);
             }
-            classLabel.setText(identifier);
+            String mappedClass = workspace.classAlias(currentClassName.isEmpty() ? identifier : currentClassName);
+            classLabel.setText(mappedClass);
             loadingMethods = false;
             loadMethods.setEnabled(true);
             start.setEnabled(methods.getItemCount() > 0);
@@ -415,7 +424,7 @@ final class LiveTracerPanel extends JPanel implements SessionAware {
                     captured.put(event.sequence, event);
                     newEvents.add(event);
                     eventModel.addRow(new Object[]{event.sequence, TIME.format(Instant.ofEpochMilli(event.timestamp)),
-                            event.thread, event.className + "." + event.methodName,
+                            event.thread, displayMethod(event.className, event.methodName, event.descriptor),
                             event.outcome, duration(event.duration)});
                 }
             }
@@ -425,7 +434,8 @@ final class LiveTracerPanel extends JPanel implements SessionAware {
         long calls = 0;
         long dropped = 0;
         for (ProbeStatus probe : statuses) {
-            probeModel.addRow(new Object[]{probe.id, probe.className + "." + probe.methodName + probe.descriptor,
+            probeModel.addRow(new Object[]{probe.id,
+                    displayMethod(probe.className, probe.methodName, probe.descriptor),
                     probe.calls, probe.captured, probe.dropped,
                     TIME.format(Instant.ofEpochMilli(probe.expiresAt))});
             calls += probe.calls;
@@ -546,6 +556,10 @@ final class LiveTracerPanel extends JPanel implements SessionAware {
         }
     }
 
+    private String displayMethod(String owner, String name, String descriptor) {
+        return workspace.classAlias(owner) + "." + workspace.methodAlias(owner, name, descriptor) + descriptor;
+    }
+
     private static JSpinner spinner(int value, int minimum, int maximum, int step) {
         JSpinner spinner = new JSpinner(new SpinnerNumberModel(value, minimum, maximum, step));
         spinner.setPreferredSize(new Dimension(76, 30));
@@ -562,12 +576,14 @@ final class LiveTracerPanel extends JPanel implements SessionAware {
 
     private static final class TraceMethod {
         final String name;
+        final String displayName;
         final String descriptor;
         final String modifiers;
         final boolean patchable;
 
-        TraceMethod(String name, String descriptor, String modifiers, boolean patchable) {
+        TraceMethod(String name, String displayName, String descriptor, String modifiers, boolean patchable) {
             this.name = name;
+            this.displayName = displayName;
             this.descriptor = descriptor;
             this.modifiers = modifiers;
             this.patchable = patchable;
@@ -577,14 +593,16 @@ final class LiveTracerPanel extends JPanel implements SessionAware {
             return patchable && !"<init>".equals(name) && !"<clinit>".equals(name);
         }
 
-        static TraceMethod parse(String line) {
+        static TraceMethod parse(String line, DeobfuscationWorkspace workspace, String owner) {
             String[] values = line.split("\t", -1);
             if (values.length != 4) return null;
-            return new TraceMethod(values[0], values[1], values[2], Boolean.parseBoolean(values[3]));
+            return new TraceMethod(values[0], workspace.methodAlias(owner, values[0], values[1]),
+                    values[1], values[2], Boolean.parseBoolean(values[3]));
         }
 
         @Override public String toString() {
-            return modifiers + " " + name + descriptor;
+            String visible = displayName.equals(name) ? name : displayName + " [" + name + "]";
+            return modifiers + " " + visible + descriptor;
         }
     }
 

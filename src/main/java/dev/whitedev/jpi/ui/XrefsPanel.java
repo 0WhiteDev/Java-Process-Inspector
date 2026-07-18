@@ -1,6 +1,7 @@
 package dev.whitedev.jpi.ui;
 
 import dev.whitedev.jpi.attach.InspectorSession;
+import dev.whitedev.jpi.deobfuscation.DeobfuscationWorkspace;
 import dev.whitedev.jpi.protocol.Operation;
 
 import javax.swing.*;
@@ -17,6 +18,7 @@ import java.util.List;
 
 final class XrefsPanel extends JPanel implements SessionAware {
     private static final Color FAILED = new Color(255, 95, 86);
+    private final DeobfuscationWorkspace workspace;
     private final JTextField className = new JTextField();
     private final JTextField method = new JTextField();
     private final JTextField descriptor = new JTextField();
@@ -34,8 +36,9 @@ final class XrefsPanel extends JPanel implements SessionAware {
     private long xrefGeneration;
     private long searchGeneration;
 
-    XrefsPanel() {
+    XrefsPanel(DeobfuscationWorkspace workspace) {
         super(new BorderLayout(0, 16));
+        this.workspace = workspace;
         setBorder(new EmptyBorder(4, 0, 0, 0));
         setOpaque(false);
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
@@ -90,7 +93,8 @@ final class XrefsPanel extends JPanel implements SessionAware {
 
     void selectTarget(String identifier, String owner, String methodName, String methodDescriptor) {
         classIdentifier = identifier;
-        className.setText(owner);
+        String mappedClass = workspace.classAlias(owner);
+        className.setText(mappedClass.equals(owner) ? owner : mappedClass + " [" + owner + "]");
         method.setText(methodName);
         descriptor.setText(methodDescriptor);
         status.setText("Ready to analyze " + owner + "." + methodName);
@@ -195,7 +199,8 @@ final class XrefsPanel extends JPanel implements SessionAware {
     private void navigate(XrefRow row) {
         if (row.className.isEmpty() || row.member.isEmpty() || "<dynamic>".equals(row.className)) return;
         classIdentifier = row.targetIdentifier.isEmpty() ? row.className : row.targetIdentifier;
-        className.setText(row.className);
+        String mappedClass = workspace.classAlias(row.className);
+        className.setText(mappedClass.equals(row.className) ? row.className : mappedClass + " [" + row.className + "]");
         method.setText(row.member);
         if (!row.descriptor.isEmpty()) {
             descriptor.setText(row.descriptor);
@@ -274,7 +279,20 @@ final class XrefsPanel extends JPanel implements SessionAware {
 
         void add(XrefRow row) {
             rows.add(row);
-            model.addRow(new Object[]{row.layer, row.className, row.member, row.descriptor, row.detail, row.count});
+            String mappedClass = workspace.classAlias(row.className);
+            String mappedMember = row.member;
+            if ("FIELD".equals(row.relation)) {
+                mappedMember = workspace.fieldAlias(row.className, row.member, row.descriptor);
+            } else if ("CALLS".equals(row.relation) || "CALLED_BY".equals(row.relation)
+                    || "STRING_USER".equals(row.relation)) {
+                mappedMember = workspace.methodAlias(row.className, row.member, row.descriptor);
+            }
+            String visibleClass = mappedClass.equals(row.className)
+                    ? row.className : mappedClass + " [" + row.className + "]";
+            String visibleMember = mappedMember.equals(row.member)
+                    ? row.member : mappedMember + " [" + row.member + "]";
+            model.addRow(new Object[]{row.layer, visibleClass, visibleMember,
+                    row.descriptor, row.detail, row.count});
         }
 
         void clear() {

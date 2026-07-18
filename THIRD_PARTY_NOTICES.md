@@ -8,7 +8,7 @@ Java Process Inspector embeds the following decompiler distributions as applicat
 | Vineflower | 1.12.0 | Apache License 2.0 | https://github.com/Vineflower/vineflower |
 | Procyon Compiler Tools | 0.6.0 | Apache License 2.0 | https://github.com/mstrobel/procyon |
 | Procyon Core | 0.6.0 | Apache License 2.0 | https://github.com/mstrobel/procyon |
-| ASM Core and Tree API | 9.10.1 | BSD-3-Clause | https://asm.ow2.io/ |
+| ASM Core, Tree, and Commons API | 9.10.1 | BSD-3-Clause | https://asm.ow2.io/ |
 | JSR-305 annotations | 3.0.2 | Apache License 2.0 | https://central.sonatype.com/artifact/com.google.code.findbugs/jsr305 |
 | Eclipse Compiler for Java | 3.26.0 | Eclipse Public License 2.0 | https://projects.eclipse.org/projects/eclipse.jdt |
 

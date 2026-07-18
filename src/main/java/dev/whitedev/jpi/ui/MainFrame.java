@@ -5,6 +5,7 @@ import dev.whitedev.jpi.attach.CommandLineTokenizer;
 import dev.whitedev.jpi.attach.InspectorSession;
 import dev.whitedev.jpi.attach.JvmDescriptor;
 import dev.whitedev.jpi.attach.JvmDiscovery;
+import dev.whitedev.jpi.deobfuscation.DeobfuscationWorkspace;
 import dev.whitedev.jpi.nativeaccess.WindowsNativeAccess;
 import dev.whitedev.jpi.nativeaccess.WindowsNetworkAccess;
 import com.formdev.flatlaf.extras.FlatSVGIcon;
@@ -48,25 +49,29 @@ public final class MainFrame extends JFrame {
         setSize(Math.min(1280, screen.width - 70), Math.min(820, screen.height - 90));
         setLocationRelativeTo(null);
 
+        DeobfuscationWorkspace mappingWorkspace = new DeobfuscationWorkspace();
         OverviewPanel overview = new OverviewPanel();
-        LiveTracerPanel tracer = new LiveTracerPanel();
-        XrefsPanel xrefs = new XrefsPanel();
-        ClassesPanel classes = new ClassesPanel(tracer, xrefs,
+        LiveTracerPanel tracer = new LiveTracerPanel(mappingWorkspace);
+        XrefsPanel xrefs = new XrefsPanel(mappingWorkspace);
+        ClassesPanel classes = new ClassesPanel(mappingWorkspace, tracer, xrefs,
                 () -> selectView("Live tracer"), () -> selectView("Xrefs"));
-        ExecutorPanel executor = new ExecutorPanel();
-        FieldsPanel fields = new FieldsPanel();
+        DeobfuscationWorkspacePanel deobfuscation = new DeobfuscationWorkspacePanel(mappingWorkspace);
+        ExecutorPanel executor = new ExecutorPanel(mappingWorkspace);
+        FieldsPanel fields = new FieldsPanel(mappingWorkspace);
         EnvironmentPanel environment = new EnvironmentPanel();
-        ConstantSearchPanel constantSearch = new ConstantSearchPanel();
+        ConstantSearchPanel constantSearch = new ConstantSearchPanel(mappingWorkspace);
         WindowsNativeAccess windows = new WindowsNativeAccess();
         NetworkPanel network = new NetworkPanel(new WindowsNetworkAccess());
         MemoryPanel memory = new MemoryPanel(windows);
         DllPanel dll = new DllPanel(windows);
-        views = Arrays.asList(overview, classes, tracer, xrefs, constantSearch, executor, fields, environment, network, memory, dll);
+        views = Arrays.asList(overview, classes, tracer, xrefs, deobfuscation,
+                constantSearch, executor, fields, environment, network, memory, dll);
 
         addCard("Overview", overview);
         addCard("Loaded classes", classes);
         addCard("Live tracer", tracer);
         addCard("Xrefs", xrefs);
+        addCard("Deobfuscation", deobfuscation);
         addCard("Constant search", constantSearch);
         addCard("Code executor", executor);
         addCard("Static fields", fields);
@@ -126,7 +131,7 @@ public final class MainFrame extends JFrame {
         brand.add(mark, BorderLayout.WEST);
         brand.add(brandText, BorderLayout.CENTER);
         sidebar.add(brand);
-        sidebar.add(Box.createVerticalStrut(26));
+        sidebar.add(Box.createVerticalStrut(18));
 
         JLabel workspace = new JLabel("WORKSPACE");
         workspace.setForeground(Ui.MUTED);
@@ -138,12 +143,13 @@ public final class MainFrame extends JFrame {
         addNavigation(sidebar, "Loaded classes");
         addNavigation(sidebar, "Live tracer");
         addNavigation(sidebar, "Xrefs");
+        addNavigation(sidebar, "Deobfuscation");
         addNavigation(sidebar, "Constant search");
         addNavigation(sidebar, "Code executor");
         addNavigation(sidebar, "Static fields");
         addNavigation(sidebar, "VM environment");
         addNavigation(sidebar, "Network activity");
-        sidebar.add(Box.createVerticalStrut(18));
+        sidebar.add(Box.createVerticalStrut(10));
         JLabel advanced = new JLabel("ADVANCED");
         advanced.setForeground(Ui.MUTED);
         advanced.setFont(advanced.getFont().deriveFont(Font.BOLD, 11f));
@@ -200,7 +206,7 @@ public final class MainFrame extends JFrame {
         button.addActionListener(e -> selectView(name));
         navigation.put(name, button);
         sidebar.add(button);
-        sidebar.add(Box.createVerticalStrut(4));
+        sidebar.add(Box.createVerticalStrut(2));
     }
 
     private void selectView(String name) {

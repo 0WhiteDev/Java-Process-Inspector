@@ -40,6 +40,12 @@ class AttachIntegrationIT {
                 assertTrue(session.requestText(Operation.FIELDS, "AttachTarget").contains("marker"));
                 assertTrue(session.requestText(Operation.CONSTANT_SEARCH, "jpi-smoke-target")
                         .contains(AttachTarget.class.getName()));
+                String mappingInventory = session.requestText(Operation.DEOBFUSCATION_INVENTORY,
+                        "dev.whitedev.jpi.integration\n");
+                assertTrue(mappingInventory.contains("C\t" + Base64.getEncoder().encodeToString(
+                        AttachTarget.class.getName().getBytes("UTF-8"))));
+                assertTrue(mappingInventory.contains(Base64.getEncoder().encodeToString(
+                        "runtimeValue".getBytes("UTF-8"))));
                 String targetLine = Arrays.stream(loadedClasses.split("\n"))
                         .filter(line -> line.contains("\t" + AttachTarget.class.getName() + "\t"))
                         .findFirst().orElseThrow();

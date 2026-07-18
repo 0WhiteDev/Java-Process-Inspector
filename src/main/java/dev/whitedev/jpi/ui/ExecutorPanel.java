@@ -1,6 +1,7 @@
 package dev.whitedev.jpi.ui;
 
 import dev.whitedev.jpi.attach.InspectorSession;
+import dev.whitedev.jpi.deobfuscation.DeobfuscationWorkspace;
 import dev.whitedev.jpi.protocol.Operation;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 
@@ -11,14 +12,17 @@ import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
 
 final class ExecutorPanel extends JPanel implements SessionAware {
+    private final DeobfuscationWorkspace workspace;
     private final RSyntaxTextArea code = CodeEditors.javaEditor(true);
     private final JTextArea output = Ui.outputArea();
     private final JButton run = Ui.primaryButton("Run in target JVM");
     private final JLabel state = new JLabel("Ready");
+    private final JCheckBox resolveMappings = new JCheckBox("Resolve mapped names", true);
     private InspectorSession session;
 
-    ExecutorPanel() {
+    ExecutorPanel(DeobfuscationWorkspace workspace) {
         super(new BorderLayout(0, 16));
+        this.workspace = workspace;
         setBorder(new EmptyBorder(4, 0, 0, 0));
         setOpaque(false);
 
@@ -27,6 +31,8 @@ final class ExecutorPanel extends JPanel implements SessionAware {
         JButton reset = Ui.secondaryButton("Reset example");
         reset.addActionListener(e -> setTemplate());
         run.addActionListener(e -> execute());
+        resolveMappings.setToolTipText("Translate enabled class, method, field, and package aliases before compilation");
+        actions.add(resolveMappings);
         actions.add(reset);
         actions.add(run);
         add(Ui.sectionHeader("Code executor",
@@ -91,15 +97,24 @@ final class ExecutorPanel extends JPanel implements SessionAware {
     private void execute() {
         final InspectorSession current = session;
         if (current == null || !run.isEnabled()) return;
-        final String source = code.getText();
+        DeobfuscationWorkspace.TranslationResult translation = resolveMappings.isSelected()
+                ? workspace.translateSource(code.getText())
+                : new DeobfuscationWorkspace.TranslationResult(code.getText(), 0, java.util.Collections.emptyList());
+        if (!translation.ambiguousAliases().isEmpty()) {
+            Ui.error(this, new IllegalStateException("Mapped aliases are ambiguous: "
+                    + String.join(", ", translation.ambiguousAliases())));
+            return;
+        }
+        final String source = translation.source();
+        final int replacements = translation.replacements();
         run.setEnabled(false);
-        state.setText("Running...");
+        state.setText(replacements == 0 ? "Running..." : "Running with " + replacements + " mapped names...");
         state.setForeground(Ui.WARNING);
         output.setText("");
         Async.run(() -> current.requestText(Operation.EXECUTE, source), value -> {
             output.setText(value.isEmpty() ? "Execution completed without output." : value);
             output.setCaretPosition(0);
-            state.setText("Completed");
+            state.setText(replacements == 0 ? "Completed" : "Completed  |  " + replacements + " aliases resolved");
             state.setForeground(Ui.SUCCESS);
             run.setEnabled(true);
         }, error -> {

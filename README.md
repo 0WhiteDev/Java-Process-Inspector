@@ -86,9 +86,10 @@ This message commonly appears when a Java 21 agent is loaded into a target runni
 | Tab | Purpose |
 |---|---|
 | Overview | Live heap, non-heap, class, thread, GC, uptime, and full thread-dump data |
-| Classes | Paged live definitions, background search, full-source HotSwap, modern method patches, raw bytecode editing, rollback, dumps, and selectable CFR, Vineflower, or Procyon decompilation |
+| Classes | Paged live definitions, original editable or mapped read-only decompilation, full-source HotSwap, modern method patches, raw bytecode editing, rollback, dumps, and selectable CFR, Vineflower, or Procyon engines |
 | Live tracer | Bounded runtime probes with arguments, results, exceptions, duration, threads, object identity, caller stacks, Time Tunnel, and an interactive call tree |
 | Xrefs | Static and observed Called by and Calls edges, field and type references, constants, and method-level string or endpoint users |
+| Deobfuscation | Persistent aliases, notes, tags, colors, scoped AutoMap, package exclusions, mapping exports, and Code Executor name resolution |
 | Constant search | Global search through strings, descriptors, class names, methods, and fields in available class constant pools |
 | Executor | Java editor with syntax highlighting, line numbers, folding, bracket matching, and Ctrl+Enter execution |
 | Fields | Inspect existing static fields without constructing arbitrary target classes |
@@ -220,6 +221,34 @@ Dynamic edges are collected only inside methods instrumented by Live Tracer. The
 
 </details>
 <details>
+<summary><strong>Deobfuscation workspace</strong></summary>
+
+- Create a local naming overlay for packages, classes, overloaded methods, fields, and method parameters
+- Keep original JVM names and descriptors next to editable aliases
+- Attach comments, comma-separated tags, colors, and an enabled state to every entry
+- Load only a selected package or class prefix and exclude any comma-separated package prefixes
+- Select <strong>Default package only</strong> to include classes without a named package and automatically exclude every named package
+- Run scoped AutoMap for selected entry kinds with globally unique <code>class_N</code>, <code>method_N</code>, and <code>field_N</code> aliases
+- Leave package renaming disabled by default and enable it explicitly when required
+- Preserve manual aliases when AutoMap runs again
+- Show mapped names in Loaded classes, method selection, Xrefs, Live Tracer, Constant search, and Static fields
+- Decompile a temporary fully remapped bytecode copy with CFR, Vineflower, or Procyon in a read-only source mode
+- Resolve enabled class, package, method, and field aliases in Code Executor before target-side compilation
+- Detect ambiguous custom aliases instead of compiling an unpredictable translation
+- Save the workspace automatically to <code>~/.jpi/deobfuscation-workspace.json</code>
+- Import and merge or replace JPI JSON workspaces
+- Export JPI JSON, Tiny v2, TSRG2, and ProGuard mappings
+
+Open <strong>Deobfuscation</strong>, enter a package prefix such as <code>a.b</code>, optionally enter excluded prefixes, and click <strong>Load scope</strong> to browse definitions without generating aliases. To map only the default package, select <strong>Default package only</strong>; the Scope and Exclude fields become inactive because every named package is omitted automatically. Edit the Mapped column directly, or select the desired kinds and click <strong>AutoMap</strong>. Package aliases are generated only when the Packages option is selected.
+
+The mapping table supports simultaneous structured filters. For example, <code>class=abc field=a,b,c method=l,p,av1</code> shows the matching class together with only those fields and methods. Available keys are <code>class</code>, <code>field</code>, <code>method</code>, <code>package</code>, and <code>parameter</code>, including their plural forms. Values match original or mapped names, comma-separated values form an OR list, different keys are combined structurally, and <code>*</code> is available as a wildcard. Unqualified text remains an additional substring filter for descriptors, locations, tags, comments, and aliases.
+
+The mapping layer never renames a loaded JVM definition and does not change target bytecode. In Loaded classes, choose <strong>Original, editable</strong> to decompile the active definition for source editing, or <strong>Mapped, read-only</strong> to decompile a temporary ASM-remapped copy for analysis. The mapped mode renames class references, packages, overloaded methods, fields, descriptors, signatures, and bytecode call sites before the selected decompiler runs. Apply source is disabled in this mode, while Raw bytecode continues to show the original active definition. Code Executor performs a lexical reverse translation immediately before sending source to the target. Text literals, character literals, and comments inside the submitted snippet are not rewritten. Parameter aliases are analysis metadata because an external executor snippet does not run inside the local-variable scope of the mapped target method.
+
+JSON is the lossless workspace format and retains notes, tags, colors, disabled entries, parameters, and descriptors. Tiny v2, TSRG2, and ProGuard exports contain the compatible naming subset intended for other reverse-engineering tools.
+
+</details>
+<details>
 <summary><strong>Controlled modification tools</strong></summary>
 
 - Java snippet execution without replacing global `System.out`
@@ -247,6 +276,7 @@ flowchart LR
     INSPECT[Metrics, classes, fields, bytecode]
     TRACE[Bounded live method probes]
     XREF[Static and observed Xrefs]
+    MAP[Persistent deobfuscation overlay]
     EXEC[Isolated source executor]
   end
   GUI --> ATTACH
@@ -257,6 +287,9 @@ flowchart LR
   AGENT --> TRACE
   TRACE --> XREF
   INSPECT --> XREF
+  XREF --> MAP
+  MAP --> GUI
+  MAP --> EXEC
   AGENT --> EXEC
   GUI --> WIN
   WIN -->|explicit native operation| OS[Selected Windows process]
@@ -271,6 +304,7 @@ flowchart LR
 | `dev.whitedev.jpi.protocol` | Binary protocol with stable operations and bounds |
 | `dev.whitedev.jpi.nativeaccess` | Typed JNA boundary for process, memory, and DLL operations |
 | `dev.whitedev.jpi.decompile` | Embedded CFR lifecycle and decompilation |
+| `dev.whitedev.jpi.deobfuscation` | Persistent mapping model, AutoMap, source alias resolution, and mapping formats |
 | `dev.whitedev.jpi.ui` | Unified workspace and asynchronous presentation layer |
 
 ### Why there is no C++ directory anymore
@@ -301,7 +335,7 @@ java -jar target/jpi.jar
 
 Integration tests cover both late attach and an executable JAR launched with the early agent. The early-agent test verifies that the application class is captured before `main()` and appears in the dynamic load timeline. A Windows-only test allocates a native buffer, writes through the production `WriteProcessMemory` path, and reads the replacement value back from the same address.
 
-The late-attach integration test installs a live trace probe, captures a real invocation, verifies static and dynamic Xrefs plus method-level string search, restores the traced definition, compiles replacement Java source inside the running target, patches ordinary and lambda-based methods, reapplies raw class bytes, and verifies rollback after every mode.
+The late-attach integration test reads a scoped deobfuscation inventory, installs a live trace probe, captures a real invocation, verifies static and dynamic Xrefs plus method-level string search, restores the traced definition, compiles replacement Java source inside the running target, patches ordinary and lambda-based methods, reapplies raw class bytes, and verifies rollback after every mode.
 
 ### Build output
 
@@ -348,6 +382,7 @@ A manual run of the Release workflow builds downloadable workflow artifacts with
 - Constructors, class initializers, abstract methods, and native methods are not available in method-only mode or Live Tracer.
 - Live Tracer currently targets modifiable non-bootstrap classes whose classloader can resolve the JPI trace runtime.
 - Dynamic Xrefs cover traced methods and aggregate observed call sites for the active session. Static reverse scans are bounded and can omit definitions whose bytecode is unavailable.
+- Deobfuscation mappings are a controller-side overlay keyed by JVM names and descriptors. Mapped decompilation is read-only and never redefines the target, local variables are not reconstructed, and duplicate binary names from different classloaders currently share one exported name.
 - Raw `.class` replacements must preserve the exact class name and HotSwap-compatible schema.
 - Strong module boundaries can prevent reading selected fields, those fields are skipped.
 - Memory scanning and DLL injection are Windows-only and may require elevated rights.
