@@ -50,6 +50,18 @@ class AttachIntegrationIT {
                         .filter(line -> line.contains("\t" + AttachTarget.class.getName() + "\t"))
                         .findFirst().orElseThrow();
                 String classId = targetLine.split("\t", -1)[0];
+                String apiHookResponse = session.requestText(Operation.API_HOOK_START,
+                        "CRYPTO\nmaxEvents=20;rateLimit=20;stopAfterSeconds=60;maxClasses=100");
+                assertTrue(apiHookResponse.contains("Crypto"), apiHookResponse);
+                String cryptoProbe = "public class CryptoProbe { public static void execute(java.io.PrintStream out) throws Exception { out.print(dev.whitedev.jpi.integration.AttachTarget.digest(new byte[]{1, 2, 3}).length); } }";
+                assertEquals("32", session.requestText(Operation.EXECUTE, cryptoProbe));
+                String hookEvents = session.requestText(Operation.API_HOOK_EVENTS, "");
+                assertTrue(hookEvents.contains("S\tCRYPTO\ttrue\t"));
+                assertTrue(hookEvents.contains("E\t"));
+                assertTrue(hookEvents.contains(Base64.getEncoder().encodeToString(
+                        AttachTarget.class.getName().getBytes("UTF-8"))));
+                assertTrue(session.requestText(Operation.API_HOOK_STOP, "").contains("restored"));
+                assertEquals("32", session.requestText(Operation.EXECUTE, cryptoProbe));
                 String probe = "public class RuntimeProbe { public static void execute(java.io.PrintStream out) { out.print(dev.whitedev.jpi.integration.AttachTarget.runtimeValue()); } }";
                 assertEquals("before", session.requestText(Operation.EXECUTE, probe));
                 assertTrue(session.requestText(Operation.CLASS_METHODS, classId)
@@ -95,7 +107,7 @@ class AttachIntegrationIT {
                 assertEquals("8", session.requestText(Operation.EXECUTE, lambdaProbe));
                 assertTrue(session.requestText(Operation.ROLLBACK_CLASS, classId).contains("Restored"));
                 assertEquals("4", session.requestText(Operation.EXECUTE, lambdaProbe));
-                String replacement = "package dev.whitedev.jpi.integration; import java.lang.management.ManagementFactory; public final class AttachTarget { public static volatile String marker = \"jpi-smoke-target\"; public static String runtimeValue() { return \"after\"; } public static int lambdaValue(int input) { java.util.function.IntUnaryOperator operation = value -> value + 1; return operation.applyAsInt(input); } public static void main(String[] args) throws Exception { System.out.println(ManagementFactory.getRuntimeMXBean().getName().split(\"@\", 2)[0]); System.out.flush(); while (true) Thread.sleep(1000); } }";
+                String replacement = "package dev.whitedev.jpi.integration; import java.lang.management.ManagementFactory; public final class AttachTarget { public static volatile String marker = \"jpi-smoke-target\"; public static String runtimeValue() { return \"after\"; } public static byte[] digest(byte[] input) throws Exception { return java.security.MessageDigest.getInstance(\"SHA-256\").digest(input); } public static int lambdaValue(int input) { java.util.function.IntUnaryOperator operation = value -> value + 1; return operation.applyAsInt(input); } public static void main(String[] args) throws Exception { System.out.println(ManagementFactory.getRuntimeMXBean().getName().split(\"@\", 2)[0]); System.out.flush(); while (true) Thread.sleep(1000); } }";
                 assertTrue(session.requestText(Operation.REDEFINE_SOURCE, classId + "\n" + replacement).contains("Redefined"));
                 assertEquals("after", session.requestText(Operation.EXECUTE, probe));
                 assertTrue(session.requestText(Operation.ROLLBACK_CLASS, classId).contains("Restored"));

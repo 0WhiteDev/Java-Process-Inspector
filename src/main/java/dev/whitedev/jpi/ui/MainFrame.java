@@ -53,6 +53,7 @@ public final class MainFrame extends JFrame {
         OverviewPanel overview = new OverviewPanel();
         LiveTracerPanel tracer = new LiveTracerPanel(mappingWorkspace);
         XrefsPanel xrefs = new XrefsPanel(mappingWorkspace);
+        ApiHooksPanel apiHooks = new ApiHooksPanel(mappingWorkspace, xrefs, () -> selectView("Xrefs"));
         ClassesPanel classes = new ClassesPanel(mappingWorkspace, tracer, xrefs,
                 () -> selectView("Live tracer"), () -> selectView("Xrefs"));
         DeobfuscationWorkspacePanel deobfuscation = new DeobfuscationWorkspacePanel(mappingWorkspace);
@@ -64,12 +65,13 @@ public final class MainFrame extends JFrame {
         NetworkPanel network = new NetworkPanel(new WindowsNetworkAccess());
         MemoryPanel memory = new MemoryPanel(windows);
         DllPanel dll = new DllPanel(windows);
-        views = Arrays.asList(overview, classes, tracer, xrefs, deobfuscation,
+        views = Arrays.asList(overview, classes, tracer, apiHooks, xrefs, deobfuscation,
                 constantSearch, executor, fields, environment, network, memory, dll);
 
         addCard("Overview", overview);
         addCard("Loaded classes", classes);
         addCard("Live tracer", tracer);
+        addCard("API hooks", apiHooks);
         addCard("Xrefs", xrefs);
         addCard("Deobfuscation", deobfuscation);
         addCard("Constant search", constantSearch);
@@ -142,6 +144,7 @@ public final class MainFrame extends JFrame {
         addNavigation(sidebar, "Overview");
         addNavigation(sidebar, "Loaded classes");
         addNavigation(sidebar, "Live tracer");
+        addNavigation(sidebar, "API hooks");
         addNavigation(sidebar, "Xrefs");
         addNavigation(sidebar, "Deobfuscation");
         addNavigation(sidebar, "Constant search");

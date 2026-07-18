@@ -88,6 +88,7 @@ This message commonly appears when a Java 21 agent is loaded into a target runni
 | Overview | Live heap, non-heap, class, thread, GC, uptime, and full thread-dump data |
 | Classes | Paged live definitions, original editable or mapped read-only decompilation, full-source HotSwap, modern method patches, raw bytecode editing, rollback, dumps, and selectable CFR, Vineflower, or Procyon engines |
 | Live tracer | Bounded runtime probes with arguments, results, exceptions, duration, threads, object identity, caller stacks, Time Tunnel, and an interactive call tree |
+| API hooks | Ready-to-use Network, Crypto, Files, Reflection, and Class loading profiles that identify exact application call sites |
 | Xrefs | Static and observed Called by and Calls edges, field and type references, constants, and method-level string or endpoint users |
 | Deobfuscation | Persistent aliases, notes, tags, colors, scoped AutoMap, package exclusions, mapping exports, and Code Executor name resolution |
 | Constant search | Global search through strings, descriptors, class names, methods, and fields in available class constant pools |
@@ -199,6 +200,25 @@ Open **Loaded classes**, select a modifiable class and method, then click **Trac
 The tracer does not call arbitrary application toString implementations while rendering captured objects. Strings, primitive wrappers, enums, arrays, and byte arrays receive bounded representations. Other objects are represented by type and identity. Replay is intentionally not automatic because invoking an observed method again can repeat network, file, state, or payment side effects.
 
 Bootstrap classes, constructors, class initializers, native methods, abstract methods, and JVM-unmodifiable classes are excluded from the current tracer backend. Application and child classloaders must be able to resolve the JPI trace runtime.
+
+</details>
+
+<details>
+<summary><strong>Automatic API Hooks</strong></summary>
+
+- Enable Network, Crypto, Files, Reflection, and Class loading observation without locating methods manually
+- Cover Socket.connect, HttpClient.send, URL.openConnection, Cipher operations, MessageDigest.digest, file streams, Files reads and writes, reflection entry points, and class definition APIs
+- Instrument application call sites instead of bootstrap JDK classes, preserving compatibility with the JVM classloader boundary
+- Record the exact caller class, method, JVM descriptor, thread, invocation kind, and observed API descriptor
+- Apply several selected profiles in one bytecode pass per class
+- Avoid capturing arguments, keys, payloads, file contents, or other target objects in the default mode
+- Bound capture with per-profile event caps, rate limits, maximum class and call-site counts, a scan deadline, and automatic expiration
+- Restore every changed class when hooks stop, expire, the session closes, tracing starts on that class, or a class patch begins
+- Double-click an event to open static and dynamic Xrefs for the application caller
+
+Open <strong>API hooks</strong>, select one or more profiles, adjust the safety limits, and click <strong>Start selected profiles</strong>. Perform the interesting action in the target application. JPI shows which application method reached the selected JDK API, even when the surrounding application names are obfuscated. Selecting Crypto, for example, reveals the application callers of Cipher.getInstance, Cipher.init, Cipher.doFinal, and MessageDigest.digest.
+
+The backend never redefines bootstrap JDK classes. It scans safely available bytecode from loaded application classes and inserts balanced, argument-free observation calls directly before matching invoke instructions. Classes whose bytecode is unavailable, cannot be modified, or cannot resolve the JPI runtime are skipped and reported in the setup summary.
 
 </details>
 
@@ -335,7 +355,7 @@ java -jar target/jpi.jar
 
 Integration tests cover both late attach and an executable JAR launched with the early agent. The early-agent test verifies that the application class is captured before `main()` and appears in the dynamic load timeline. A Windows-only test allocates a native buffer, writes through the production `WriteProcessMemory` path, and reads the replacement value back from the same address.
 
-The late-attach integration test reads a scoped deobfuscation inventory, installs a live trace probe, captures a real invocation, verifies static and dynamic Xrefs plus method-level string search, restores the traced definition, compiles replacement Java source inside the running target, patches ordinary and lambda-based methods, reapplies raw class bytes, and verifies rollback after every mode.
+The late-attach integration test reads a scoped deobfuscation inventory, installs a Crypto API profile, captures a real MessageDigest call and restores its call-site class, installs a live trace probe, captures a real invocation, verifies static and dynamic Xrefs plus method-level string search, restores the traced definition, compiles replacement Java source inside the running target, patches ordinary and lambda-based methods, reapplies raw class bytes, and verifies rollback after every mode.
 
 ### Build output
 
@@ -381,6 +401,7 @@ A manual run of the Release workflow builds downloadable workflow artifacts with
 - Existing lambdas can be edited with the Java compiler backend when their synthetic method count and captured-variable shape remain compatible. Adding more lambda bodies or changing their capture signature would add or change methods and is rejected by standard HotSwap.
 - Constructors, class initializers, abstract methods, and native methods are not available in method-only mode or Live Tracer.
 - Live Tracer currently targets modifiable non-bootstrap classes whose classloader can resolve the JPI trace runtime.
+- Automatic API Hooks observe direct bytecode call sites available in loaded non-bootstrap classes. Calls made entirely inside JDK internals, native code, unavailable definitions, or classes loaded after a profile starts are not included in that run. Restart the selected profiles to scan newly loaded classes.
 - Dynamic Xrefs cover traced methods and aggregate observed call sites for the active session. Static reverse scans are bounded and can omit definitions whose bytecode is unavailable.
 - Deobfuscation mappings are a controller-side overlay keyed by JVM names and descriptors. Mapped decompilation is read-only and never redefines the target, local variables are not reconstructed, and duplicate binary names from different classloaders currently share one exported name.
 - Raw `.class` replacements must preserve the exact class name and HotSwap-compatible schema.

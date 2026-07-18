@@ -34,12 +34,14 @@ final class TargetInspector {
     private final Instrumentation instrumentation;
     private final ClassRegistry registry;
     private final TraceManager traceManager;
+    private final ApiHookManager apiHookManager;
     private final Map<String, WeakReference<Class<?>>> classIndex = new ConcurrentHashMap<>();
 
     TargetInspector(Instrumentation instrumentation, ClassRegistry registry) {
         this.instrumentation = instrumentation;
         this.registry = registry;
         this.traceManager = new TraceManager(instrumentation);
+        this.apiHookManager = new ApiHookManager(instrumentation, registry);
     }
 
     String loadedClasses() {
@@ -110,6 +112,7 @@ final class TargetInspector {
         String source = payload.substring(separator + 1);
         Class<?> target = resolveClass(identifier);
         requireRedefinable(target);
+        apiHookManager.stopForClass(target);
         byte[] current = classBytes(identifier);
         byte[] replacement = RuntimeJavaCompiler.compile(target.getName(), source, runtimeClassPath(target));
         applyDefinition(target, current, replacement);
@@ -134,6 +137,7 @@ final class TargetInspector {
         String body = payload.substring(third + 1);
         Class<?> target = resolveClass(identifier);
         requireRedefinable(target);
+        apiHookManager.stopForClass(target);
         byte[] current = classBytes(identifier);
         byte[] replacement;
         String compiler;
@@ -171,6 +175,7 @@ final class TargetInspector {
         String settings = payload.substring(third + 1);
         Class<?> target = resolveClass(identifier);
         requireRedefinable(target);
+        apiHookManager.stopForClass(target);
         return traceManager.start(target, identifier, method, descriptor, settings, classBytes(identifier));
     }
 
@@ -180,6 +185,18 @@ final class TargetInspector {
 
     String traceEvents() {
         return traceManager.events();
+    }
+
+    String startApiHooks(String payload) throws Exception {
+        return apiHookManager.start(payload);
+    }
+
+    String stopApiHooks() {
+        return apiHookManager.stopAll();
+    }
+
+    String apiHookEvents() {
+        return apiHookManager.events();
     }
 
     String methodXrefs(String payload) throws Exception {
@@ -283,6 +300,7 @@ final class TargetInspector {
 
     void close() {
         traceManager.close();
+        apiHookManager.close();
     }
 
     String applyClassBytes(String payload) throws Exception {
@@ -300,6 +318,7 @@ final class TargetInspector {
         }
         Class<?> target = resolveClass(identifier);
         requireRedefinable(target);
+        apiHookManager.stopForClass(target);
         byte[] current = classBytes(identifier);
         applyDefinition(target, current, replacement);
         return "Applied " + replacement.length + " byte class definition to " + target.getName();
@@ -309,6 +328,7 @@ final class TargetInspector {
         Class<?> target = resolveClass(identifier);
         requireRedefinable(target);
         traceManager.stopForClass(target);
+        apiHookManager.stopForClass(target);
         if (registry.originalBytecodeFor(target) == null) classBytes(identifier);
         byte[] original = registry.originalBytecodeFor(target);
         if (original == null) throw new IOException("Original bytecode is unavailable for " + target.getName());
@@ -555,6 +575,7 @@ final class TargetInspector {
 
     private void applyDefinition(Class<?> target, byte[] current, byte[] replacement) throws Exception {
         traceManager.stopForClass(target);
+        apiHookManager.stopForClass(target);
         ClassSchema.verifyCompatible(current, replacement);
         instrumentation.redefineClasses(new ClassDefinition(target, replacement));
         registry.recordApplied(target, replacement);

@@ -5,6 +5,9 @@ import java.lang.management.ManagementFactory;
 public final class AttachTarget {
     public static volatile String marker = "jpi-smoke-target";
     public static String runtimeValue() { return "before"; }
+    public static byte[] digest(byte[] input) throws Exception {
+        return java.security.MessageDigest.getInstance("SHA-256").digest(input);
+    }
     public static int lambdaValue(int input) {
         java.util.function.IntUnaryOperator operation = value -> value + 1;
         return operation.applyAsInt(input);
