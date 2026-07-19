@@ -94,6 +94,7 @@ This message commonly appears when a Java 21 agent is loaded into a target runni
 | Constant search | Global search through strings, descriptors, class names, methods, and fields in available class constant pools |
 | Executor | Java editor with syntax highlighting, line numbers, folding, bracket matching, and Ctrl+Enter execution |
 | Fields | Inspect existing static fields without constructing arbitrary target classes |
+| Heap objects | Bounded traversal from explicit static roots, reachable instance counts, samples, fields, outgoing references, known-root paths, value search, and confirmed HPROF export |
 | VM environment | VM arguments, redacted system properties, command line, and classloader inventory |
 | Session snapshot | One ZIP containing metrics, environment, class inventory, load events, and a thread dump |
 | Network activity | Live process-owned TCP/UDP IPv4/IPv6 endpoints, states, filtering, and open/close timeline |
@@ -268,6 +269,27 @@ The mapping layer never renames a loaded JVM definition and does not change targ
 JSON is the lossless workspace format and retains notes, tags, colors, disabled entries, parameters, and descriptors. Tiny v2, TSRG2, and ProGuard exports contain the compatible naming subset intended for other reverse-engineering tools.
 
 </details>
+
+<details>
+<summary><strong>Heap / Object Inspector</strong></summary>
+
+- Start from an explicit application class or package containing known static root fields
+- Traverse a bounded identity graph without invoking application getters or <code>toString</code> methods
+- Count unique reachable objects per runtime class and aggregate their shallow sizes from <code>Instrumentation.getObjectSize</code>
+- Filter sample instances by class name, instance-field name, string value, primitive wrapper, number, boolean, character, or enum value
+- Inspect bounded instance fields and array elements, then follow outgoing object references interactively
+- Show the exact field and array path from every sample back to the selected known static root
+- Keep only weak object handles so inspection does not prevent target objects from being collected
+- Bound depth, visited objects, samples, root fields, array elements, value length, execution time, and retained handles
+- Skip inaccessible module fields and avoid descending into JDK internals, classloaders, threads, and reflection metadata
+- Export a complete live <code>.hprof</code> through the HotSpot diagnostic MXBean after an explicit pause and disk-space warning
+
+Open <strong>Heap objects</strong> and enter a static root class such as <code>com.example.SessionRegistry</code> or a narrow package prefix. Optionally filter the reachable graph by instance class, field name, or scalar value. The Sample instances tab shows shallow size and the known-root path, Reachable class counts provides a bounded histogram, and Object details lets you follow outgoing references by double-clicking an object-valued field.
+
+Reachable instance counts are not global heap histograms. They cover unique objects found from the selected static roots within the configured limits. Likewise, a displayed path is a path to a known static root selected for this scan, not proof that it is the shortest path among every JVM GC root. Use <strong>Export full HPROF...</strong> when a complete heap snapshot is required, then analyze that file outside the target with tools such as Eclipse MAT, VisualVM, or another HPROF analyzer.
+
+</details>
+
 <details>
 <summary><strong>Controlled modification tools</strong></summary>
 
@@ -355,7 +377,7 @@ java -jar target/jpi.jar
 
 Integration tests cover both late attach and an executable JAR launched with the early agent. The early-agent test verifies that the application class is captured before `main()` and appears in the dynamic load timeline. A Windows-only test allocates a native buffer, writes through the production `WriteProcessMemory` path, and reads the replacement value back from the same address.
 
-The late-attach integration test reads a scoped deobfuscation inventory, installs a Crypto API profile, captures a real MessageDigest call and restores its call-site class, installs a live trace probe, captures a real invocation, verifies static and dynamic Xrefs plus method-level string search, restores the traced definition, compiles replacement Java source inside the running target, patches ordinary and lambda-based methods, reapplies raw class bytes, and verifies rollback after every mode.
+The late-attach integration test scans a known static heap root, inspects a sampled object through a weak handle, reads a scoped deobfuscation inventory, installs a Crypto API profile, captures a real MessageDigest call and restores its call-site class, installs a live trace probe, captures a real invocation, verifies static and dynamic Xrefs plus method-level string search, restores the traced definition, compiles replacement Java source inside the running target, patches ordinary and lambda-based methods, reapplies raw class bytes, and verifies rollback after every mode.
 
 ### Build output
 
@@ -401,6 +423,7 @@ A manual run of the Release workflow builds downloadable workflow artifacts with
 - Existing lambdas can be edited with the Java compiler backend when their synthetic method count and captured-variable shape remain compatible. Adding more lambda bodies or changing their capture signature would add or change methods and is rejected by standard HotSwap.
 - Constructors, class initializers, abstract methods, and native methods are not available in method-only mode or Live Tracer.
 - Live Tracer currently targets modifiable non-bootstrap classes whose classloader can resolve the JPI trace runtime.
+- Heap / Object Inspector counts and paths cover only the bounded graph reachable from explicitly selected static roots. Reflective access can be denied by target modules, and weak sample handles can expire at any time. Full HPROF export is HotSpot-specific and can pause the target or consume substantial disk space.
 - Automatic API Hooks observe direct bytecode call sites available in loaded non-bootstrap classes. Calls made entirely inside JDK internals, native code, unavailable definitions, or classes loaded after a profile starts are not included in that run. Restart the selected profiles to scan newly loaded classes.
 - Dynamic Xrefs cover traced methods and aggregate observed call sites for the active session. Static reverse scans are bounded and can omit definitions whose bytecode is unavailable.
 - Deobfuscation mappings are a controller-side overlay keyed by JVM names and descriptors. Mapped decompilation is read-only and never redefines the target, local variables are not reconstructed, and duplicate binary names from different classloaders currently share one exported name.

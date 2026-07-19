@@ -35,6 +35,7 @@ final class TargetInspector {
     private final ClassRegistry registry;
     private final TraceManager traceManager;
     private final ApiHookManager apiHookManager;
+    private final HeapObjectInspector heapInspector;
     private final Map<String, WeakReference<Class<?>>> classIndex = new ConcurrentHashMap<>();
 
     TargetInspector(Instrumentation instrumentation, ClassRegistry registry) {
@@ -42,6 +43,7 @@ final class TargetInspector {
         this.registry = registry;
         this.traceManager = new TraceManager(instrumentation);
         this.apiHookManager = new ApiHookManager(instrumentation, registry);
+        this.heapInspector = new HeapObjectInspector(instrumentation);
     }
 
     String loadedClasses() {
@@ -199,6 +201,18 @@ final class TargetInspector {
         return apiHookManager.events();
     }
 
+    String heapScan(String payload) throws Exception {
+        return heapInspector.scan(payload);
+    }
+
+    String heapObject(String objectId) throws Exception {
+        return heapInspector.object(objectId);
+    }
+
+    String heapDump(String path) throws Exception {
+        return HeapDumpService.dump(path);
+    }
+
     String methodXrefs(String payload) throws Exception {
         String[] values = payload.split("\\n", 3);
         if (values.length != 3 || values[0].isEmpty() || values[1].isEmpty() || values[2].isEmpty()) {
@@ -301,6 +315,7 @@ final class TargetInspector {
     void close() {
         traceManager.close();
         apiHookManager.close();
+        heapInspector.clear();
     }
 
     String applyClassBytes(String payload) throws Exception {

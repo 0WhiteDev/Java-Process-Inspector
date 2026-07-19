@@ -68,8 +68,8 @@ public final class Ui {
         JButton button = button(text);
         button.setHorizontalAlignment(SwingConstants.LEFT);
         button.setAlignmentX(Component.LEFT_ALIGNMENT);
-        button.setMaximumSize(new Dimension(Integer.MAX_VALUE, 36));
-        button.setPreferredSize(new Dimension(176, 36));
+        button.setMaximumSize(new Dimension(Integer.MAX_VALUE, 34));
+        button.setPreferredSize(new Dimension(176, 34));
         button.setBackground(SIDEBAR);
         button.setBorder(new EmptyBorder(0, 9, 0, 9));
         return button;

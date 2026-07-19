@@ -59,6 +59,7 @@ public final class MainFrame extends JFrame {
         DeobfuscationWorkspacePanel deobfuscation = new DeobfuscationWorkspacePanel(mappingWorkspace);
         ExecutorPanel executor = new ExecutorPanel(mappingWorkspace);
         FieldsPanel fields = new FieldsPanel(mappingWorkspace);
+        HeapObjectPanel heapObjects = new HeapObjectPanel(mappingWorkspace);
         EnvironmentPanel environment = new EnvironmentPanel();
         ConstantSearchPanel constantSearch = new ConstantSearchPanel(mappingWorkspace);
         WindowsNativeAccess windows = new WindowsNativeAccess();
@@ -66,7 +67,7 @@ public final class MainFrame extends JFrame {
         MemoryPanel memory = new MemoryPanel(windows);
         DllPanel dll = new DllPanel(windows);
         views = Arrays.asList(overview, classes, tracer, apiHooks, xrefs, deobfuscation,
-                constantSearch, executor, fields, environment, network, memory, dll);
+                constantSearch, executor, fields, environment, network, heapObjects, memory, dll);
 
         addCard("Overview", overview);
         addCard("Loaded classes", classes);
@@ -77,6 +78,7 @@ public final class MainFrame extends JFrame {
         addCard("Constant search", constantSearch);
         addCard("Code executor", executor);
         addCard("Static fields", fields);
+        addCard("Heap objects", heapObjects);
         addCard("VM environment", environment);
         addCard("Network activity", network);
         addCard("Memory scanner", memory);
@@ -133,7 +135,7 @@ public final class MainFrame extends JFrame {
         brand.add(mark, BorderLayout.WEST);
         brand.add(brandText, BorderLayout.CENTER);
         sidebar.add(brand);
-        sidebar.add(Box.createVerticalStrut(18));
+        sidebar.add(Box.createVerticalStrut(12));
 
         JLabel workspace = new JLabel("WORKSPACE");
         workspace.setForeground(Ui.MUTED);
@@ -159,6 +161,7 @@ public final class MainFrame extends JFrame {
         advanced.setBorder(new EmptyBorder(0, 10, 8, 0));
         advanced.setAlignmentX(Component.LEFT_ALIGNMENT);
         sidebar.add(advanced);
+        addNavigation(sidebar, "Heap objects");
         addNavigation(sidebar, "Memory scanner");
         addNavigation(sidebar, "DLL loader");
         sidebar.add(Box.createVerticalGlue());
@@ -209,7 +212,7 @@ public final class MainFrame extends JFrame {
         button.addActionListener(e -> selectView(name));
         navigation.put(name, button);
         sidebar.add(button);
-        sidebar.add(Box.createVerticalStrut(2));
+        sidebar.add(Box.createVerticalStrut(1));
     }
 
     private void selectView(String name) {

@@ -77,6 +77,9 @@ final class AgentServer implements Runnable {
             case API_HOOK_START: return WireProtocol.utf8(inspector.startApiHooks(payload));
             case API_HOOK_STOP: return WireProtocol.utf8(inspector.stopApiHooks());
             case API_HOOK_EVENTS: return WireProtocol.utf8(inspector.apiHookEvents());
+            case HEAP_SCAN: return WireProtocol.utf8(inspector.heapScan(payload));
+            case HEAP_OBJECT: return WireProtocol.utf8(inspector.heapObject(payload));
+            case HEAP_DUMP: return WireProtocol.utf8(inspector.heapDump(payload));
             case DISCONNECT: return WireProtocol.utf8("disconnected");
             default: throw new IllegalArgumentException("Unsupported operation: " + request.operation());
         }

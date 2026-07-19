@@ -38,6 +38,19 @@ class AttachIntegrationIT {
                 String loadedClasses = session.requestText(Operation.CLASSES, "");
                 assertTrue(loadedClasses.contains(AttachTarget.class.getName()));
                 assertTrue(session.requestText(Operation.FIELDS, "AttachTarget").contains("marker"));
+                String heapScan = session.requestText(Operation.HEAP_SCAN,
+                        "root=" + AttachTarget.class.getName() + "\nclass=java.lang.String\nvalue=jpi-smoke-target"
+                                + "\nmaxDepth=2\nmaxObjects=100\nmaxResults=10\ntimeoutMillis=3000");
+                String heapObjectLine = Arrays.stream(heapScan.split("\n"))
+                        .filter(line -> line.startsWith("O\t"))
+                        .findFirst().orElseThrow();
+                assertTrue(heapScan.contains(Base64.getEncoder().encodeToString(
+                        (AttachTarget.class.getName() + ".marker").getBytes("UTF-8"))));
+                String heapObjectId = heapObjectLine.split("\t", -1)[1];
+                String heapObject = session.requestText(Operation.HEAP_OBJECT, heapObjectId);
+                assertTrue(heapObject.startsWith("H\t" + heapObjectId + "\t"));
+                assertTrue(heapObject.contains(Base64.getEncoder().encodeToString(
+                        "\"jpi-smoke-target\"".getBytes("UTF-8"))));
                 assertTrue(session.requestText(Operation.CONSTANT_SEARCH, "jpi-smoke-target")
                         .contains(AttachTarget.class.getName()));
                 String mappingInventory = session.requestText(Operation.DEOBFUSCATION_INVENTORY,
