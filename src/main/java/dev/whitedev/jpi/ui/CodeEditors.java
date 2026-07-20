@@ -9,10 +9,10 @@ import javax.swing.*;
 import java.awt.*;
 import java.io.InputStream;
 
-final class CodeEditors {
+public final class CodeEditors {
     private CodeEditors() {}
 
-    static RSyntaxTextArea javaEditor(boolean editable) {
+    public static RSyntaxTextArea javaEditor(boolean editable) {
         RSyntaxTextArea editor = new RSyntaxTextArea();
         editor.setSyntaxEditingStyle(SyntaxConstants.SYNTAX_STYLE_JAVA);
         editor.setEditable(editable);
@@ -30,7 +30,7 @@ final class CodeEditors {
         return editor;
     }
 
-    static RTextScrollPane scrollPane(RSyntaxTextArea editor) {
+    public static RTextScrollPane scrollPane(RSyntaxTextArea editor) {
         RTextScrollPane scroll = new RTextScrollPane(editor);
         scroll.setLineNumbersEnabled(true);
         scroll.setFoldIndicatorEnabled(true);

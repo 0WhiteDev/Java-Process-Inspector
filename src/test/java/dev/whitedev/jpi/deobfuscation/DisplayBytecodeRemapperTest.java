@@ -1,6 +1,7 @@
 package dev.whitedev.jpi.deobfuscation;
 
 import dev.whitedev.jpi.decompile.DecompilerService;
+import dev.whitedev.jpi.deobfuscation.bytecode.DisplayBytecodeRemapper;
 import org.junit.jupiter.api.Test;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.tree.ClassNode;

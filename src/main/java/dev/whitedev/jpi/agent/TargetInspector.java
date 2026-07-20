@@ -1,5 +1,20 @@
 package dev.whitedev.jpi.agent;
 
+import dev.whitedev.jpi.agent.analysis.ConstantPoolSearch;
+import dev.whitedev.jpi.agent.analysis.DeobfuscationInventory;
+import dev.whitedev.jpi.agent.analysis.XrefAnalyzer;
+import dev.whitedev.jpi.agent.cfg.BytecodeCfgAnalyzer;
+import dev.whitedev.jpi.agent.cfg.CfgManager;
+import dev.whitedev.jpi.agent.heap.HeapDumpService;
+import dev.whitedev.jpi.agent.heap.HeapObjectInspector;
+import dev.whitedev.jpi.agent.hook.ApiHookManager;
+import dev.whitedev.jpi.agent.patch.ClassSchema;
+import dev.whitedev.jpi.agent.patch.MethodBodyPatcher;
+import dev.whitedev.jpi.agent.patch.ModernMethodPatcher;
+import dev.whitedev.jpi.agent.patch.RuntimeJavaCompiler;
+import dev.whitedev.jpi.agent.trace.TraceManager;
+import dev.whitedev.jpi.agent.trace.TraceRuntime;
+
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -35,6 +50,7 @@ final class TargetInspector {
     private final ClassRegistry registry;
     private final TraceManager traceManager;
     private final ApiHookManager apiHookManager;
+    private final CfgManager cfgManager;
     private final HeapObjectInspector heapInspector;
     private final Map<String, WeakReference<Class<?>>> classIndex = new ConcurrentHashMap<>();
 
@@ -43,6 +59,7 @@ final class TargetInspector {
         this.registry = registry;
         this.traceManager = new TraceManager(instrumentation);
         this.apiHookManager = new ApiHookManager(instrumentation, registry);
+        this.cfgManager = new CfgManager(instrumentation);
         this.heapInspector = new HeapObjectInspector(instrumentation);
     }
 
@@ -177,6 +194,7 @@ final class TargetInspector {
         String settings = payload.substring(third + 1);
         Class<?> target = resolveClass(identifier);
         requireRedefinable(target);
+        cfgManager.stopForClass(target);
         apiHookManager.stopForClass(target);
         return traceManager.start(target, identifier, method, descriptor, settings, classBytes(identifier));
     }
@@ -189,7 +207,44 @@ final class TargetInspector {
         return traceManager.events();
     }
 
+    String bytecodeCfg(String payload) throws Exception {
+        String[] values = payload.split("\n", 3);
+        if (values.length != 3 || values[0].isEmpty() || values[1].isEmpty() || values[2].isEmpty()) {
+            throw new IOException("Missing class, method, or descriptor");
+        }
+        return BytecodeCfgAnalyzer.analyze(classBytes(values[0]), values[1], values[2]);
+    }
+
+    String startCfgTrace(String payload) throws Exception {
+        String[] values = payload.split("\n", 4);
+        if (values.length != 4 || values[0].isEmpty() || values[1].isEmpty()
+                || values[2].isEmpty() || values[3].isEmpty()) {
+            throw new IOException("Missing class, method, descriptor, or CFG trace duration");
+        }
+        long duration;
+        try {
+            duration = Long.parseLong(values[3]);
+        } catch (NumberFormatException error) {
+            throw new IOException("Invalid CFG trace duration", error);
+        }
+        Class<?> target = resolveClass(values[0]);
+        requireRedefinable(target);
+        traceManager.stopForClass(target);
+        apiHookManager.stopForClass(target);
+        return cfgManager.start(target, values[1], values[2], classBytes(values[0]), duration);
+    }
+
+    String stopCfgTrace(String probeId) throws Exception {
+        return cfgManager.stop(probeId);
+    }
+
+    String cfgSnapshot(String probeId) {
+        return cfgManager.snapshot(probeId);
+    }
+
     String startApiHooks(String payload) throws Exception {
+        cfgManager.stopAll();
+        traceManager.stopAll();
         return apiHookManager.start(payload);
     }
 
@@ -313,6 +368,7 @@ final class TargetInspector {
     }
 
     void close() {
+        cfgManager.close();
         traceManager.close();
         apiHookManager.close();
         heapInspector.clear();
@@ -342,6 +398,7 @@ final class TargetInspector {
     String rollbackClass(String identifier) throws Exception {
         Class<?> target = resolveClass(identifier);
         requireRedefinable(target);
+        cfgManager.stopForClass(target);
         traceManager.stopForClass(target);
         apiHookManager.stopForClass(target);
         if (registry.originalBytecodeFor(target) == null) classBytes(identifier);
@@ -589,6 +646,7 @@ final class TargetInspector {
     }
 
     private void applyDefinition(Class<?> target, byte[] current, byte[] replacement) throws Exception {
+        cfgManager.stopForClass(target);
         traceManager.stopForClass(target);
         apiHookManager.stopForClass(target);
         ClassSchema.verifyCompatible(current, replacement);

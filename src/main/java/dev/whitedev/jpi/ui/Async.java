@@ -4,10 +4,10 @@ import javax.swing.SwingWorker;
 import java.util.concurrent.Callable;
 import java.util.function.Consumer;
 
-final class Async {
+public final class Async {
     private Async() {}
 
-    static <T> void run(final Callable<T> task, final Consumer<T> success, final Consumer<Throwable> failure) {
+    public static <T> void run(final Callable<T> task, final Consumer<T> success, final Consumer<Throwable> failure) {
         new SwingWorker<T, Void>() {
             @Override protected T doInBackground() throws Exception { return task.call(); }
             @Override protected void done() {

@@ -1,5 +1,6 @@
 package dev.whitedev.jpi.agent;
 
+import dev.whitedev.jpi.agent.patch.SourceExecutor;
 import dev.whitedev.jpi.protocol.Operation;
 import dev.whitedev.jpi.protocol.WireProtocol;
 
@@ -80,6 +81,10 @@ final class AgentServer implements Runnable {
             case HEAP_SCAN: return WireProtocol.utf8(inspector.heapScan(payload));
             case HEAP_OBJECT: return WireProtocol.utf8(inspector.heapObject(payload));
             case HEAP_DUMP: return WireProtocol.utf8(inspector.heapDump(payload));
+            case CFG_ANALYZE: return WireProtocol.utf8(inspector.bytecodeCfg(payload));
+            case CFG_TRACE_START: return WireProtocol.utf8(inspector.startCfgTrace(payload));
+            case CFG_TRACE_STOP: return WireProtocol.utf8(inspector.stopCfgTrace(payload));
+            case CFG_SNAPSHOT: return WireProtocol.utf8(inspector.cfgSnapshot(payload));
             case DISCONNECT: return WireProtocol.utf8("disconnected");
             default: throw new IllegalArgumentException("Unsupported operation: " + request.operation());
         }

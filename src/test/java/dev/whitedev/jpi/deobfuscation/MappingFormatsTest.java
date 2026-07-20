@@ -1,5 +1,6 @@
 package dev.whitedev.jpi.deobfuscation;
 
+import dev.whitedev.jpi.deobfuscation.io.MappingFormats;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

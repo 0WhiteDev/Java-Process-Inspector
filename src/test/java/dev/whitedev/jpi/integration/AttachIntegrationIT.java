@@ -63,6 +63,24 @@ class AttachIntegrationIT {
                         .filter(line -> line.contains("\t" + AttachTarget.class.getName() + "\t"))
                         .findFirst().orElseThrow();
                 String classId = targetLine.split("\t", -1)[0];
+                String cfg = session.requestText(Operation.CFG_ANALYZE,
+                        classId + "\nbranchValue\n(I)I");
+                assertTrue(cfg.startsWith("G\t"));
+                assertTrue(cfg.contains("\tBRANCH\t"));
+                String cfgResponse = session.requestText(Operation.CFG_TRACE_START,
+                        classId + "\nbranchValue\n(I)I\n60000");
+                String cfgId = cfgResponse.split("\t", -1)[1];
+                assertTrue(cfgId.startsWith("cfg-"));
+                String branchProbe = "public class BranchProbe { public static void execute(java.io.PrintStream out) { out.print(dev.whitedev.jpi.integration.AttachTarget.branchValue(4)); } }";
+                assertEquals("8", session.requestText(Operation.EXECUTE, branchProbe));
+                String cfgSnapshot = session.requestText(Operation.CFG_SNAPSHOT, cfgId);
+                assertTrue(cfgSnapshot.startsWith("S\t" + cfgId + "\ttrue\t"));
+                assertTrue(Arrays.stream(cfgSnapshot.split("\n"))
+                        .filter(line -> line.startsWith("H\t"))
+                        .map(line -> line.split("\t", -1))
+                        .anyMatch(values -> Long.parseLong(values[2]) > 0L));
+                assertTrue(session.requestText(Operation.CFG_TRACE_STOP, cfgId).contains("Stopped"));
+                assertEquals("8", session.requestText(Operation.EXECUTE, branchProbe));
                 String apiHookResponse = session.requestText(Operation.API_HOOK_START,
                         "CRYPTO\nmaxEvents=20;rateLimit=20;stopAfterSeconds=60;maxClasses=100");
                 assertTrue(apiHookResponse.contains("Crypto"), apiHookResponse);
@@ -120,7 +138,7 @@ class AttachIntegrationIT {
                 assertEquals("8", session.requestText(Operation.EXECUTE, lambdaProbe));
                 assertTrue(session.requestText(Operation.ROLLBACK_CLASS, classId).contains("Restored"));
                 assertEquals("4", session.requestText(Operation.EXECUTE, lambdaProbe));
-                String replacement = "package dev.whitedev.jpi.integration; import java.lang.management.ManagementFactory; public final class AttachTarget { public static volatile String marker = \"jpi-smoke-target\"; public static String runtimeValue() { return \"after\"; } public static byte[] digest(byte[] input) throws Exception { return java.security.MessageDigest.getInstance(\"SHA-256\").digest(input); } public static int lambdaValue(int input) { java.util.function.IntUnaryOperator operation = value -> value + 1; return operation.applyAsInt(input); } public static void main(String[] args) throws Exception { System.out.println(ManagementFactory.getRuntimeMXBean().getName().split(\"@\", 2)[0]); System.out.flush(); while (true) Thread.sleep(1000); } }";
+                String replacement = "package dev.whitedev.jpi.integration; import java.lang.management.ManagementFactory; public final class AttachTarget { public static volatile String marker = \"jpi-smoke-target\"; public static String runtimeValue() { return \"after\"; } public static byte[] digest(byte[] input) throws Exception { return java.security.MessageDigest.getInstance(\"SHA-256\").digest(input); } public static int lambdaValue(int input) { java.util.function.IntUnaryOperator operation = value -> value + 1; return operation.applyAsInt(input); } public static int branchValue(int input) { if (input < 0) return -1; return input % 2 == 0 ? input * 2 : input + 1; } public static void main(String[] args) throws Exception { System.out.println(ManagementFactory.getRuntimeMXBean().getName().split(\"@\", 2)[0]); System.out.flush(); while (true) Thread.sleep(1000); } }";
                 assertTrue(session.requestText(Operation.REDEFINE_SOURCE, classId + "\n" + replacement).contains("Redefined"));
                 assertEquals("after", session.requestText(Operation.EXECUTE, probe));
                 assertTrue(session.requestText(Operation.ROLLBACK_CLASS, classId).contains("Restored"));

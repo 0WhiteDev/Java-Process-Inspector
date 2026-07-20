@@ -67,7 +67,7 @@ java -jar target/jpi.jar
 
 No files need to be copied to the target directory. The same `jpi.jar` is both the desktop controller and the Java agent.
 
-The shaded JAR intentionally contains two bytecode levels. Desktop and GUI classes use Java 21, while `dev.whitedev.jpi.agent` and `dev.whitedev.jpi.protocol` are rebuilt as Java 8 bytecode before packaging. This allows the Java 21 desktop application to attach to targets such as older app installations running Java 8 or Java 17.
+The shaded JAR intentionally contains two bytecode levels. Desktop and GUI classes use Java 21, while the `dev.whitedev.jpi.agent` package tree and `dev.whitedev.jpi.protocol` are rebuilt as Java 8 bytecode before packaging. This allows the Java 21 desktop application to attach to targets such as older app installations running Java 8 or Java 17.
 
 ### Applications that disable late attach
 
@@ -90,6 +90,7 @@ This message commonly appears when a Java 21 agent is loaded into a target runni
 | Live tracer | Bounded runtime probes with arguments, results, exceptions, duration, threads, object identity, caller stacks, Time Tunnel, and an interactive call tree |
 | API hooks | Ready-to-use Network, Crypto, Files, Reflection, and Class loading profiles that identify exact application call sites |
 | Xrefs | Static and observed Called by and Calls edges, field and type references, constants, and method-level string or endpoint users |
+| Bytecode CFG | Interactive basic-block graph with branches, exception edges, dominators, complexity, dead code, and live execution counts |
 | Deobfuscation | Persistent aliases, notes, tags, colors, scoped AutoMap, package exclusions, mapping exports, and Code Executor name resolution |
 | Constant search | Global search through strings, descriptors, class names, methods, and fields in available class constant pools |
 | Executor | Java editor with syntax highlighting, line numbers, folding, bracket matching, and Ctrl+Enter execution |
@@ -241,6 +242,27 @@ Select a method in <strong>Loaded classes</strong> and click <strong>Xrefs</stro
 Dynamic edges are collected only inside methods instrumented by Live Tracer. The red state identifies the last observed call site before an uncaught exception left the traced method. It is a useful lead, not proof that the callee itself threw the exception. Reflection is recognized from standard reflection and method-handle frames and call sites.
 
 </details>
+
+<details>
+<summary><strong>Bytecode CFG and block tracing</strong></summary>
+
+- Build a control-flow graph directly from the selected method bytecode without depending on decompiled source
+- Split instructions into basic blocks and connect fallthrough, conditional, switch, return, throw, and exception-handler edges
+- Show source line ranges, bytecode instruction ranges, incoming and outgoing relations, and complete instructions for the selected block
+- Calculate the full dominator set and immediate dominator for every reachable block
+- Report cyclomatic complexity and statically unreachable blocks
+- Render large graphs in a scrollable layered canvas with clickable nodes and backward loop edges
+- Install optional low-allocation block counters in the running method
+- Display exact aggregated execution counts without capturing arguments, return values, or target objects
+- Highlight executed blocks in green, reachable zero-hit blocks in yellow, and statically dead blocks in red
+- Automatically stop tracing after a configurable 1 to 600 seconds and restore the original class definition
+- Remove CFG instrumentation before method tracing, API hooks, HotSwap, rollback, or session shutdown changes the same target
+
+Open <strong>Loaded classes</strong>, select any concrete method, and click <strong>CFG</strong>. Static analysis is available for methods in loaded read-only classes as long as their bytecode can be read. Click a block to inspect its dominators, predecessors, successors, and full instruction list.
+
+For runtime coverage, click <strong>Start block trace</strong>, perform the relevant action in the target application, and watch the graph update. A yellow block after at least one recorded hit means the block was reachable in the static graph but was not executed during this trace window. A red block is unreachable from the method entry according to the bytecode graph. Block tracing requires a modifiable non-bootstrap class whose classloader can access the JPI agent runtime.
+
+</details>
 <details>
 <summary><strong>Deobfuscation workspace</strong></summary>
 
@@ -341,13 +363,29 @@ flowchart LR
 
 | Package | Responsibility |
 |---|---|
-| `dev.whitedev.jpi.attach` | JVM discovery, agent loading, session lifecycle |
-| `dev.whitedev.jpi.agent` | Target entry point, dispatcher, inspection, live tracing, and execution |
+| `dev.whitedev.jpi.attach` | JVM discovery, agent loading, and session lifecycle |
+| `dev.whitedev.jpi.agent` | Agent entry point, control server, class registry, and target orchestration |
+| `dev.whitedev.jpi.agent.analysis` | Constant-pool search, deobfuscation inventory, and Xref analysis |
+| `dev.whitedev.jpi.agent.cfg` | Static control-flow analysis and bounded runtime block coverage |
+| `dev.whitedev.jpi.agent.heap` | Reachable-object inspection and optional heap dumps |
+| `dev.whitedev.jpi.agent.hook` | Automatic API hook profiles and call-site instrumentation |
+| `dev.whitedev.jpi.agent.patch` | Runtime compilation, schema validation, method patching, and source execution |
+| `dev.whitedev.jpi.agent.trace` | Method probes, conditions, instrumentation, events, and dynamic call graphs |
 | `dev.whitedev.jpi.protocol` | Binary protocol with stable operations and bounds |
-| `dev.whitedev.jpi.nativeaccess` | Typed JNA boundary for process, memory, and DLL operations |
-| `dev.whitedev.jpi.decompile` | Embedded CFR lifecycle and decompilation |
-| `dev.whitedev.jpi.deobfuscation` | Persistent mapping model, AutoMap, source alias resolution, and mapping formats |
-| `dev.whitedev.jpi.ui` | Unified workspace and asynchronous presentation layer |
+| `dev.whitedev.jpi.nativeaccess` | Typed JNA boundary for process, memory, network, and DLL operations |
+| `dev.whitedev.jpi.decompile` | Embedded decompiler lifecycle and source extraction |
+| dev.whitedev.jpi.deobfuscation | Persistent mapping model, inventory, and AutoMap |
+| dev.whitedev.jpi.deobfuscation.bytecode | Read-only bytecode remapping for mapped decompilation |
+| dev.whitedev.jpi.deobfuscation.io | JSON persistence and Tiny, TSRG, and ProGuard exports |
+| dev.whitedev.jpi.deobfuscation.search | Structured multi-kind mapping queries |
+| `dev.whitedev.jpi.ui` | Application shell, shared styling, editors, and asynchronous execution |
+| `dev.whitedev.jpi.ui.browser` | Loaded-class navigation, decompilation, bytecode, and live editing |
+| `dev.whitedev.jpi.ui.tracing` | Live tracer, automatic hooks, and Xref views |
+| `dev.whitedev.jpi.ui.analysis` | Interactive bytecode CFG rendering and coverage presentation |
+| `dev.whitedev.jpi.ui.inspection` | Fields, constants, and heap-object views |
+| `dev.whitedev.jpi.ui.workspace` | Deobfuscation workspace and target-side code executor |
+| `dev.whitedev.jpi.ui.system` | Runtime overview and environment snapshot views |
+| `dev.whitedev.jpi.ui.nativeview` | Windows network, memory, and DLL views |
 
 ### Why there is no C++ directory anymore
 

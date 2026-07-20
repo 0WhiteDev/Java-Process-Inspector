@@ -8,6 +8,21 @@ import dev.whitedev.jpi.attach.JvmDiscovery;
 import dev.whitedev.jpi.deobfuscation.DeobfuscationWorkspace;
 import dev.whitedev.jpi.nativeaccess.WindowsNativeAccess;
 import dev.whitedev.jpi.nativeaccess.WindowsNetworkAccess;
+import dev.whitedev.jpi.ui.analysis.BytecodeCfgPanel;
+import dev.whitedev.jpi.ui.browser.ClassesPanel;
+import dev.whitedev.jpi.ui.nativeview.DllPanel;
+import dev.whitedev.jpi.ui.nativeview.MemoryPanel;
+import dev.whitedev.jpi.ui.nativeview.NetworkPanel;
+import dev.whitedev.jpi.ui.system.EnvironmentPanel;
+import dev.whitedev.jpi.ui.system.OverviewPanel;
+import dev.whitedev.jpi.ui.tracing.ApiHooksPanel;
+import dev.whitedev.jpi.ui.tracing.LiveTracerPanel;
+import dev.whitedev.jpi.ui.tracing.XrefsPanel;
+import dev.whitedev.jpi.ui.workspace.DeobfuscationWorkspacePanel;
+import dev.whitedev.jpi.ui.workspace.ExecutorPanel;
+import dev.whitedev.jpi.ui.inspection.ConstantSearchPanel;
+import dev.whitedev.jpi.ui.inspection.FieldsPanel;
+import dev.whitedev.jpi.ui.inspection.HeapObjectPanel;
 import com.formdev.flatlaf.extras.FlatSVGIcon;
 
 import javax.swing.*;
@@ -53,9 +68,10 @@ public final class MainFrame extends JFrame {
         OverviewPanel overview = new OverviewPanel();
         LiveTracerPanel tracer = new LiveTracerPanel(mappingWorkspace);
         XrefsPanel xrefs = new XrefsPanel(mappingWorkspace);
+        BytecodeCfgPanel cfg = new BytecodeCfgPanel(mappingWorkspace);
         ApiHooksPanel apiHooks = new ApiHooksPanel(mappingWorkspace, xrefs, () -> selectView("Xrefs"));
-        ClassesPanel classes = new ClassesPanel(mappingWorkspace, tracer, xrefs,
-                () -> selectView("Live tracer"), () -> selectView("Xrefs"));
+        ClassesPanel classes = new ClassesPanel(mappingWorkspace, tracer, xrefs, cfg,
+                () -> selectView("Live tracer"), () -> selectView("Xrefs"), () -> selectView("Bytecode CFG"));
         DeobfuscationWorkspacePanel deobfuscation = new DeobfuscationWorkspacePanel(mappingWorkspace);
         ExecutorPanel executor = new ExecutorPanel(mappingWorkspace);
         FieldsPanel fields = new FieldsPanel(mappingWorkspace);
@@ -66,7 +82,7 @@ public final class MainFrame extends JFrame {
         NetworkPanel network = new NetworkPanel(new WindowsNetworkAccess());
         MemoryPanel memory = new MemoryPanel(windows);
         DllPanel dll = new DllPanel(windows);
-        views = Arrays.asList(overview, classes, tracer, apiHooks, xrefs, deobfuscation,
+        views = Arrays.asList(overview, classes, tracer, apiHooks, xrefs, cfg, deobfuscation,
                 constantSearch, executor, fields, environment, network, heapObjects, memory, dll);
 
         addCard("Overview", overview);
@@ -74,6 +90,7 @@ public final class MainFrame extends JFrame {
         addCard("Live tracer", tracer);
         addCard("API hooks", apiHooks);
         addCard("Xrefs", xrefs);
+        addCard("Bytecode CFG", cfg);
         addCard("Deobfuscation", deobfuscation);
         addCard("Constant search", constantSearch);
         addCard("Code executor", executor);
@@ -148,6 +165,7 @@ public final class MainFrame extends JFrame {
         addNavigation(sidebar, "Live tracer");
         addNavigation(sidebar, "API hooks");
         addNavigation(sidebar, "Xrefs");
+        addNavigation(sidebar, "Bytecode CFG");
         addNavigation(sidebar, "Deobfuscation");
         addNavigation(sidebar, "Constant search");
         addNavigation(sidebar, "Code executor");

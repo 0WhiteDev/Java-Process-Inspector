@@ -1,5 +1,7 @@
 package dev.whitedev.jpi.agent;
 
+import dev.whitedev.jpi.agent.hook.HookClassRegistry;
+
 import java.lang.instrument.ClassFileTransformer;
 import java.lang.instrument.IllegalClassFormatException;
 import java.security.ProtectionDomain;
@@ -10,7 +12,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-final class ClassRegistry implements ClassFileTransformer {
+final class ClassRegistry implements ClassFileTransformer, HookClassRegistry {
+
+
     private static final long MAX_CAPTURED_BYTES = 256L * 1024L * 1024L;
     private static final int MAX_EVENTS = 10_000;
 
@@ -30,7 +34,7 @@ final class ClassRegistry implements ClassFileTransformer {
         return null;
     }
 
-    synchronized byte[] bytecodeFor(Class<?> type) {
+    public synchronized byte[] bytecodeFor(Class<?> type) {
         CapturedClass value = captured.get(keyFor(type));
         return value == null ? null : value.bytecode.clone();
     }
@@ -49,7 +53,7 @@ final class ClassRegistry implements ClassFileTransformer {
         return new ArrayList<>(captured.values());
     }
 
-    synchronized void captureIfAbsent(Class<?> type, byte[] bytecode) {
+    public synchronized void captureIfAbsent(Class<?> type, byte[] bytecode) {
         String key = keyFor(type);
         if (captured.containsKey(key)) return;
         byte[] copy = bytecode.clone();
@@ -58,7 +62,7 @@ final class ClassRegistry implements ClassFileTransformer {
         evictIfNeeded();
     }
 
-    synchronized void recordApplied(Class<?> type, byte[] bytecode) {
+    public synchronized void recordApplied(Class<?> type, byte[] bytecode) {
         captureIfAbsent(type, bytecode);
         CapturedClass value = captured.get(keyFor(type));
         if (value != null) {

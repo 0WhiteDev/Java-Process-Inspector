@@ -1,6 +1,10 @@
 package dev.whitedev.jpi.agent;
 
 import dev.whitedev.jpi.JpiApplication;
+import dev.whitedev.jpi.agent.cfg.CfgRuntime;
+import dev.whitedev.jpi.agent.patch.MethodBodyPatcher;
+import dev.whitedev.jpi.agent.patch.ModernMethodPatcher;
+import dev.whitedev.jpi.agent.patch.RuntimeJavaCompiler;
 import dev.whitedev.jpi.protocol.Operation;
 import javassist.CtClass;
 import org.junit.jupiter.api.Test;
@@ -17,6 +21,7 @@ class AgentBytecodeCompatibilityTest {
     @Test void packagesAJava8AgentInsideTheJava21Application() throws Exception {
         assertEquals(52, majorVersion(InspectorAgent.class));
         assertEquals(52, majorVersion(AgentServer.class));
+        assertEquals(52, majorVersion(CfgRuntime.class));
         assertEquals(52, majorVersion(Operation.class));
         assertEquals(52, majorVersion(MethodBodyPatcher.class));
         assertEquals(52, majorVersion(ModernMethodPatcher.class));

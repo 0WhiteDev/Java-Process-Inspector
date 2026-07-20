@@ -12,6 +12,10 @@ public final class AttachTarget {
         java.util.function.IntUnaryOperator operation = value -> value + 1;
         return operation.applyAsInt(input);
     }
+    public static int branchValue(int input) {
+        if (input < 0) return -1;
+        return input % 2 == 0 ? input * 2 : input + 1;
+    }
     public static void main(String[] args) throws Exception {
         System.out.println(ManagementFactory.getRuntimeMXBean().getName().split("@", 2)[0]);
         System.out.flush();
