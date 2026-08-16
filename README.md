@@ -99,6 +99,7 @@ This message commonly appears when a Java 21 agent is loaded into a target runni
 | VM environment | VM arguments, redacted system properties, command line, and classloader inventory |
 | Session snapshot | One ZIP containing metrics, environment, class inventory, load events, and a thread dump |
 | Network activity | Live process-owned TCP/UDP IPv4/IPv6 endpoints, states, filtering, and open/close timeline |
+| Native symbols | Offline PE, ELF, PDB, DWARF, and MAP analysis with C++ demangling, source locations, RTTI, and virtual-table discovery |
 | Memory scanner | Search, refine, and explicitly confirm writes to another Windows process |
 | DLL injector | Optional compatibility tool for loading a user-selected DLL on Windows |
 
@@ -313,6 +314,27 @@ Reachable instance counts are not global heap histograms. They cover unique obje
 </details>
 
 <details>
+<summary><strong>Native symbols and debug metadata</strong></summary>
+
+- Read PE exports, COFF symbol tables, and CodeView RSDS references to matching PDB files
+- Read ELF <code>.symtab</code> and <code>.dynsym</code> symbols from 32-bit and 64-bit little-endian or big-endian images
+- Decode DWARF 2, 3, and 4 <code>.debug_line</code> programs and collect source references from debug string sections
+- Import Microsoft and GNU-style MAP symbols plus Microsoft MAP source-line records
+- Extract decorated C++ names and source-file references embedded in PDB 7.0 containers
+- Demangle common Itanium ABI and Microsoft C++ names while keeping every raw name visible
+- Classify functions, data, line records, RTTI, vtables, vftables, and vbtables for focused filtering
+- Merge several symbol sources, remove duplicate entries, and attach nearby line records to addressed symbols
+- Detect adjacent <code>.pdb</code>, <code>.map</code>, <code>.debug</code>, and <code>&lt;binary&gt;.debug</code> files automatically
+- Search by address, raw name, demangled name, source path, provider, or symbol kind and export the result to CSV
+- Bound input files, section counts, symbol counts, line rows, strings, and merged results before allocating parser state
+
+Open <strong>Native symbols</strong> under <strong>Advanced</strong>. Select an EXE, DLL, SYS, ELF, SO, PDB, MAP, or DEBUG file as the primary input. Add any separate symbol files in <strong>Additional sources</strong>, then click <strong>Analyze symbols</strong>. JPI also looks for matching symbol files next to the primary binary. Use the kind selector to isolate RTTI, virtual tables, source lines, functions, or data. Selecting a row shows its raw and demangled names, provider, address, size, and source location.
+
+PDB support in this version intentionally performs safe container validation and bounded extraction of embedded decorated names and source references. It does not yet decode the complete DBI, TPI, IPI, and module streams. Exact PDB addresses, types, and line mappings therefore require a companion MAP or COFF source. DWARF line decoding currently covers versions 2 through 4 and uncompressed sections. DWARF 5 tables, split DWARF indexes, compressed <code>.zdebug_*</code> payloads, complete DIE type recovery, and vtable layout reconstruction remain future extensions. RTTI and vtable results currently come from ABI symbol classification rather than arbitrary memory scanning.
+
+</details>
+
+<details>
 <summary><strong>Controlled modification tools</strong></summary>
 
 - Java snippet execution without replacing global `System.out`
@@ -334,6 +356,7 @@ flowchart LR
     ATTACH[JVM discovery and Attach API]
     CLIENT[Versioned session client]
     WIN[Windows tools via JNA]
+    SYMBOLS[Offline native symbol analysis]
   end
   subgraph target [Target JVM]
     AGENT[Embedded Instrumentation agent]
@@ -356,6 +379,8 @@ flowchart LR
   MAP --> EXEC
   AGENT --> EXEC
   GUI --> WIN
+  GUI --> SYMBOLS
+  SYMBOLS -->|PE, ELF, PDB, DWARF, MAP| FILES[Selected local files]
   WIN -->|explicit native operation| OS[Selected Windows process]
 ```
 
@@ -373,6 +398,9 @@ flowchart LR
 | `dev.whitedev.jpi.agent.trace` | Method probes, conditions, instrumentation, events, and dynamic call graphs |
 | `dev.whitedev.jpi.protocol` | Binary protocol with stable operations and bounds |
 | `dev.whitedev.jpi.nativeaccess` | Typed JNA boundary for process, memory, network, and DLL operations |
+| `dev.whitedev.jpi.symbols` | Native symbol-source discovery, merging, C++ demangling, and report assembly |
+| `dev.whitedev.jpi.symbols.model` | Immutable symbol, artifact, kind, and report models |
+| `dev.whitedev.jpi.symbols.parse` | Bounded PE, COFF, ELF, DWARF, PDB, and MAP parsers |
 | `dev.whitedev.jpi.decompile` | Embedded decompiler lifecycle and source extraction |
 | dev.whitedev.jpi.deobfuscation | Persistent mapping model, inventory, and AutoMap |
 | dev.whitedev.jpi.deobfuscation.bytecode | Read-only bytecode remapping for mapped decompilation |
@@ -385,7 +413,7 @@ flowchart LR
 | `dev.whitedev.jpi.ui.inspection` | Fields, constants, and heap-object views |
 | `dev.whitedev.jpi.ui.workspace` | Deobfuscation workspace and target-side code executor |
 | `dev.whitedev.jpi.ui.system` | Runtime overview and environment snapshot views |
-| `dev.whitedev.jpi.ui.nativeview` | Windows network, memory, and DLL views |
+| `dev.whitedev.jpi.ui.nativeview` | Native symbols plus Windows network, memory, and DLL views |
 
 ### Why there is no C++ directory anymore
 
@@ -469,6 +497,8 @@ A manual run of the Release workflow builds downloadable workflow artifacts with
 - Strong module boundaries can prevent reading selected fields, those fields are skipped.
 - Memory scanning and DLL injection are Windows-only and may require elevated rights.
 - A DLL must match the target process architecture.
+- PDB analysis currently extracts embedded decorated names and source references but does not decode complete Microsoft DBI, TPI, IPI, module, type, address, and line streams. Supply a matching MAP file or PE/COFF symbols for addresses.
+- DWARF line decoding currently supports versions 2 through 4 in uncompressed ELF sections. DWARF 5, split DWARF, compressed debug sections, complete type DIEs, and reconstructed vtable layouts are not decoded yet.
 
 ## Third-party components
 

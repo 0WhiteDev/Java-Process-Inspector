@@ -12,6 +12,7 @@ import dev.whitedev.jpi.ui.analysis.BytecodeCfgPanel;
 import dev.whitedev.jpi.ui.browser.ClassesPanel;
 import dev.whitedev.jpi.ui.nativeview.DllPanel;
 import dev.whitedev.jpi.ui.nativeview.MemoryPanel;
+import dev.whitedev.jpi.ui.nativeview.NativeSymbolsPanel;
 import dev.whitedev.jpi.ui.nativeview.NetworkPanel;
 import dev.whitedev.jpi.ui.system.EnvironmentPanel;
 import dev.whitedev.jpi.ui.system.OverviewPanel;
@@ -82,8 +83,9 @@ public final class MainFrame extends JFrame {
         NetworkPanel network = new NetworkPanel(new WindowsNetworkAccess());
         MemoryPanel memory = new MemoryPanel(windows);
         DllPanel dll = new DllPanel(windows);
+        NativeSymbolsPanel nativeSymbols = new NativeSymbolsPanel();
         views = Arrays.asList(overview, classes, tracer, apiHooks, xrefs, cfg, deobfuscation,
-                constantSearch, executor, fields, environment, network, heapObjects, memory, dll);
+                constantSearch, executor, fields, environment, network, heapObjects, nativeSymbols, memory, dll);
 
         addCard("Overview", overview);
         addCard("Loaded classes", classes);
@@ -96,6 +98,7 @@ public final class MainFrame extends JFrame {
         addCard("Code executor", executor);
         addCard("Static fields", fields);
         addCard("Heap objects", heapObjects);
+        addCard("Native symbols", nativeSymbols);
         addCard("VM environment", environment);
         addCard("Network activity", network);
         addCard("Memory scanner", memory);
@@ -180,6 +183,7 @@ public final class MainFrame extends JFrame {
         advanced.setAlignmentX(Component.LEFT_ALIGNMENT);
         sidebar.add(advanced);
         addNavigation(sidebar, "Heap objects");
+        addNavigation(sidebar, "Native symbols");
         addNavigation(sidebar, "Memory scanner");
         addNavigation(sidebar, "DLL loader");
         sidebar.add(Box.createVerticalGlue());
