@@ -13,7 +13,7 @@ public final class WireProtocol {
     private WireProtocol() {}
 
     public static void writeRequest(DataOutputStream out, Operation operation, byte[] payload) throws IOException {
-        writeHeader(out, operation.code(), payload);
+        writeHeader(out, operation.ordinal(), payload);
     }
 
     public static Request readRequest(DataInputStream in) throws IOException {
