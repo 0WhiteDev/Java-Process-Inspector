@@ -8,6 +8,11 @@ import dev.whitedev.jpi.attach.JvmDiscovery;
 import dev.whitedev.jpi.deobfuscation.DeobfuscationWorkspace;
 import dev.whitedev.jpi.nativeaccess.WindowsNativeAccess;
 import dev.whitedev.jpi.nativeaccess.WindowsNetworkAccess;
+import dev.whitedev.jpi.plugin.api.JpiContext;
+import dev.whitedev.jpi.plugin.api.ui.JpiTab;
+import dev.whitedev.jpi.plugin.api.ui.TabGroup;
+import dev.whitedev.jpi.plugin.runtime.PluginManager;
+import dev.whitedev.jpi.plugin.runtime.RegisteredExtension;
 import dev.whitedev.jpi.ui.analysis.BytecodeCfgPanel;
 import dev.whitedev.jpi.ui.browser.ClassesPanel;
 import dev.whitedev.jpi.ui.nativeview.DllPanel;
@@ -24,6 +29,7 @@ import dev.whitedev.jpi.ui.workspace.ExecutorPanel;
 import dev.whitedev.jpi.ui.inspection.ConstantSearchPanel;
 import dev.whitedev.jpi.ui.inspection.FieldsPanel;
 import dev.whitedev.jpi.ui.inspection.HeapObjectPanel;
+import dev.whitedev.jpi.ui.plugins.PluginsPanel;
 import com.formdev.flatlaf.extras.FlatSVGIcon;
 
 import javax.swing.*;
@@ -37,6 +43,9 @@ import java.awt.datatransfer.StringSelection;
 import java.io.File;
 import java.net.URI;
 import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -54,10 +63,20 @@ public final class MainFrame extends JFrame {
     private final JPanel cards = new JPanel(cardLayout);
     private final Map<String, JButton> navigation = new LinkedHashMap<>();
     private final List<SessionAware> views;
+    private final List<SessionAware> pluginViews = new ArrayList<>();
+    private final Map<String, JComponent> pluginCards = new LinkedHashMap<>();
+    private final JPanel workspacePluginNavigation = new JPanel();
+    private final JPanel advancedPluginNavigation = new JPanel();
+    private final PluginManager pluginManager;
     private InspectorSession session;
 
     public MainFrame() {
+        this(defaultPluginManager());
+    }
+
+    public MainFrame(PluginManager pluginManager) {
         super("Java Process Inspector");
+        this.pluginManager = pluginManager;
         setIconImage(new FlatSVGIcon("assets/logo.svg", 64, 64).getImage());
         setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
         setMinimumSize(new Dimension(1024, 700));
@@ -70,9 +89,11 @@ public final class MainFrame extends JFrame {
         LiveTracerPanel tracer = new LiveTracerPanel(mappingWorkspace);
         XrefsPanel xrefs = new XrefsPanel(mappingWorkspace);
         BytecodeCfgPanel cfg = new BytecodeCfgPanel(mappingWorkspace);
-        ApiHooksPanel apiHooks = new ApiHooksPanel(mappingWorkspace, xrefs, () -> selectView("Xrefs"));
+        ApiHooksPanel apiHooks = new ApiHooksPanel(mappingWorkspace, xrefs, () -> selectView("Xrefs"),
+                pluginManager.extensions());
         ClassesPanel classes = new ClassesPanel(mappingWorkspace, tracer, xrefs, cfg,
-                () -> selectView("Live tracer"), () -> selectView("Xrefs"), () -> selectView("Bytecode CFG"));
+                () -> selectView("Live tracer"), () -> selectView("Xrefs"), () -> selectView("Bytecode CFG"),
+                pluginManager.extensions());
         DeobfuscationWorkspacePanel deobfuscation = new DeobfuscationWorkspacePanel(mappingWorkspace);
         ExecutorPanel executor = new ExecutorPanel(mappingWorkspace);
         FieldsPanel fields = new FieldsPanel(mappingWorkspace);
@@ -84,8 +105,9 @@ public final class MainFrame extends JFrame {
         MemoryPanel memory = new MemoryPanel(windows);
         DllPanel dll = new DllPanel(windows);
         NativeSymbolsPanel nativeSymbols = new NativeSymbolsPanel();
-        views = Arrays.asList(overview, classes, tracer, apiHooks, xrefs, cfg, deobfuscation,
-                constantSearch, executor, fields, environment, network, heapObjects, nativeSymbols, memory, dll);
+        PluginsPanel plugins = new PluginsPanel(pluginManager);
+        views = new ArrayList<>(Arrays.asList(overview, classes, tracer, apiHooks, xrefs, cfg, deobfuscation,
+                constantSearch, executor, fields, environment, network, heapObjects, nativeSymbols, memory, dll, plugins));
 
         addCard("Overview", overview);
         addCard("Loaded classes", classes);
@@ -103,6 +125,7 @@ public final class MainFrame extends JFrame {
         addCard("Network activity", network);
         addCard("Memory scanner", memory);
         addCard("DLL loader", dll);
+        addCard("Plugins", plugins);
 
         JPanel content = new JPanel(new BorderLayout(0, 12));
         content.setBorder(new EmptyBorder(14, 16, 16, 16));
@@ -119,8 +142,14 @@ public final class MainFrame extends JFrame {
         manualEarly.addActionListener(e -> prepareManualEarlyAgent());
         disconnect.addActionListener(e -> disconnect());
         addWindowListener(new WindowAdapter() {
-            @Override public void windowClosed(WindowEvent event) { disconnect(); }
+            @Override public void windowClosed(WindowEvent event) {
+                disconnect();
+                pluginManager.close();
+            }
         });
+        pluginManager.extensions().addListener(() -> SwingUtilities.invokeLater(this::syncPluginTabs));
+        pluginManager.addListener(() -> SwingUtilities.invokeLater(this::syncPluginTabs));
+        syncPluginTabs();
         setSession(null);
         selectView("Overview");
         refreshTargets();
@@ -130,7 +159,7 @@ public final class MainFrame extends JFrame {
         cards.add(component, name);
     }
 
-    private JPanel sidebar() {
+    private JComponent sidebar() {
         JPanel sidebar = new JPanel();
         sidebar.setBackground(Ui.SIDEBAR);
         sidebar.setPreferredSize(new Dimension(184, 0));
@@ -175,6 +204,8 @@ public final class MainFrame extends JFrame {
         addNavigation(sidebar, "Static fields");
         addNavigation(sidebar, "VM environment");
         addNavigation(sidebar, "Network activity");
+        configurePluginNavigation(workspacePluginNavigation);
+        sidebar.add(workspacePluginNavigation);
         sidebar.add(Box.createVerticalStrut(10));
         JLabel advanced = new JLabel("ADVANCED");
         advanced.setForeground(Ui.MUTED);
@@ -186,6 +217,9 @@ public final class MainFrame extends JFrame {
         addNavigation(sidebar, "Native symbols");
         addNavigation(sidebar, "Memory scanner");
         addNavigation(sidebar, "DLL loader");
+        addNavigation(sidebar, "Plugins");
+        configurePluginNavigation(advancedPluginNavigation);
+        sidebar.add(advancedPluginNavigation);
         sidebar.add(Box.createVerticalGlue());
         JPanel footer = new JPanel();
         footer.setOpaque(false);
@@ -215,7 +249,13 @@ public final class MainFrame extends JFrame {
         authorRow.add(author);
         footer.add(authorRow);
         sidebar.add(footer);
-        return sidebar;
+        JScrollPane scroll = new JScrollPane(sidebar, ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
+                ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+        scroll.setPreferredSize(new Dimension(184, 0));
+        scroll.setBorder(null);
+        scroll.getViewport().setBackground(Ui.SIDEBAR);
+        scroll.getVerticalScrollBar().setUnitIncrement(18);
+        return scroll;
     }
 
     private void openAuthorProfile() {
@@ -235,6 +275,62 @@ public final class MainFrame extends JFrame {
         navigation.put(name, button);
         sidebar.add(button);
         sidebar.add(Box.createVerticalStrut(1));
+    }
+
+    private void configurePluginNavigation(JPanel panel) {
+        panel.setOpaque(false);
+        panel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        panel.setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
+    }
+
+    private void syncPluginTabs() {
+        for (Map.Entry<String, JComponent> entry : pluginCards.entrySet()) {
+            cards.remove(entry.getValue());
+            navigation.remove(entry.getKey());
+        }
+        for (SessionAware view : pluginViews) view.setSession(null);
+        pluginViews.clear();
+        pluginCards.clear();
+        workspacePluginNavigation.removeAll();
+        advancedPluginNavigation.removeAll();
+        Set<String> names = new HashSet<>(navigation.keySet());
+        for (RegisteredExtension<JpiTab> registered : pluginManager.extensions().tabs()) {
+            JpiContext context = pluginManager.context(registered.pluginId()).orElse(null);
+            if (context == null) continue;
+            JpiTab tab = registered.extension();
+            String name = uniqueTabName(tab.title(), registered.pluginId(), names);
+            JComponent component;
+            try {
+                component = tab.createComponent(context);
+                if (component == null) throw new IllegalStateException("Plugin tab returned no component");
+            } catch (Throwable error) {
+                JTextArea failure = Ui.outputArea();
+                failure.setText("Plugin tab could not be created.\n\n" + error.getClass().getSimpleName() + ": "
+                        + (error.getMessage() == null ? "no details" : error.getMessage()));
+                component = Ui.scroll(failure);
+            }
+            addCard(name, component);
+            pluginCards.put(name, component);
+            addNavigation(tab.group() == TabGroup.WORKSPACE ? workspacePluginNavigation : advancedPluginNavigation, name);
+            if (component instanceof SessionAware aware) {
+                pluginViews.add(aware);
+                aware.setSession(session);
+            }
+        }
+        workspacePluginNavigation.revalidate();
+        advancedPluginNavigation.revalidate();
+        cards.revalidate();
+        cards.repaint();
+    }
+
+    private static String uniqueTabName(String requested, String pluginId, Set<String> names) {
+        String base = requested == null || requested.isBlank() ? "Plugin" : requested.trim();
+        String result = base;
+        if (names.contains(result)) result = base + " [" + pluginId + "]";
+        int suffix = 2;
+        while (!names.add(result)) result = base + " [" + pluginId + " " + suffix++ + "]";
+        return result;
     }
 
     private void selectView(String name) {
@@ -411,7 +507,9 @@ public final class MainFrame extends JFrame {
 
     private void setSession(InspectorSession value) {
         session = value;
+        pluginManager.setSession(value);
         for (SessionAware view : views) view.setSession(value);
+        for (SessionAware view : pluginViews) view.setSession(value);
         boolean connected = value != null;
         attach.setEnabled(!connected);
         launchEarly.setEnabled(!connected);
@@ -419,6 +517,15 @@ public final class MainFrame extends JFrame {
         disconnect.setEnabled(connected);
         targets.setEnabled(!connected);
         if (!connected) setStatus("Not attached", Ui.MUTED, Ui.SURFACE_LIGHT);
+    }
+
+    private static PluginManager defaultPluginManager() {
+        PluginManager manager = new PluginManager();
+        try {
+            manager.reload();
+        } catch (Exception ignored) {
+        }
+        return manager;
     }
 
     private void setStatus(String text, Color foreground, Color background) {

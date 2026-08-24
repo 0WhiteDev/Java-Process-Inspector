@@ -43,10 +43,15 @@ public final class ApiHookManager {
     }
 
     public synchronized String start(String payload) throws Exception {
-        int separator = payload.indexOf('\n');
-        String profileText = separator < 0 ? payload : payload.substring(0, separator);
-        String settings = separator < 0 ? "" : payload.substring(separator + 1);
-        Set<ApiHookProfile> profiles = ApiHookProfile.parse(profileText);
+        String[] sections = payload.split("\n", -1);
+        String profileText = sections.length == 0 ? "" : sections[0];
+        String settings = sections.length < 2 ? "" : sections[1];
+        StringBuilder definitions = new StringBuilder();
+        for (int index = 2; index < sections.length; index++) {
+            if (definitions.length() > 0) definitions.append('\n');
+            definitions.append(sections[index]);
+        }
+        Set<ApiHookProfile> profiles = ApiHookProfile.parse(profileText, definitions.toString());
         ApiHookConfig config = ApiHookConfig.parse(settings);
         stopAll();
         if (!hooked.isEmpty()) throw new IOException("Previously hooked classes could not be restored");

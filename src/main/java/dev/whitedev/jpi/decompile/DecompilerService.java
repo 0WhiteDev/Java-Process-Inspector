@@ -1,5 +1,7 @@
 package dev.whitedev.jpi.decompile;
 
+import dev.whitedev.jpi.plugin.api.decompile.DecompilationRequest;
+
 import java.io.*;
 import java.lang.reflect.InvocationTargetException;
 import java.net.URL;
@@ -25,6 +27,13 @@ public final class DecompilerService {
         return decompile(engine, className, null, null, bytecode);
     }
 
+    public String decompile(DecompilerOption option, String className, byte[] bytecode) throws Exception {
+        if (option == null || !option.plugin()) {
+            return decompile(option == null ? DecompilerEngine.CFR : option.engine(), className, bytecode);
+        }
+        return option.provider().decompile(new DecompilationRequest(className, bytecode, "", ""));
+    }
+
     public String decompileMethod(String className, String methodName, byte[] bytecode)
             throws IOException, InterruptedException {
         return decompileMethod(DecompilerEngine.CFR, className, methodName, null, bytecode);
@@ -34,6 +43,15 @@ public final class DecompilerService {
                                   String descriptor, byte[] bytecode)
             throws IOException, InterruptedException {
         return decompile(engine, className, methodName, descriptor, bytecode);
+    }
+
+    public String decompileMethod(DecompilerOption option, String className, String methodName,
+                                  String descriptor, byte[] bytecode) throws Exception {
+        if (option == null || !option.plugin()) {
+            return decompileMethod(option == null ? DecompilerEngine.CFR : option.engine(),
+                    className, methodName, descriptor, bytecode);
+        }
+        return option.provider().decompile(new DecompilationRequest(className, bytecode, methodName, descriptor));
     }
 
     private String decompile(DecompilerEngine engine, String className, String methodName,

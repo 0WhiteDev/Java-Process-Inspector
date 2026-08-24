@@ -8,13 +8,21 @@ import dev.whitedev.jpi.ui.tracing.LiveTracerPanel;
 import dev.whitedev.jpi.ui.tracing.XrefsPanel;
 
 import dev.whitedev.jpi.attach.InspectorSession;
-import dev.whitedev.jpi.decompile.DecompilerEngine;
+import dev.whitedev.jpi.decompile.DecompilerOption;
 import dev.whitedev.jpi.decompile.DecompilerService;
 import dev.whitedev.jpi.decompile.MethodBodyCompatibility;
 import dev.whitedev.jpi.decompile.MethodSourceExtractor;
 import dev.whitedev.jpi.deobfuscation.DeobfuscationWorkspace;
 import dev.whitedev.jpi.deobfuscation.bytecode.DisplayBytecodeRemapper;
 import dev.whitedev.jpi.protocol.Operation;
+import dev.whitedev.jpi.plugin.api.decompile.DecompilerProvider;
+import dev.whitedev.jpi.plugin.api.analysis.AnalysisResult;
+import dev.whitedev.jpi.plugin.api.analysis.BytecodeAnalyzer;
+import dev.whitedev.jpi.plugin.api.analysis.BytecodeTarget;
+import dev.whitedev.jpi.plugin.api.deobfuscation.Deobfuscator;
+import dev.whitedev.jpi.plugin.api.deobfuscation.MappingSuggestion;
+import dev.whitedev.jpi.plugin.runtime.ExtensionRegistry;
+import dev.whitedev.jpi.plugin.runtime.RegisteredExtension;
 import dev.whitedev.jpi.ui.analysis.BytecodeCfgPanel;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 
@@ -65,10 +73,12 @@ public final class ClassesPanel extends JPanel implements SessionAware {
     private final JButton decompile = Ui.primaryButton("Decompile");
     private final JButton applySource = Ui.primaryButton("Apply source");
     private final JButton rollback = Ui.secondaryButton("Rollback original");
+    private final JButton pluginTools = Ui.secondaryButton("Plugin tools...");
     private final JCheckBox live = new JCheckBox("Live tracking", true);
-    private final JComboBox<DecompilerEngine> decompilerSelector = new JComboBox<>(DecompilerEngine.values());
+    private final JComboBox<DecompilerOption> decompilerSelector = new JComboBox<>();
     private final JComboBox<SourceMode> sourceMode = new JComboBox<>(SourceMode.values());
     private final DecompilerService decompilerService = new DecompilerService();
+    private final ExtensionRegistry extensions;
     private final javax.swing.Timer classFilterTimer = new javax.swing.Timer(220, event -> filter(false, null));
     private final javax.swing.Timer mappedSourceTimer = new javax.swing.Timer(350, event -> refreshMappedSource());
     private List<LoadedClassInfo> allClasses = new ArrayList<>();
@@ -89,6 +99,12 @@ public final class ClassesPanel extends JPanel implements SessionAware {
 
     public ClassesPanel(DeobfuscationWorkspace mappingWorkspace, LiveTracerPanel liveTracer, XrefsPanel xrefs,
                  BytecodeCfgPanel cfg, Runnable openLiveTracer, Runnable openXrefs, Runnable openCfg) {
+        this(mappingWorkspace, liveTracer, xrefs, cfg, openLiveTracer, openXrefs, openCfg, new ExtensionRegistry());
+    }
+
+    public ClassesPanel(DeobfuscationWorkspace mappingWorkspace, LiveTracerPanel liveTracer, XrefsPanel xrefs,
+                 BytecodeCfgPanel cfg, Runnable openLiveTracer, Runnable openXrefs, Runnable openCfg,
+                 ExtensionRegistry extensions) {
         super(new BorderLayout(0, 16));
         this.mappingWorkspace = mappingWorkspace;
         this.liveTracer = liveTracer;
@@ -97,6 +113,7 @@ public final class ClassesPanel extends JPanel implements SessionAware {
         this.openLiveTracer = openLiveTracer;
         this.openXrefs = openXrefs;
         this.openCfg = openCfg;
+        this.extensions = extensions;
         setBorder(new EmptyBorder(4, 0, 0, 0));
         setOpaque(false);
         mappingWorkspace.addListener(() -> SwingUtilities.invokeLater(() -> {
@@ -152,11 +169,13 @@ public final class ClassesPanel extends JPanel implements SessionAware {
         dump.addActionListener(e -> dumpSelected());
         dumpAll.addActionListener(e -> dumpAll());
         refreshEvents.addActionListener(e -> refreshEvents());
+        pluginTools.addActionListener(event -> runPluginTool());
         actions.add(live);
         actions.add(refreshEvents);
         actions.add(reload);
         actions.add(dump);
         actions.add(dumpAll);
+        actions.add(pluginTools);
         generalRow.add(metadata, BorderLayout.CENTER);
         generalRow.add(actions, BorderLayout.EAST);
 
@@ -213,6 +232,12 @@ public final class ClassesPanel extends JPanel implements SessionAware {
         });
         methodSelector.addActionListener(event -> methodChanged());
         decompilerSelector.addActionListener(event -> decompilerChanged());
+        extensions.addListener(() -> SwingUtilities.invokeLater(() -> {
+            refreshDecompilers();
+            refreshPluginTools();
+        }));
+        refreshDecompilers();
+        refreshPluginTools();
         sourceMode.addActionListener(event -> sourceModeChanged());
         methodBody.getDocument().addDocumentListener(new DocumentListener() {
             public void insertUpdate(DocumentEvent event) { refreshMethodPatchState(); }
@@ -244,6 +269,7 @@ public final class ClassesPanel extends JPanel implements SessionAware {
         showXrefs.setEnabled(false);
         showCfg.setEnabled(false);
         applyHex.setEnabled(false);
+        refreshPluginTools();
         live.setEnabled(connected);
         if (connected) {
             reload(true);
@@ -392,6 +418,7 @@ public final class ClassesPanel extends JPanel implements SessionAware {
     private void updateSelectionMetadata() {
         if (updatingClassList) return;
         LoadedClassInfo selected = list.getSelectedValue();
+        refreshPluginTools();
         if (selected == null && reloading) return;
         decompileGeneration++;
         decompile.setEnabled(session != null);
@@ -431,9 +458,121 @@ public final class ClassesPanel extends JPanel implements SessionAware {
         if (isMappedSource() && session != null && list.getSelectedValue() != null) decompile();
     }
 
-    private DecompilerEngine selectedDecompiler() {
-        DecompilerEngine selected = (DecompilerEngine) decompilerSelector.getSelectedItem();
-        return selected == null ? DecompilerEngine.CFR : selected;
+    private DecompilerOption selectedDecompiler() {
+        DecompilerOption selected = (DecompilerOption) decompilerSelector.getSelectedItem();
+        return selected == null ? DecompilerOption.builtIns().getFirst() : selected;
+    }
+
+    private void refreshDecompilers() {
+        DecompilerOption selected = (DecompilerOption) decompilerSelector.getSelectedItem();
+        decompilerSelector.removeAllItems();
+        for (DecompilerOption option : DecompilerOption.builtIns()) decompilerSelector.addItem(option);
+        for (RegisteredExtension<DecompilerProvider> registered : extensions.decompilers()) {
+            decompilerSelector.addItem(DecompilerOption.plugin(registered.pluginId(), registered.extension()));
+        }
+        if (selected != null) decompilerSelector.setSelectedItem(selected);
+        if (decompilerSelector.getSelectedIndex() < 0 && decompilerSelector.getItemCount() > 0) {
+            decompilerSelector.setSelectedIndex(0);
+        }
+    }
+
+    private void refreshPluginTools() {
+        boolean available = !extensions.analyzers().isEmpty() || !extensions.deobfuscators().isEmpty();
+        pluginTools.setEnabled(available && session != null && list.getSelectedValue() != null);
+        pluginTools.setToolTipText(available ? "Run a plugin analyzer or deobfuscator on the selected definition"
+                : "No plugin bytecode tools are registered");
+    }
+
+    private void runPluginTool() {
+        LoadedClassInfo selected = list.getSelectedValue();
+        InspectorSession current = session;
+        if (selected == null || current == null) return;
+        List<PluginTool> tools = new ArrayList<>();
+        for (RegisteredExtension<BytecodeAnalyzer> value : extensions.analyzers()) {
+            tools.add(new PluginTool(value.pluginId(), value.extension().name(), value.extension(), null));
+        }
+        for (RegisteredExtension<Deobfuscator> value : extensions.deobfuscators()) {
+            tools.add(new PluginTool(value.pluginId(), value.extension().name(), null, value.extension()));
+        }
+        PluginTool tool = (PluginTool) JOptionPane.showInputDialog(this, "Choose an extension to run",
+                "Plugin bytecode tools", JOptionPane.PLAIN_MESSAGE, null, tools.toArray(), null);
+        if (tool == null) return;
+        MethodInfo method = (MethodInfo) methodSelector.getSelectedItem();
+        String methodName = method == null ? "" : method.name;
+        String descriptor = method == null ? "" : method.descriptor;
+        pluginTools.setEnabled(false);
+        Async.run(() -> {
+            byte[] bytecode = current.request(Operation.CLASS_BYTES, selected.id);
+            BytecodeTarget target = new BytecodeTarget(selected.id, selected.name, bytecode, methodName, descriptor);
+            if (tool.analyzer != null) return PluginToolResult.analysis(tool.analyzer.analyze(target));
+            return PluginToolResult.suggestions(tool.deobfuscator.suggest(target));
+        }, result -> {
+            refreshPluginTools();
+            if (result.analysis != null) showPluginAnalysis(result.analysis);
+            else applyPluginSuggestions(tool, result.suggestions);
+        }, error -> {
+            refreshPluginTools();
+            Ui.error(this, error);
+        });
+    }
+
+    private void showPluginAnalysis(AnalysisResult result) {
+        JTextArea output = Ui.outputArea();
+        output.setText(result.content());
+        output.setCaretPosition(0);
+        JScrollPane scroll = Ui.scroll(output);
+        scroll.setPreferredSize(new Dimension(900, 620));
+        JOptionPane.showMessageDialog(this, scroll, result.title(), JOptionPane.PLAIN_MESSAGE);
+    }
+
+    private void applyPluginSuggestions(PluginTool tool, List<MappingSuggestion> suggestions) {
+        List<MappingSuggestion> values = suggestions == null ? List.of() : suggestions.stream().limit(10_000).toList();
+        if (values.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "The deobfuscator returned no mapping suggestions.",
+                    tool.name, JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        StringBuilder preview = new StringBuilder();
+        for (int index = 0; index < Math.min(values.size(), 200); index++) {
+            MappingSuggestion value = values.get(index);
+            preview.append(value.type()).append("  ").append(value.owner()).append('.')
+                    .append(value.originalName()).append(value.descriptor()).append("  ->  ")
+                    .append(value.suggestedName()).append("  ")
+                    .append(String.format(Locale.ROOT, "%.0f%%", value.confidence() * 100.0)).append('\n');
+        }
+        if (values.size() > 200) preview.append("\n...").append(values.size() - 200).append(" more suggestions");
+        JTextArea output = Ui.outputArea();
+        output.setText(preview.toString());
+        output.setCaretPosition(0);
+        JScrollPane scroll = Ui.scroll(output);
+        scroll.setPreferredSize(new Dimension(900, 560));
+        int choice = JOptionPane.showConfirmDialog(this, scroll,
+                "Apply " + values.size() + " suggestions from " + tool.name,
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if (choice != JOptionPane.OK_OPTION) return;
+        Map<String, dev.whitedev.jpi.deobfuscation.MappingEntry> current = new HashMap<>();
+        for (dev.whitedev.jpi.deobfuscation.MappingEntry entry : mappingWorkspace.entries()) current.put(entry.key(), entry);
+        List<dev.whitedev.jpi.deobfuscation.MappingEntry> accepted = new ArrayList<>();
+        int preserved = 0;
+        for (MappingSuggestion suggestion : values) {
+            dev.whitedev.jpi.deobfuscation.MappingEntry candidate = new dev.whitedev.jpi.deobfuscation.MappingEntry(
+                    dev.whitedev.jpi.deobfuscation.MappingKind.valueOf(suggestion.type().name()),
+                    suggestion.owner(), suggestion.originalName(), suggestion.descriptor(),
+                    suggestion.parameterIndex(), 0);
+            dev.whitedev.jpi.deobfuscation.MappingEntry existing = current.get(candidate.key());
+            if (existing != null && !existing.mappedName().isBlank()) {
+                preserved++;
+                continue;
+            }
+            dev.whitedev.jpi.deobfuscation.MappingEntry result = existing == null ? candidate : existing.copy();
+            result.setMappedName(suggestion.suggestedName());
+            result.setComment(suggestion.reason());
+            result.setTags("plugin," + tool.pluginId);
+            accepted.add(result);
+        }
+        mappingWorkspace.merge(accepted);
+        JOptionPane.showMessageDialog(this, "Applied " + accepted.size() + " suggestions. Preserved "
+                + preserved + " existing manual mappings.", tool.name, JOptionPane.INFORMATION_MESSAGE);
     }
 
     private void decompilerChanged() {
@@ -449,7 +588,7 @@ public final class ClassesPanel extends JPanel implements SessionAware {
     private void decompile() {
         final LoadedClassInfo selected = list.getSelectedValue();
         final InspectorSession current = session;
-        final DecompilerEngine engine = selectedDecompiler();
+        final DecompilerOption engine = selectedDecompiler();
         final SourceMode mode = (SourceMode) sourceMode.getSelectedItem();
         final long generation = ++decompileGeneration;
         if (selected == null || current == null || mode == null) return;
@@ -489,11 +628,11 @@ public final class ClassesPanel extends JPanel implements SessionAware {
         });
     }
 
-    private boolean decompileMatches(long generation, String classId, DecompilerEngine engine,
+    private boolean decompileMatches(long generation, String classId, DecompilerOption engine,
                                      SourceMode mode) {
         LoadedClassInfo selected = list.getSelectedValue();
         return generation == decompileGeneration && selected != null && classId.equals(selected.id)
-                && engine == selectedDecompiler() && mode == sourceMode.getSelectedItem();
+                && engine.equals(selectedDecompiler()) && mode == sourceMode.getSelectedItem();
     }
     private JPanel methodPatchPanel() {
         JPanel panel = new JPanel(new BorderLayout(0, 10));
@@ -622,7 +761,7 @@ public final class ClassesPanel extends JPanel implements SessionAware {
         final long generation = ++methodLoadGeneration;
         final String selectedId = selected.id;
         final String methodKey = method.name + method.descriptor;
-        final DecompilerEngine engine = selectedDecompiler();
+        final DecompilerOption engine = selectedDecompiler();
         methodBodyLoading = true;
         methodBodyReady = false;
         methodStatus.setText("Loading the current implementation of " + methodKey + "...");
@@ -1055,6 +1194,42 @@ public final class ClassesPanel extends JPanel implements SessionAware {
         ClassInventory(List<LoadedClassInfo> classes, long captured) {
             this.classes = classes;
             this.captured = captured;
+        }
+    }
+
+    private static final class PluginTool {
+        final String pluginId;
+        final String name;
+        final BytecodeAnalyzer analyzer;
+        final Deobfuscator deobfuscator;
+
+        PluginTool(String pluginId, String name, BytecodeAnalyzer analyzer, Deobfuscator deobfuscator) {
+            this.pluginId = pluginId;
+            this.name = name;
+            this.analyzer = analyzer;
+            this.deobfuscator = deobfuscator;
+        }
+
+        @Override public String toString() {
+            return name + "  [" + pluginId + "]";
+        }
+    }
+
+    private static final class PluginToolResult {
+        final AnalysisResult analysis;
+        final List<MappingSuggestion> suggestions;
+
+        private PluginToolResult(AnalysisResult analysis, List<MappingSuggestion> suggestions) {
+            this.analysis = analysis;
+            this.suggestions = suggestions;
+        }
+
+        static PluginToolResult analysis(AnalysisResult value) {
+            return new PluginToolResult(value, List.of());
+        }
+
+        static PluginToolResult suggestions(List<MappingSuggestion> values) {
+            return new PluginToolResult(null, values == null ? List.of() : List.copyOf(values));
         }
     }
 

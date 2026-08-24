@@ -4,6 +4,8 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.util.Set;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -39,5 +41,22 @@ class ApiHookProfileTest {
     void rejectsUnknownAndEmptySelections() {
         assertThrows(IOException.class, () -> ApiHookProfile.parse("unknown"));
         assertThrows(IOException.class, () -> ApiHookProfile.parse(""));
+    }
+
+    @Test
+    void acceptsBoundedPluginProfileDefinitions() throws Exception {
+        String definition = "P\t" + encoded("GAME_IO") + "\t" + encoded("Game IO") + "\t"
+                + encoded("game/network/Client") + "\t" + encoded("send");
+
+        Set<ApiHookProfile> profiles = ApiHookProfile.parse("GAME_IO", definition);
+
+        ApiHookProfile profile = profiles.iterator().next();
+        assertEquals("GAME_IO", profile.name());
+        assertTrue(profile.matches("game/network/Client", "send"));
+        assertFalse(profile.matches("game/network/Client", "receive"));
+    }
+
+    private static String encoded(String value) {
+        return Base64.getEncoder().encodeToString(value.getBytes(StandardCharsets.UTF_8));
     }
 }

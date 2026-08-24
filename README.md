@@ -100,6 +100,7 @@ This message commonly appears when a Java 21 agent is loaded into a target runni
 | Session snapshot | One ZIP containing metrics, environment, class inventory, load events, and a thread dump |
 | Network activity | Live process-owned TCP/UDP IPv4/IPv6 endpoints, states, filtering, and open/close timeline |
 | Native symbols | Offline PE, ELF, PDB, DWARF, and MAP analysis with C++ demangling, source locations, RTTI, and virtual-table discovery |
+| Plugins | Versioned Java API for trusted JAR extensions that add tabs, bytecode tools, deobfuscators, exporters, hook profiles, and decompilers |
 | Memory scanner | Search, refine, and explicitly confirm writes to another Windows process |
 | DLL injector | Optional compatibility tool for loading a user-selected DLL on Windows |
 
@@ -314,6 +315,50 @@ Reachable instance counts are not global heap histograms. They cover unique obje
 </details>
 
 <details>
+<summary><strong>Plugin API</strong></summary>
+
+- Discover plugin entry points with Java <code>ServiceLoader</code> from <code>~/.jpi/plugins/*.jar</code>
+- Load every plugin JAR through a dedicated classloader while sharing the stable JPI API from the application classloader
+- Validate plugin IDs, extension IDs, API versions, duplicate registrations, hook definitions, and bounded target counts
+- Give each plugin a persistent private data directory under <code>~/.jpi/plugin-data</code>
+- Add Workspace or Advanced tabs dynamically and remove them safely during reload
+- Add bytecode analyzers and deobfuscators to <strong>Loaded classes -> Plugin tools...</strong>
+- Add decompilers directly to the existing decompiler selector
+- Add exporters to <strong>Plugins -> Run exporter...</strong>
+- Add declarative API hook profiles without copying plugin classes into the inspected JVM
+- Notify plugins when a target session attaches or disconnects through a restricted <code>JpiSession</code> facade
+- Roll back every registration, call plugin shutdown, and close JAR classloaders during reload or application shutdown
+- Isolate discovery and initialization failures so one invalid JAR does not prevent JPI from starting
+
+The smallest entry point is:
+
+```java
+public final class MyPlugin implements JpiPlugin {
+    @Override public String name() {
+        return "My Plugin";
+    }
+
+    @Override public void initialize(JpiContext context) {
+        context.registerBytecodeAnalyzer(new MyAnalyzer());
+    }
+}
+```
+
+Add the implementation name to:
+
+```text
+META-INF/services/dev.whitedev.jpi.plugin.api.JpiPlugin
+```
+
+Build JPI with <code>mvn install</code>, declare <code>dev.whitedev:java-process-inspector:2.0.0</code> as a <code>provided</code> dependency in the plugin, then build the plugin for Java 21. Open <strong>Advanced -> Plugins</strong> to install its JAR, inspect registration failures, reload all plugin classloaders, run exporters, or open the plugin directory. A complete buildable project is available in <a href="examples/sample-plugin">examples/sample-plugin</a>.
+
+Hook profiles contain only an ID, display metadata, and exact owner and method-name pairs. JPI serializes the selected definitions to the Java 8 agent, validates their size and count again inside the target, instruments matching application call sites with the existing bounded runtime, and restores modified classes normally when hooks stop. Plugin bytecode never needs to enter the target JVM.
+
+Plugins are trusted local code, not a security sandbox. They execute with the same file, network, process, and JVM permissions as JPI. Install only JARs whose source and publisher you trust.
+
+</details>
+
+<details>
 <summary><strong>Native symbols and debug metadata</strong></summary>
 
 - Read PE exports, COFF symbol tables, and CodeView RSDS references to matching PDB files
@@ -357,6 +402,7 @@ flowchart LR
     CLIENT[Versioned session client]
     WIN[Windows tools via JNA]
     SYMBOLS[Offline native symbol analysis]
+    PLUGINS[Plugin manager and extension registry]
   end
   subgraph target [Target JVM]
     AGENT[Embedded Instrumentation agent]
@@ -380,6 +426,8 @@ flowchart LR
   AGENT --> EXEC
   GUI --> WIN
   GUI --> SYMBOLS
+  GUI --> PLUGINS
+  PLUGINS -->|ServiceLoader| JARS[Trusted plugin JARs]
   SYMBOLS -->|PE, ELF, PDB, DWARF, MAP| FILES[Selected local files]
   WIN -->|explicit native operation| OS[Selected Windows process]
 ```
@@ -401,6 +449,9 @@ flowchart LR
 | `dev.whitedev.jpi.symbols` | Native symbol-source discovery, merging, C++ demangling, and report assembly |
 | `dev.whitedev.jpi.symbols.model` | Immutable symbol, artifact, kind, and report models |
 | `dev.whitedev.jpi.symbols.parse` | Bounded PE, COFF, ELF, DWARF, PDB, and MAP parsers |
+| `dev.whitedev.jpi.plugin.api` | Versioned plugin lifecycle, context, registration, and target-session contracts |
+| `dev.whitedev.jpi.plugin.api.*` | Typed tab, analyzer, decompiler, deobfuscator, exporter, and hook extensions |
+| `dev.whitedev.jpi.plugin.runtime` | JAR discovery, classloader lifecycle, extension registry, and session facade |
 | `dev.whitedev.jpi.decompile` | Embedded decompiler lifecycle and source extraction |
 | dev.whitedev.jpi.deobfuscation | Persistent mapping model, inventory, and AutoMap |
 | dev.whitedev.jpi.deobfuscation.bytecode | Read-only bytecode remapping for mapped decompilation |
@@ -414,6 +465,7 @@ flowchart LR
 | `dev.whitedev.jpi.ui.workspace` | Deobfuscation workspace and target-side code executor |
 | `dev.whitedev.jpi.ui.system` | Runtime overview and environment snapshot views |
 | `dev.whitedev.jpi.ui.nativeview` | Native symbols plus Windows network, memory, and DLL views |
+| `dev.whitedev.jpi.ui.plugins` | Plugin installation, reload, diagnostics, and exporter UI |
 
 ### Why there is no C++ directory anymore
 
@@ -499,6 +551,7 @@ A manual run of the Release workflow builds downloadable workflow artifacts with
 - A DLL must match the target process architecture.
 - PDB analysis currently extracts embedded decorated names and source references but does not decode complete Microsoft DBI, TPI, IPI, module, type, address, and line streams. Supply a matching MAP file or PE/COFF symbols for addresses.
 - DWARF line decoding currently supports versions 2 through 4 in uncompressed ELF sections. DWARF 5, split DWARF, compressed debug sections, complete type DIEs, and reconstructed vtable layouts are not decoded yet.
+- Plugins are trusted local code and are not sandboxed. Reload removes registered extensions and closes their classloaders, but a malicious or defective plugin can retain threads, native resources, or global state outside JPI's lifecycle controls.
 
 ## Third-party components
 

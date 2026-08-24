@@ -7,6 +7,10 @@ import dev.whitedev.jpi.ui.Ui;
 import dev.whitedev.jpi.attach.InspectorSession;
 import dev.whitedev.jpi.deobfuscation.DeobfuscationWorkspace;
 import dev.whitedev.jpi.protocol.Operation;
+import dev.whitedev.jpi.plugin.api.hook.HookProfile;
+import dev.whitedev.jpi.plugin.api.hook.HookTarget;
+import dev.whitedev.jpi.plugin.runtime.ExtensionRegistry;
+import dev.whitedev.jpi.plugin.runtime.RegisteredExtension;
 
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
@@ -20,6 +24,7 @@ import javax.swing.JTextArea;
 import javax.swing.ListSelectionModel;
 import javax.swing.SpinnerNumberModel;
 import javax.swing.Timer;
+import javax.swing.SwingUtilities;
 import javax.swing.border.EmptyBorder;
 import javax.swing.table.DefaultTableModel;
 import java.awt.BorderLayout;
@@ -49,6 +54,9 @@ public final class ApiHooksPanel extends JPanel implements SessionAware {
     private final XrefsPanel xrefs;
     private final Runnable openXrefs;
     private final Map<String, JCheckBox> profiles = new LinkedHashMap<>();
+    private final Map<String, HookProfile> pluginProfiles = new LinkedHashMap<>();
+    private final JPanel profileRows = new JPanel();
+    private final ExtensionRegistry extensions;
     private final JSpinner maxEvents = spinner(1000, 1, 10000, 100);
     private final JSpinner rateLimit = spinner(200, 1, 100000, 25);
     private final JSpinner stopAfter = spinner(120, 1, 3600, 30);
@@ -69,10 +77,16 @@ public final class ApiHooksPanel extends JPanel implements SessionAware {
     private boolean polling;
 
     public ApiHooksPanel(DeobfuscationWorkspace workspace, XrefsPanel xrefs, Runnable openXrefs) {
+        this(workspace, xrefs, openXrefs, new ExtensionRegistry());
+    }
+
+    public ApiHooksPanel(DeobfuscationWorkspace workspace, XrefsPanel xrefs, Runnable openXrefs,
+                         ExtensionRegistry extensions) {
         super(new BorderLayout(0, 16));
         this.workspace = workspace;
         this.xrefs = xrefs;
         this.openXrefs = openXrefs;
+        this.extensions = extensions;
         setBorder(new EmptyBorder(4, 0, 0, 0));
         setOpaque(false);
 
@@ -131,6 +145,8 @@ public final class ApiHooksPanel extends JPanel implements SessionAware {
         stop.addActionListener(event -> stop());
         clear.addActionListener(event -> clear());
         details.setText("Select an event to inspect its caller and exact JVM descriptors. Double-click it to open Xrefs.");
+        extensions.addListener(() -> SwingUtilities.invokeLater(this::refreshProfiles));
+        refreshProfiles();
         setSession(null);
         pollTimer.start();
     }
@@ -156,15 +172,9 @@ public final class ApiHooksPanel extends JPanel implements SessionAware {
         JLabel title = new JLabel("Observation profiles");
         title.setFont(title.getFont().deriveFont(Font.BOLD, 14f));
         card.add(title, BorderLayout.NORTH);
-        JPanel rows = new JPanel();
-        rows.setOpaque(false);
-        rows.setLayout(new BoxLayout(rows, BoxLayout.Y_AXIS));
-        addProfile(rows, "NETWORK", "Network", "Socket.connect, HttpClient.send, URL.openConnection", false);
-        addProfile(rows, "CRYPTO", "Crypto", "Cipher operations and MessageDigest.digest", true);
-        addProfile(rows, "FILES", "Files", "File streams and java.nio.file.Files reads or writes", false);
-        addProfile(rows, "REFLECTION", "Reflection", "Class.forName, Method.invoke, Constructor.newInstance", false);
-        addProfile(rows, "CLASS_LOADING", "Class loading", "ClassLoader and MethodHandles class definition", false);
-        card.add(rows, BorderLayout.CENTER);
+        profileRows.setOpaque(false);
+        profileRows.setLayout(new BoxLayout(profileRows, BoxLayout.Y_AXIS));
+        card.add(profileRows, BorderLayout.CENTER);
         return card;
     }
 
@@ -204,6 +214,32 @@ public final class ApiHooksPanel extends JPanel implements SessionAware {
         parent.add(row);
     }
 
+    private void refreshProfiles() {
+        Map<String, Boolean> selected = new LinkedHashMap<>();
+        for (Map.Entry<String, JCheckBox> entry : profiles.entrySet()) selected.put(entry.getKey(), entry.getValue().isSelected());
+        profiles.clear();
+        pluginProfiles.clear();
+        profileRows.removeAll();
+        addProfile(profileRows, "NETWORK", "Network", "Socket.connect, HttpClient.send, URL.openConnection",
+                selected.getOrDefault("NETWORK", false));
+        addProfile(profileRows, "CRYPTO", "Crypto", "Cipher operations and MessageDigest.digest",
+                selected.getOrDefault("CRYPTO", selected.isEmpty()));
+        addProfile(profileRows, "FILES", "Files", "File streams and java.nio.file.Files reads or writes",
+                selected.getOrDefault("FILES", false));
+        addProfile(profileRows, "REFLECTION", "Reflection", "Class.forName, Method.invoke, Constructor.newInstance",
+                selected.getOrDefault("REFLECTION", false));
+        addProfile(profileRows, "CLASS_LOADING", "Class loading", "ClassLoader and MethodHandles class definition",
+                selected.getOrDefault("CLASS_LOADING", false));
+        for (RegisteredExtension<HookProfile> registered : extensions.hookProfiles()) {
+            HookProfile profile = registered.extension();
+            pluginProfiles.put(profile.id(), profile);
+            addProfile(profileRows, profile.id(), profile.name(), profile.description(),
+                    selected.getOrDefault(profile.id(), false));
+        }
+        profileRows.revalidate();
+        profileRows.repaint();
+    }
+
     private void start() {
         InspectorSession current = session;
         if (current == null) return;
@@ -218,7 +254,7 @@ public final class ApiHooksPanel extends JPanel implements SessionAware {
         }
         String payload = String.join(",", selected) + "\nmaxEvents=" + maxEvents.getValue()
                 + ";rateLimit=" + rateLimit.getValue() + ";stopAfterSeconds=" + stopAfter.getValue()
-                + ";maxClasses=" + maxClasses.getValue();
+                + ";maxClasses=" + maxClasses.getValue() + hookDefinitions(selected);
         start.setEnabled(false);
         status.setForeground(Ui.MUTED);
         status.setText("Scanning application call sites and applying probes...");
@@ -233,6 +269,24 @@ public final class ApiHooksPanel extends JPanel implements SessionAware {
             status.setText("API hook setup failed");
             Ui.error(this, error);
         });
+    }
+
+    private String hookDefinitions(List<String> selected) {
+        StringBuilder output = new StringBuilder();
+        for (String id : selected) {
+            HookProfile profile = pluginProfiles.get(id);
+            if (profile == null) continue;
+            for (HookTarget target : profile.targets()) {
+                output.append('\n').append('P').append('\t').append(encoded(profile.id())).append('\t')
+                        .append(encoded(profile.name())).append('\t').append(encoded(target.owner())).append('\t')
+                        .append(encoded(target.methodName()));
+            }
+        }
+        return output.toString();
+    }
+
+    private static String encoded(String value) {
+        return Base64.getEncoder().encodeToString(value.getBytes(StandardCharsets.UTF_8));
     }
 
     private void stop() {

@@ -7,7 +7,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
-import java.util.EnumSet;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -23,9 +23,9 @@ class ApiHookInstrumenterTest {
     void recordsTheExactApplicationCallerWithoutCapturingArguments() throws Exception {
         byte[] source = bytes(ApiHookFixture.class);
         ApiHookInstrumenter.Result result = ApiHookInstrumenter.instrument(
-                source, EnumSet.of(ApiHookProfile.CRYPTO));
+                source, Set.of(ApiHookProfile.CRYPTO));
         ApiHookConfig config = ApiHookConfig.parse("maxEvents=20;rateLimit=20;stopAfterSeconds=30");
-        ApiHookRuntime.configure(EnumSet.of(ApiHookProfile.CRYPTO), config, 1, result.sites);
+        ApiHookRuntime.configure(Set.of(ApiHookProfile.CRYPTO), config, 1, result.sites);
 
         assertEquals(1, result.sites);
         Class<?> instrumented = new FixtureLoader().define(ApiHookFixture.class.getName(), result.bytecode);
