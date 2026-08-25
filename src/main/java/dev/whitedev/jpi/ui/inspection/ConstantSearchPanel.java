@@ -12,11 +12,14 @@ import javax.swing.border.EmptyBorder;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.awt.datatransfer.StringSelection;
+import java.util.function.Consumer;
 
 public final class ConstantSearchPanel extends JPanel implements SessionAware {
     private final DeobfuscationWorkspace workspace;
+    private final Consumer<String> investigation;
     private final JTextField query = new JTextField();
     private final JButton search = Ui.primaryButton("Search constants");
+    private final JButton investigate = Ui.secondaryButton("Investigate");
     private final JLabel resultCount = new JLabel("Not attached");
     private final DefaultTableModel model = new DefaultTableModel(
             new Object[]{"Class", "Class loader", "Matching constant or symbol"}, 0) {
@@ -26,8 +29,13 @@ public final class ConstantSearchPanel extends JPanel implements SessionAware {
     private InspectorSession session;
 
     public ConstantSearchPanel(DeobfuscationWorkspace workspace) {
+        this(workspace, null);
+    }
+
+    public ConstantSearchPanel(DeobfuscationWorkspace workspace, Consumer<String> investigation) {
         super(new BorderLayout(0, 16));
         this.workspace = workspace;
+        this.investigation = investigation;
         setBorder(new EmptyBorder(4, 0, 0, 0));
         setOpaque(false);
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
@@ -36,9 +44,12 @@ public final class ConstantSearchPanel extends JPanel implements SessionAware {
         query.putClientProperty("JTextField.placeholderText", "URL, package, method, field, marker...");
         query.addActionListener(e -> search());
         search.addActionListener(e -> search());
+        investigate.addActionListener(e -> investigate());
         JButton copy = Ui.secondaryButton("Copy results");
         copy.addActionListener(e -> copyResults());
-        actions.add(query); actions.add(copy); actions.add(search);
+        actions.add(query); actions.add(copy);
+        if (investigation != null) actions.add(investigate);
+        actions.add(search);
         add(Ui.sectionHeader("Constant search",
                 "Find strings, descriptors, class names, methods, and field symbols across available bytecode",
                 actions), BorderLayout.NORTH);
@@ -59,9 +70,24 @@ public final class ConstantSearchPanel extends JPanel implements SessionAware {
     @Override public void setSession(InspectorSession session) {
         this.session = session;
         search.setEnabled(session != null);
+        investigate.setEnabled(session != null && investigation != null);
         query.setEnabled(session != null);
         model.setRowCount(0);
         resultCount.setText(session == null ? "Not attached" : "Enter at least two characters");
+    }
+
+    private void investigate() {
+        if (investigation == null) return;
+        String value = query.getText().trim();
+        int row = results.getSelectedRow();
+        if (value.isEmpty() && row >= 0) {
+            value = String.valueOf(model.getValueAt(results.convertRowIndexToModel(row), 2));
+        }
+        if (value.length() < 2) {
+            resultCount.setText("Enter or select at least two characters");
+            return;
+        }
+        investigation.accept(value);
     }
 
     private void search() {

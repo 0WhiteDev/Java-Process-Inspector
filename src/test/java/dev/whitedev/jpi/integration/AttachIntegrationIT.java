@@ -6,6 +6,8 @@ import dev.whitedev.jpi.attach.JvmDescriptor;
 import dev.whitedev.jpi.attach.LaunchResult;
 import dev.whitedev.jpi.protocol.Operation;
 import dev.whitedev.jpi.export.SessionSnapshotExporter;
+import dev.whitedev.jpi.investigation.InvestigationAnalyzer;
+import dev.whitedev.jpi.investigation.InvestigationReport;
 import org.junit.jupiter.api.Test;
 import java.io.*;
 import java.net.InetAddress;
@@ -119,6 +121,12 @@ class AttachIntegrationIT {
                 assertTrue(session.requestText(Operation.XREF_SEARCH, "before")
                         .contains(Base64.getEncoder().encodeToString(
                                 AttachTarget.class.getName().getBytes("UTF-8"))));
+                InvestigationReport investigation = InvestigationAnalyzer.analyze("before",
+                        session.requestText(Operation.CONSTANT_SEARCH, "before"),
+                        session.requestText(Operation.XREF_SEARCH, "before"),
+                        session.requestText(Operation.TRACE_EVENTS, ""));
+                assertTrue(investigation.entryPoints().stream().anyMatch(entry ->
+                        "runtimeValue".equals(entry.methodName()) && entry.runtimeHits() > 0));
                 assertTrue(session.requestText(Operation.TRACE_STOP, traceId).contains("Stopped"));
                 assertEquals("before", session.requestText(Operation.EXECUTE, probe));
                 String methodPatch = classId + "\nruntimeValue\n()Ljava/lang/String;\n{ return \"method-patched\"; }";

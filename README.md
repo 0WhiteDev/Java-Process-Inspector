@@ -109,6 +109,7 @@ This message commonly appears when a Java 21 agent is loaded into a target runni
 | API hooks | Ready-to-use Network, Crypto, Files, Reflection, and Class loading profiles that identify exact application call sites |
 | Xrefs | Static and observed Called by and Calls edges, field and type references, constants, and method-level string or endpoint users |
 | Bytecode CFG | Interactive basic-block graph with branches, exception edges, dominators, complexity, dead code, and live execution counts |
+| Investigation | Guided constant-to-code workflow with ranked entry points, correlated Xrefs, suggested probes, runtime caller paths, and interesting CFG branches |
 | Deobfuscation | Persistent aliases, notes, tags, colors, scoped AutoMap, package exclusions, mapping exports, and Code Executor name resolution |
 | Constant search | Global search through strings, descriptors, class names, methods, and fields in available class constant pools |
 | Executor | Java editor with syntax highlighting, line numbers, folding, bracket matching, and Ctrl+Enter execution |
@@ -137,6 +138,26 @@ The interface uses FlatLaf with a focused sidebar workspace instead of nested ut
 - Loopback-only socket, random session token, protocol magic, version, and payload limits
 - Minimal agent thread, the GUI never runs inside the target process
 - Re-attach support and deterministic disconnect handling
+
+</details>
+
+<details>
+<summary><strong>Investigation sessions</strong></summary>
+
+- Start from a URL, endpoint, error message, token name, license marker, or another interesting constant
+- Correlate constant-pool matches with the exact methods that load matching strings
+- Rank candidate entry points with a bounded confidence heuristic based on match quality, semantic markers, method names, and runtime evidence
+- Preserve exact classloader-specific identifiers so every suggested action targets the correct loaded definition
+- Refresh existing Live Tracer evidence and promote methods that were actually executed
+- Show captured caller stacks as runtime paths from the application entry point to the investigated method
+- Load reverse callers, outgoing calls, fields, types, constants, and CFG only for the selected candidate
+- Prepare the selected method directly in Live Tracer, Xrefs, or Bytecode CFG without searching for it again
+- Install an explicit 30-second CFG probe and correlate branch blocks with live target-block hit counts
+- Keep initial analysis bounded by the existing constant and Xref limits instead of repeating reverse scans for every candidate
+
+Open <strong>Constant search</strong>, search for a value such as <code>https://api.example.com/license</code>, and click <strong>Investigate</strong>. JPI opens the Investigation workspace with ranked method-level users and interesting related constants. Select an entry point and click <strong>Analyze selected</strong> to load its Xrefs and CFG. Use <strong>Prepare tracer</strong>, perform the action in the target, then return and click <strong>Refresh runtime</strong> to add observed calls and caller paths to the same report. Use <strong>Trace branches 30s</strong> when branch-level evidence is needed.
+
+Confidence is an analysis aid, not a correctness guarantee. CFG target-block hits approximate taken branch counts when several edges can reach the same target. Starting CFG counters can stop an active method probe for the selected class because both features temporarily transform the same definition.
 
 </details>
 

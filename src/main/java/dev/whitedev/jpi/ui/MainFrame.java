@@ -14,6 +14,7 @@ import dev.whitedev.jpi.plugin.api.ui.TabGroup;
 import dev.whitedev.jpi.plugin.runtime.PluginManager;
 import dev.whitedev.jpi.plugin.runtime.RegisteredExtension;
 import dev.whitedev.jpi.ui.analysis.BytecodeCfgPanel;
+import dev.whitedev.jpi.ui.analysis.InvestigationPanel;
 import dev.whitedev.jpi.ui.browser.ClassesPanel;
 import dev.whitedev.jpi.ui.connection.TunnelAgentDialog;
 import dev.whitedev.jpi.ui.nativeview.DllPanel;
@@ -91,6 +92,17 @@ public final class MainFrame extends JFrame {
         LiveTracerPanel tracer = new LiveTracerPanel(mappingWorkspace);
         XrefsPanel xrefs = new XrefsPanel(mappingWorkspace);
         BytecodeCfgPanel cfg = new BytecodeCfgPanel(mappingWorkspace);
+        InvestigationPanel investigation = new InvestigationPanel(mappingWorkspace,
+                target -> {
+                    xrefs.selectTarget(target.classIdentifier(), target.className(), target.methodName(), target.descriptor());
+                    selectView("Xrefs");
+                }, target -> {
+                    tracer.selectTarget(target.classIdentifier(), target.className(), target.methodName(), target.descriptor());
+                    selectView("Live tracer");
+                }, target -> {
+                    cfg.selectTarget(target.classIdentifier(), target.className(), target.methodName(), target.descriptor());
+                    selectView("Bytecode CFG");
+                });
         ApiHooksPanel apiHooks = new ApiHooksPanel(mappingWorkspace, xrefs, () -> selectView("Xrefs"),
                 pluginManager.extensions());
         ClassesPanel classes = new ClassesPanel(mappingWorkspace, tracer, xrefs, cfg,
@@ -101,14 +113,17 @@ public final class MainFrame extends JFrame {
         FieldsPanel fields = new FieldsPanel(mappingWorkspace);
         HeapObjectPanel heapObjects = new HeapObjectPanel(mappingWorkspace);
         EnvironmentPanel environment = new EnvironmentPanel();
-        ConstantSearchPanel constantSearch = new ConstantSearchPanel(mappingWorkspace);
+        ConstantSearchPanel constantSearch = new ConstantSearchPanel(mappingWorkspace, value -> {
+            investigation.investigate(value);
+            selectView("Investigation");
+        });
         WindowsNativeAccess windows = new WindowsNativeAccess();
         NetworkPanel network = new NetworkPanel(new WindowsNetworkAccess());
         MemoryPanel memory = new MemoryPanel(windows);
         DllPanel dll = new DllPanel(windows);
         NativeSymbolsPanel nativeSymbols = new NativeSymbolsPanel();
         PluginsPanel plugins = new PluginsPanel(pluginManager);
-        views = new ArrayList<>(Arrays.asList(overview, classes, tracer, apiHooks, xrefs, cfg, deobfuscation,
+        views = new ArrayList<>(Arrays.asList(overview, classes, tracer, apiHooks, xrefs, cfg, investigation, deobfuscation,
                 constantSearch, executor, fields, environment, network, heapObjects, nativeSymbols, memory, dll, plugins));
 
         addCard("Overview", overview);
@@ -117,6 +132,7 @@ public final class MainFrame extends JFrame {
         addCard("API hooks", apiHooks);
         addCard("Xrefs", xrefs);
         addCard("Bytecode CFG", cfg);
+        addCard("Investigation", investigation);
         addCard("Deobfuscation", deobfuscation);
         addCard("Constant search", constantSearch);
         addCard("Code executor", executor);
@@ -201,6 +217,7 @@ public final class MainFrame extends JFrame {
         addNavigation(sidebar, "API hooks");
         addNavigation(sidebar, "Xrefs");
         addNavigation(sidebar, "Bytecode CFG");
+        addNavigation(sidebar, "Investigation");
         addNavigation(sidebar, "Deobfuscation");
         addNavigation(sidebar, "Constant search");
         addNavigation(sidebar, "Code executor");
