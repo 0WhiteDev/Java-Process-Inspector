@@ -15,6 +15,7 @@ import dev.whitedev.jpi.plugin.runtime.PluginManager;
 import dev.whitedev.jpi.plugin.runtime.RegisteredExtension;
 import dev.whitedev.jpi.ui.analysis.BytecodeCfgPanel;
 import dev.whitedev.jpi.ui.browser.ClassesPanel;
+import dev.whitedev.jpi.ui.connection.TunnelAgentDialog;
 import dev.whitedev.jpi.ui.nativeview.DllPanel;
 import dev.whitedev.jpi.ui.nativeview.MemoryPanel;
 import dev.whitedev.jpi.ui.nativeview.NativeSymbolsPanel;
@@ -57,6 +58,7 @@ public final class MainFrame extends JFrame {
     private final JButton attach = Ui.primaryButton("Attach");
     private final JButton launchEarly = Ui.secondaryButton("Launch with early agent...");
     private final JButton manualEarly = Ui.secondaryButton("Manual agent...");
+    private final JButton tunnelAgent = Ui.secondaryButton("Tunnel agent...");
     private final JButton disconnect = Ui.secondaryButton("Disconnect");
     private final JLabel status = new JLabel("Not attached");
     private final CardLayout cardLayout = new CardLayout();
@@ -140,6 +142,7 @@ public final class MainFrame extends JFrame {
         attach.addActionListener(e -> connect());
         launchEarly.addActionListener(e -> launchWithEarlyAgent());
         manualEarly.addActionListener(e -> prepareManualEarlyAgent());
+        tunnelAgent.addActionListener(e -> connectTunnel());
         disconnect.addActionListener(e -> disconnect());
         addWindowListener(new WindowAdapter() {
             @Override public void windowClosed(WindowEvent event) {
@@ -377,6 +380,7 @@ public final class MainFrame extends JFrame {
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
         actions.setOpaque(false);
         actions.add(refresh);
+        actions.add(tunnelAgent);
         actions.add(manualEarly);
         actions.add(launchEarly);
         actions.add(attach);
@@ -498,6 +502,27 @@ public final class MainFrame extends JFrame {
         });
     }
 
+    private void connectTunnel() {
+        TunnelAgentDialog.ConnectionRequest request = TunnelAgentDialog.showDialog(this, attachService);
+        if (request == null) return;
+        attach.setEnabled(false);
+        launchEarly.setEnabled(false);
+        manualEarly.setEnabled(false);
+        tunnelAgent.setEnabled(false);
+        targets.setEnabled(false);
+        setStatus("Connecting through tunnel...", Ui.WARNING, Ui.SURFACE_LIGHT);
+        Async.run(() -> attachService.connectTunnel(request.localPort(), request.token(), request.pid(),
+                request.displayName()), connected -> {
+            setSession(connected);
+            setStatus("Attached through tunnel  |  PID " + connected.target().id(),
+                    Ui.SUCCESS, new Color(60, 60, 60));
+        }, error -> {
+            setSession(null);
+            setStatus("Tunnel connection failed", Ui.WARNING, new Color(69, 48, 25));
+            Ui.error(this, error);
+        });
+    }
+
     private void disconnect() {
         InspectorSession current = session;
         session = null;
@@ -514,6 +539,7 @@ public final class MainFrame extends JFrame {
         attach.setEnabled(!connected);
         launchEarly.setEnabled(!connected);
         manualEarly.setEnabled(!connected);
+        tunnelAgent.setEnabled(!connected);
         disconnect.setEnabled(connected);
         targets.setEnabled(!connected);
         if (!connected) setStatus("Not attached", Ui.MUTED, Ui.SURFACE_LIGHT);

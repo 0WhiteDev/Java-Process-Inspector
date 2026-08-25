@@ -75,6 +75,24 @@ When you control application startup, use **Launch with early agent...** and sel
 
 For IDEs, Gradle, application servers, native launchers, or non-executable class paths, use **Manual agent...**. JPI generates a one-use authenticated `-javaagent` argument, copies it to the clipboard, and waits up to two minutes for the target to start. Supplying the optional PID also enables the native memory and network views.
 
+### Inspect through an SSH tunnel
+
+Use **Tunnel agent...** when the target JVM runs on another machine, inside a VM, or behind a network boundary. The dialog generates a one-use token and setup commands for an early agent, remote late attach, and SSH forwarding. The agent listens only on the target machine's loopback interface, while the desktop client connects only to a locally forwarded loopback port.
+
+For late attach, copy `jpi.jar` to the target machine and run the generated command there:
+
+```text
+java -jar jpi.jar agent-server --pid 1234 --port 43123 --token <generated-token> --timeout 900
+```
+
+Create the forwarding tunnel from the desktop machine:
+
+```text
+ssh -N -L 43123:127.0.0.1:43123 user@remote-host
+```
+
+Keep the SSH command running, return to **Tunnel agent...**, and click **Connect** with the same local port and token. The late-attach command exits after loading the listener into the target JVM. If the application must be observed before `main()`, use the generated `-javaagent` argument instead of the `agent-server` command. The remote JAR should come from the same JPI build as the desktop application so both sides use the same protocol.
+
 ### Agent JAR loaded but agent failed to initialize
 
 This message commonly appears when a Java 21 agent is loaded into a target running Java 8 or Java 17. JPI now rebuilds its embedded agent and protocol as Java 8 bytecode while keeping the desktop application on Java 21.
@@ -114,6 +132,7 @@ The interface uses FlatLaf with a focused sidebar workspace instead of nested ut
 - Standard `VirtualMachine.loadAgent` attach instead of `CreateRemoteThread` + `DllMain`
 - Early `-javaagent` launch mode for applications that disable late attach
 - Manual one-use early-agent argument for IDEs, build tools, application servers, and custom launchers
+- Agent-server mode and desktop client mode for inspection through SSH or another local port-forwarding tunnel
 - One distributable shaded JAR with controller and agent manifests
 - Loopback-only socket, random session token, protocol magic, version, and payload limits
 - Minimal agent thread, the GUI never runs inside the target process
@@ -415,7 +434,7 @@ flowchart LR
   GUI --> ATTACH
   ATTACH -->|load the same jpi.jar| AGENT
   GUI --> CLIENT
-  CLIENT <-->|authenticated loopback| AGENT
+  CLIENT <-->|authenticated loopback or port-forwarded loopback| AGENT
   AGENT --> INSPECT
   AGENT --> TRACE
   TRACE --> XREF
@@ -458,6 +477,7 @@ flowchart LR
 | dev.whitedev.jpi.deobfuscation.io | JSON persistence and Tiny, TSRG, and ProGuard exports |
 | dev.whitedev.jpi.deobfuscation.search | Structured multi-kind mapping queries |
 | `dev.whitedev.jpi.ui` | Application shell, shared styling, editors, and asynchronous execution |
+| `dev.whitedev.jpi.ui.connection` | Guided agent-server, SSH tunnel, and remote client setup |
 | `dev.whitedev.jpi.ui.browser` | Loaded-class navigation, decompilation, bytecode, and live editing |
 | `dev.whitedev.jpi.ui.tracing` | Live tracer, automatic hooks, and Xref views |
 | `dev.whitedev.jpi.ui.analysis` | Interactive bytecode CFG rendering and coverage presentation |
@@ -479,7 +499,7 @@ The release is reproducible and has one application artifact to build, verify, a
 
 ## Protocol and security model
 
-The controller binds an ephemeral loopback listener before loading the agent. Agent options contain the endpoint and a random one-use token. The first agent message authenticates the session. Every frame has a magic value, version, operation code, and bounded payload length. There is no wildcard bind, discovery file, default password, or remote service.
+In the default attach mode, the controller binds an ephemeral loopback listener before loading the agent. Agent options contain the endpoint and a random one-use token, and the first agent message authenticates the session. In the opt-in tunneled mode, the direction is reversed: the agent binds a user-selected loopback port and authenticates the desktop client with the same one-use token. Both modes reject non-loopback bind and connection addresses. Every frame has a magic value, version, operation code, and bounded payload length. There is no wildcard bind, discovery file, default password, or unauthenticated remote service.
 
 ---
 
@@ -493,7 +513,7 @@ mvn verify
 java -jar target/jpi.jar
 ```
 
-Integration tests cover both late attach and an executable JAR launched with the early agent. The early-agent test verifies that the application class is captured before `main()` and appears in the dynamic load timeline. A Windows-only test allocates a native buffer, writes through the production `WriteProcessMemory` path, and reads the replacement value back from the same address.
+Integration tests cover late attach, an executable JAR launched with the early agent, and the reversed agent-server transport used through tunnels. The tunnel test authenticates a desktop client and dumps a real class from a child JVM. The early-agent test verifies that the application class is captured before `main()` and appears in the dynamic load timeline. A Windows-only test allocates a native buffer, writes through the production `WriteProcessMemory` path, and reads the replacement value back from the same address.
 
 The late-attach integration test scans a known static heap root, inspects a sampled object through a weak handle, reads a scoped deobfuscation inventory, installs a Crypto API profile, captures a real MessageDigest call and restores its call-site class, installs a live trace probe, captures a real invocation, verifies static and dynamic Xrefs plus method-level string search, restores the traced definition, compiles replacement Java source inside the running target, patches ordinary and lambda-based methods, reapplies raw class bytes, and verifies rollback after every mode.
 
@@ -534,6 +554,7 @@ A manual run of the Release workflow builds downloadable workflow artifacts with
 - Attach can be disabled by JVM flags, container boundaries, OS policy, or a different user account.
 - A JVM that already attempted to load an incompatible older JPI agent must be restarted before retrying with a rebuilt JAR.
 - Early-agent mode requires control over the target launch command and is not a security-boundary bypass.
+- Tunneled mode requires the same JPI build on the remote side, a reachable port-forwarding mechanism, and permission to attach to or start the target JVM. The listener accepts one authenticated session and closes when its timeout expires or the session ends.
 - The executor requires `JavaCompiler` in the target and compiles against its visible compiler class path.
 - Hidden classes are listed when the JVM exposes them, definitions that never pass through Java Instrumentation may remain unavailable.
 - Runtime source editing uses the target JDK compiler when present and an embedded Java 8-compatible ECJ fallback otherwise. JPI exposes loaded class definitions and bundled javax.annotation types to the compiler, but invalid source emitted by a decompiler can still require manual correction or a different decompiler.

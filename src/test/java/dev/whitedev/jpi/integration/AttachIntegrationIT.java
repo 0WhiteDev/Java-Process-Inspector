@@ -8,6 +8,8 @@ import dev.whitedev.jpi.protocol.Operation;
 import dev.whitedev.jpi.export.SessionSnapshotExporter;
 import org.junit.jupiter.api.Test;
 import java.io.*;
+import java.net.InetAddress;
+import java.net.ServerSocket;
 import java.util.concurrent.TimeUnit;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -175,6 +177,42 @@ class AttachIntegrationIT {
             launch.session().close();
             launch.process().destroy();
             if (!launch.process().waitFor(3, TimeUnit.SECONDS)) launch.process().destroyForcibly();
+        }
+    }
+
+    @Test void listeningAgentDumpsClassesThroughAForwardedLoopbackEndpoint() throws Exception {
+        String java = new File(new File(System.getProperty("java.home"), "bin"),
+                isWindows() ? "java.exe" : "java").getAbsolutePath();
+        Process target = new ProcessBuilder(java, "-cp", TEST_CLASSES, AttachTarget.class.getName())
+                .redirectErrorStream(true).start();
+        try {
+            BufferedReader output = new BufferedReader(new InputStreamReader(target.getInputStream(), "UTF-8"));
+            String pid = output.readLine();
+            assertNotNull(pid, "Target JVM did not start");
+            int port;
+            try (ServerSocket available = new ServerSocket(0, 1, InetAddress.getLoopbackAddress())) {
+                port = available.getLocalPort();
+            }
+            AttachService service = new AttachService(AGENT_JAR);
+            AttachService.PreparedTunnelAgent prepared = service.prepareTunnelAgent(port, 60);
+            service.loadTunnelAgent(pid, prepared);
+            InspectorSession session = service.connectTunnel(port, prepared.token(), pid, "tunnel-smoke-target");
+            try {
+                assertTrue(session.requestText(Operation.METRICS, "").contains("pid=" + pid));
+                String classes = session.requestText(Operation.CLASSES, "");
+                String classLine = Arrays.stream(classes.split("\n"))
+                        .filter(line -> line.contains("\t" + AttachTarget.class.getName() + "\t"))
+                        .findFirst().orElseThrow();
+                byte[] bytecode = session.request(Operation.CLASS_BYTES, classLine.split("\t", -1)[0]);
+                assertTrue(bytecode.length > 4);
+                assertArrayEquals(new byte[] {(byte) 0xca, (byte) 0xfe, (byte) 0xba, (byte) 0xbe},
+                        Arrays.copyOf(bytecode, 4));
+            } finally {
+                session.close();
+            }
+        } finally {
+            target.destroy();
+            if (!target.waitFor(3, TimeUnit.SECONDS)) target.destroyForcibly();
         }
     }
 

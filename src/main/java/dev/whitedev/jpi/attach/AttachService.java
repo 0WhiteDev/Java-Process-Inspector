@@ -8,10 +8,12 @@ import dev.whitedev.jpi.JpiApplication;
 import dev.whitedev.jpi.protocol.Operation;
 
 import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Method;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.URI;
@@ -35,6 +37,71 @@ public final class AttachService {
         String argument = "-javaagent:" + agentJar.getAbsolutePath() + "=" + channel.options();
         if (argument.indexOf(' ') >= 0) argument = '"' + argument + '"';
         return new PreparedAgentSession(channel, argument);
+    }
+
+    public PreparedTunnelAgent prepareTunnelAgent(int agentPort, int acceptTimeoutSeconds) {
+        return prepareTunnelAgent(agentPort, UUID.randomUUID().toString() + UUID.randomUUID(), acceptTimeoutSeconds);
+    }
+
+    public PreparedTunnelAgent prepareTunnelAgent(int agentPort, String token, int acceptTimeoutSeconds) {
+        if (agentPort < 1 || agentPort > 65535) throw new IllegalArgumentException("Agent port must be between 1 and 65535");
+        if (token == null || token.length() < 16 || token.length() > 512 || token.indexOf(';') >= 0) {
+            throw new IllegalArgumentException("Invalid tunnel authentication token");
+        }
+        if (acceptTimeoutSeconds < 10 || acceptTimeoutSeconds > 3600) {
+            throw new IllegalArgumentException("Agent timeout must be between 10 and 3600 seconds");
+        }
+        String options = "mode=listen;host=127.0.0.1"
+                + ";port=" + agentPort + ";token=" + token
+                + ";acceptTimeoutSeconds=" + acceptTimeoutSeconds;
+        return new PreparedTunnelAgent(token, options);
+    }
+
+    public void loadTunnelAgent(String pid, PreparedTunnelAgent prepared) throws Exception {
+        if (pid == null || pid.isBlank()) throw new IllegalArgumentException("Target PID is required");
+        if (prepared == null) throw new IllegalArgumentException("Prepared tunnel agent is required");
+        File agentJar = applicationJar();
+        VirtualMachine vm = null;
+        try {
+            vm = VirtualMachine.attach(pid.trim());
+            vm.loadAgent(agentJar.getAbsolutePath(), prepared.options());
+        } catch (AgentInitializationException exception) {
+            throw new IOException("The listening JPI agent could not initialize. Check that its loopback port is free. "
+                    + "Initialization code: " + exception.returnValue() + ". Cause: " + exception.getMessage(), exception);
+        } catch (AgentLoadException | AttachNotSupportedException | IOException exception) {
+            throw new IOException("Could not load the listening JPI agent into PID " + pid.trim()
+                    + ". Cause: " + exception.getMessage(), exception);
+        } finally {
+            if (vm != null) vm.detach();
+        }
+    }
+
+    public InspectorSession connectTunnel(int localPort, String token, String pid, String displayName) throws IOException {
+        if (localPort < 1 || localPort > 65535) throw new IllegalArgumentException("Tunnel port must be between 1 and 65535");
+        if (token == null || token.length() < 16 || token.length() > 512) {
+            throw new IllegalArgumentException("Invalid tunnel authentication token");
+        }
+        Socket socket = new Socket();
+        try {
+            socket.connect(new InetSocketAddress("127.0.0.1", localPort), 15_000);
+            socket.setTcpNoDelay(true);
+            socket.setSoTimeout(60_000);
+            DataOutputStream output = new DataOutputStream(socket.getOutputStream());
+            output.writeUTF(token);
+            output.flush();
+            String id = pid == null || pid.isBlank() ? "tunneled" : pid.trim();
+            String name = displayName == null || displayName.isBlank() ? "Tunneled JVM" : displayName.trim();
+            InspectorSession session = new InspectorSession(new JvmDescriptor(id, name + " (tunnel)"), socket);
+            if (!"pong".equals(session.requestText(Operation.PING, ""))) {
+                session.close();
+                throw new IOException("Agent did not complete the tunneled protocol handshake");
+            }
+            return session;
+        } catch (IOException error) {
+            try { socket.close(); } catch (IOException ignored) {}
+            throw new IOException("Could not connect to the local tunnel endpoint on port " + localPort
+                    + ". Verify the agent, SSH forwarding, port, and token. Cause: " + error.getMessage(), error);
+        }
     }
 
     public InspectorSession attach(JvmDescriptor target) throws Exception {
@@ -206,5 +273,18 @@ public final class AttachService {
         }
 
         @Override public void close() { channel.close(); }
+    }
+
+    public static final class PreparedTunnelAgent {
+        private final String token;
+        private final String options;
+
+        private PreparedTunnelAgent(String token, String options) {
+            this.token = token;
+            this.options = options;
+        }
+
+        public String token() { return token; }
+        public String options() { return options; }
     }
 }

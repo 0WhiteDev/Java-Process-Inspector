@@ -9,12 +9,17 @@ import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.io.IOException;
 import java.lang.instrument.Instrumentation;
+import java.net.InetSocketAddress;
+import java.net.ServerSocket;
 import java.net.Socket;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 
 final class AgentServer implements Runnable {
     private final AgentOptions options;
     private final TargetInspector inspector;
     private volatile Socket socket;
+    private volatile ServerSocket listener;
     private volatile boolean closed;
 
     AgentServer(AgentOptions options, Instrumentation instrumentation, ClassRegistry classRegistry) {
@@ -22,16 +27,26 @@ final class AgentServer implements Runnable {
         this.inspector = new TargetInspector(instrumentation, classRegistry);
     }
 
+    void prepare() throws IOException {
+        if (options.mode() != AgentOptions.Mode.LISTEN || listener != null) return;
+        ServerSocket server = new ServerSocket();
+        server.setReuseAddress(false);
+        server.bind(new InetSocketAddress(options.host(), options.port()), 1);
+        server.setSoTimeout(options.acceptTimeoutMillis());
+        listener = server;
+    }
+
     @Override
     public void run() {
         try {
-            Socket connection = new Socket(options.host(), options.port());
+            Socket connection = openConnection();
             connection.setTcpNoDelay(true);
+            connection.setSoTimeout(15_000);
             socket = connection;
             DataOutputStream output = new DataOutputStream(connection.getOutputStream());
             DataInputStream input = new DataInputStream(connection.getInputStream());
-            output.writeUTF(options.token());
-            output.flush();
+            authenticate(input, output);
+            connection.setSoTimeout(0);
             while (!closed) {
                 WireProtocol.Request request = WireProtocol.readRequest(input);
                 boolean disconnect = request.operation() == Operation.DISCONNECT;
@@ -48,6 +63,32 @@ final class AgentServer implements Runnable {
             if (!closed) System.err.println("[JPI agent] Session ended: " + exception.getMessage());
         } finally {
             close();
+        }
+    }
+
+    private Socket openConnection() throws IOException {
+        if (options.mode() == AgentOptions.Mode.CONNECT) return new Socket(options.host(), options.port());
+        prepare();
+        ServerSocket server = listener;
+        if (server == null) throw new IOException("Agent listener is unavailable");
+        try {
+            return server.accept();
+        } finally {
+            listener = null;
+            try { server.close(); } catch (IOException ignored) {}
+        }
+    }
+
+    private void authenticate(DataInputStream input, DataOutputStream output) throws IOException {
+        if (options.mode() == AgentOptions.Mode.CONNECT) {
+            output.writeUTF(options.token());
+            output.flush();
+            return;
+        }
+        String received = input.readUTF();
+        if (!MessageDigest.isEqual(options.token().getBytes(StandardCharsets.UTF_8),
+                received.getBytes(StandardCharsets.UTF_8))) {
+            throw new IOException("Client authentication failed");
         }
     }
 
@@ -99,6 +140,9 @@ final class AgentServer implements Runnable {
         if (closed) return;
         closed = true;
         inspector.close();
+        ServerSocket currentListener = listener;
+        listener = null;
+        if (currentListener != null) try { currentListener.close(); } catch (IOException ignored) {}
         Socket current = socket;
         socket = null;
         if (current != null) try { current.close(); } catch (IOException ignored) {}
