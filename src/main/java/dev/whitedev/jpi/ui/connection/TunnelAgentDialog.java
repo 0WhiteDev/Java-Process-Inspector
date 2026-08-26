@@ -160,7 +160,7 @@ public final class TunnelAgentDialog extends JDialog {
         if (prepared == null) return;
         String jar = remoteJar.getText().trim().isEmpty() ? "jpi.jar" : remoteJar.getText().trim();
         String rawArgument = "-javaagent:" + jar + "=" + prepared.options();
-        earlyArgument.setText(jar.indexOf(' ') >= 0 ? '"' + rawArgument + '"' : rawArgument);
+        earlyArgument.setText(quoteAgentArgument(rawArgument));
         String pid = remotePid.getText().trim().isEmpty() ? "<pid>" : remotePid.getText().trim();
         lateAttachCommand.setText("java -jar " + quoted(jar) + " agent-server --pid " + pid
                 + " --port " + agentPort.getValue() + " --token " + prepared.token()
@@ -222,6 +222,10 @@ public final class TunnelAgentDialog extends JDialog {
 
     private static String quoted(String value) {
         return value.indexOf(' ') < 0 ? value : '"' + value.replace("\"", "\\\"") + '"';
+    }
+
+    static String quoteAgentArgument(String value) {
+        return '"' + value.replace("\"", "\\\"") + '"';
     }
 
     public record ConnectionRequest(int localPort, String token, String pid, String displayName) {}

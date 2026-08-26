@@ -93,6 +93,22 @@ ssh -N -L 43123:127.0.0.1:43123 user@remote-host
 
 Keep the SSH command running, return to **Tunnel agent...**, and click **Connect** with the same local port and token. The late-attach command exits after loading the listener into the target JVM. If the application must be observed before `main()`, use the generated `-javaagent` argument instead of the `agent-server` command. The remote JAR should come from the same JPI build as the desktop application so both sides use the same protocol.
 
+Keep the complete early-agent argument quoted. Bash, PowerShell, and container startup shells treat unquoted semicolons as command separators:
+
+```text
+java "-javaagent:jpi.jar=mode=listen;host=127.0.0.1;port=43123;token=<generated-token>;acceptTimeoutSeconds=900" -jar server.jar
+```
+
+In Pterodactyl, place this quoted argument before the existing JVM options and `-jar server.jar`. If the panel provides a separate JVM arguments field, paste the complete quoted value into that field.
+
+Pterodactyl usually runs Java in a separate container network namespace. The panel host's loopback address is therefore not the container's loopback address. If the container can reach an authorized SSH endpoint on the desktop, create reverse forwarding from inside the container:
+
+```text
+ssh -N -R 43123:127.0.0.1:43123 user@desktop-host
+```
+
+For a private relay, create the reverse tunnel from the container to the relay, then create the normal local tunnel from the desktop to the same relay. Keep both SSH sessions running and do not expose the agent port as a public server allocation.
+
 ### Agent JAR loaded but agent failed to initialize
 
 This message commonly appears when a Java 21 agent is loaded into a target running Java 8 or Java 17. JPI now rebuilds its embedded agent and protocol as Java 8 bytecode while keeping the desktop application on Java 21.
