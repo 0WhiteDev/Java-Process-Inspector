@@ -7,6 +7,9 @@ import dev.whitedev.jpi.ui.Ui;
 import dev.whitedev.jpi.attach.InspectorSession;
 import dev.whitedev.jpi.deobfuscation.DeobfuscationWorkspace;
 import dev.whitedev.jpi.protocol.Operation;
+import dev.whitedev.jpi.ui.timeline.RuntimeTimelineStore;
+import dev.whitedev.jpi.ui.timeline.TimelineEvent;
+import dev.whitedev.jpi.ui.timeline.TimelineSource;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -35,6 +38,7 @@ public final class LiveTracerPanel extends JPanel implements SessionAware {
     private static final int MAX_LOCAL_EVENTS = 10_000;
 
     private final DeobfuscationWorkspace workspace;
+    private final RuntimeTimelineStore timeline;
     private final JTextField classIdentifier = new JTextField();
     private final JLabel classLabel = new JLabel("No class selected");
     private final JComboBox<TraceMethod> methods = new JComboBox<>();
@@ -79,8 +83,13 @@ public final class LiveTracerPanel extends JPanel implements SessionAware {
     private String currentClassName = "";
 
     public LiveTracerPanel(DeobfuscationWorkspace workspace) {
+        this(workspace, new RuntimeTimelineStore());
+    }
+
+    public LiveTracerPanel(DeobfuscationWorkspace workspace, RuntimeTimelineStore timeline) {
         super(new BorderLayout(0, 16));
         this.workspace = workspace;
+        this.timeline = timeline;
         setBorder(new EmptyBorder(4, 0, 0, 0));
         setOpaque(false);
 
@@ -427,6 +436,7 @@ public final class LiveTracerPanel extends JPanel implements SessionAware {
                 if (event != null && !captured.containsKey(event.sequence) && captured.size() < MAX_LOCAL_EVENTS) {
                     captured.put(event.sequence, event);
                     newEvents.add(event);
+                    publishTimeline(event);
                     eventModel.addRow(new Object[]{event.sequence, TIME.format(Instant.ofEpochMilli(event.timestamp)),
                             event.thread, displayMethod(event.className, event.methodName, event.descriptor),
                             event.outcome, duration(event.duration)});
@@ -458,6 +468,31 @@ public final class LiveTracerPanel extends JPanel implements SessionAware {
             callTreeModel.reload(callRoot);
             callTree.expandRow(0);
         }
+    }
+
+    private void publishTimeline(TraceEvent event) {
+        String callId = Long.toString(event.sequence);
+        String parent = event.parent == 0L ? "" : Long.toString(event.parent);
+        String method = displayMethod(event.className, event.methodName, event.descriptor);
+        String common = "Probe: " + event.probeId + "\nTarget: " + event.targetIdentifier
+                + "\nReceiver: " + empty(event.receiver) + "\nArguments: " + empty(event.arguments)
+                + "\nCaller:\n" + empty(event.stack);
+        timeline.publish(new TimelineEvent("trace:0:start:" + callId, event.timestamp, TimelineSource.TRACE,
+                event.thread, callId, parent, method + " entered", common));
+        long finished = event.duration < 0L ? event.timestamp
+                : event.timestamp + Math.max(1L, (event.duration + 999_999L) / 1_000_000L);
+        String result = event.exception.isEmpty() ? compact(event.result) : compact(event.exception);
+        String summary = method + " -> " + event.outcome + (result.isEmpty() ? "" : "  " + result);
+        String completion = "Duration: " + duration(event.duration) + "\nReturn: " + empty(event.result)
+                + "\nException: " + empty(event.exception);
+        timeline.publish(new TimelineEvent("trace:1:end:" + callId, finished, TimelineSource.TRACE,
+                event.thread, callId, parent, summary, completion));
+    }
+
+    private static String compact(String value) {
+        if (value == null || value.isBlank()) return "";
+        String compact = value.replace('\r', ' ').replace('\n', ' ').trim();
+        return compact.length() <= 120 ? compact : compact.substring(0, 117) + "...";
     }
 
     private void addCallNode(TraceEvent event) {

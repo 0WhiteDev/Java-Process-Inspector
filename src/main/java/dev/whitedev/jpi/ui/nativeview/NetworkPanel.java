@@ -7,6 +7,9 @@ import dev.whitedev.jpi.ui.Ui;
 import dev.whitedev.jpi.attach.InspectorSession;
 import dev.whitedev.jpi.nativeaccess.NetworkConnection;
 import dev.whitedev.jpi.nativeaccess.WindowsNetworkAccess;
+import dev.whitedev.jpi.ui.timeline.RuntimeTimelineStore;
+import dev.whitedev.jpi.ui.timeline.TimelineEvent;
+import dev.whitedev.jpi.ui.timeline.TimelineSource;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -25,6 +28,7 @@ import java.util.regex.Pattern;
 
 public final class NetworkPanel extends JPanel implements SessionAware {
     private final WindowsNetworkAccess network;
+    private final RuntimeTimelineStore timeline;
     private final DefaultTableModel model = new DefaultTableModel(
             new Object[]{"Protocol", "Local endpoint", "Remote endpoint", "State"}, 0) {
         @Override public boolean isCellEditable(int row, int column) { return false; }
@@ -40,8 +44,13 @@ public final class NetworkPanel extends JPanel implements SessionAware {
     private boolean loading;
 
     public NetworkPanel(WindowsNetworkAccess network) {
+        this(network, new RuntimeTimelineStore());
+    }
+
+    public NetworkPanel(WindowsNetworkAccess network, RuntimeTimelineStore timeline) {
         super(new BorderLayout(0, 16));
         this.network = network;
+        this.timeline = timeline;
         setBorder(new EmptyBorder(4, 0, 0, 0));
         setOpaque(false);
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
@@ -90,8 +99,10 @@ public final class NetworkPanel extends JPanel implements SessionAware {
         loading = true;
         refresh.setEnabled(false);
         Async.run(() -> network.connections(pid), value -> {
+            if (session != current) return;
             render(value); loading = false; refresh.setEnabled(true);
         }, error -> {
+            if (session != current) return;
             loading = false; refresh.setEnabled(true);
             events.append("Network refresh failed: " + error.getMessage() + "\n");
         });
@@ -110,10 +121,17 @@ public final class NetworkPanel extends JPanel implements SessionAware {
     }
 
     private void appendEvent(String type, NetworkConnection connection) {
+        long timestamp = System.currentTimeMillis();
         String time = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"));
         events.append(time + "  " + type + "  " + connection.protocol() + "  "
                 + connection.localEndpoint() + " -> " + connection.remoteEndpoint() + "  " + connection.state() + "\n");
         events.setCaretPosition(events.getDocument().getLength());
+        String identity = connection.protocol() + ":" + connection.localEndpoint() + ":" + connection.remoteEndpoint()
+                + ":" + connection.state();
+        timeline.publish(new TimelineEvent("network:" + type + ":" + timestamp + ":" + identity.hashCode(),
+                timestamp, TimelineSource.NETWORK, "", "", "",
+                connection.protocol() + " " + type + "  " + connection.remoteEndpoint(),
+                connection.localEndpoint() + " -> " + connection.remoteEndpoint() + "\nState: " + connection.state()));
     }
 
     private void applyFilter() {

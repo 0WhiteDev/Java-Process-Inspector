@@ -11,6 +11,9 @@ import dev.whitedev.jpi.plugin.api.hook.HookProfile;
 import dev.whitedev.jpi.plugin.api.hook.HookTarget;
 import dev.whitedev.jpi.plugin.runtime.ExtensionRegistry;
 import dev.whitedev.jpi.plugin.runtime.RegisteredExtension;
+import dev.whitedev.jpi.ui.timeline.RuntimeTimelineStore;
+import dev.whitedev.jpi.ui.timeline.TimelineEvent;
+import dev.whitedev.jpi.ui.timeline.TimelineSource;
 
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
@@ -51,6 +54,7 @@ public final class ApiHooksPanel extends JPanel implements SessionAware {
     private static final int MAX_LOCAL_EVENTS = 10000;
 
     private final DeobfuscationWorkspace workspace;
+    private final RuntimeTimelineStore timeline;
     private final XrefsPanel xrefs;
     private final Runnable openXrefs;
     private final Map<String, JCheckBox> profiles = new LinkedHashMap<>();
@@ -77,16 +81,22 @@ public final class ApiHooksPanel extends JPanel implements SessionAware {
     private boolean polling;
 
     public ApiHooksPanel(DeobfuscationWorkspace workspace, XrefsPanel xrefs, Runnable openXrefs) {
-        this(workspace, xrefs, openXrefs, new ExtensionRegistry());
+        this(workspace, xrefs, openXrefs, new ExtensionRegistry(), new RuntimeTimelineStore());
     }
 
     public ApiHooksPanel(DeobfuscationWorkspace workspace, XrefsPanel xrefs, Runnable openXrefs,
                          ExtensionRegistry extensions) {
+        this(workspace, xrefs, openXrefs, extensions, new RuntimeTimelineStore());
+    }
+
+    public ApiHooksPanel(DeobfuscationWorkspace workspace, XrefsPanel xrefs, Runnable openXrefs,
+                         ExtensionRegistry extensions, RuntimeTimelineStore timeline) {
         super(new BorderLayout(0, 16));
         this.workspace = workspace;
         this.xrefs = xrefs;
         this.openXrefs = openXrefs;
         this.extensions = extensions;
+        this.timeline = timeline;
         setBorder(new EmptyBorder(4, 0, 0, 0));
         setOpaque(false);
 
@@ -334,6 +344,7 @@ public final class ApiHooksPanel extends JPanel implements SessionAware {
                 ApiEvent value = ApiEvent.parse(values);
                 if (value != null && !events.containsKey(value.sequence) && events.size() < MAX_LOCAL_EVENTS) {
                     events.put(value.sequence, value);
+                    publishTimeline(value);
                     eventModel.addRow(new Object[]{value.sequence, TIME.format(Instant.ofEpochMilli(value.timestamp)),
                             displayProfile(value.profile), value.thread, displayCaller(value), displayApi(value)});
                 }
@@ -351,6 +362,15 @@ public final class ApiHooksPanel extends JPanel implements SessionAware {
             status.setForeground(new Color(255, 95, 86));
             status.setText("High-frequency API activity detected. " + dropped + " events were dropped by safety limits.");
         }
+    }
+
+    private void publishTimeline(ApiEvent event) {
+        String caller = displayCaller(event) + event.callerDescriptor;
+        String api = displayApi(event) + event.apiDescriptor;
+        timeline.publish(new TimelineEvent("api-hook:" + event.sequence, event.timestamp, TimelineSource.API_HOOK,
+                event.thread, "", "", api,
+                "Profile: " + displayProfile(event.profile) + "\nApplication caller: " + caller
+                        + "\nObserved API: " + api + "\nInvocation: " + event.invocationKind));
     }
 
     private void showSelected() {

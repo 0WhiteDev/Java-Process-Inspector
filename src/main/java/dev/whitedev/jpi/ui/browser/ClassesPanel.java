@@ -6,6 +6,9 @@ import dev.whitedev.jpi.ui.SessionAware;
 import dev.whitedev.jpi.ui.Ui;
 import dev.whitedev.jpi.ui.tracing.LiveTracerPanel;
 import dev.whitedev.jpi.ui.tracing.XrefsPanel;
+import dev.whitedev.jpi.ui.timeline.RuntimeTimelineStore;
+import dev.whitedev.jpi.ui.timeline.TimelineEvent;
+import dev.whitedev.jpi.ui.timeline.TimelineSource;
 
 import dev.whitedev.jpi.attach.InspectorSession;
 import dev.whitedev.jpi.decompile.DecompilerOption;
@@ -44,6 +47,7 @@ public final class ClassesPanel extends JPanel implements SessionAware {
     private static final int MAX_HEX_BYTES = 4 * 1024 * 1024;
     private static final int CLASS_PAGE_SIZE = 500;
     private final DeobfuscationWorkspace mappingWorkspace;
+    private final RuntimeTimelineStore timeline;
     private final LiveTracerPanel liveTracer;
     private final XrefsPanel xrefs;
     private final BytecodeCfgPanel cfg;
@@ -99,14 +103,23 @@ public final class ClassesPanel extends JPanel implements SessionAware {
 
     public ClassesPanel(DeobfuscationWorkspace mappingWorkspace, LiveTracerPanel liveTracer, XrefsPanel xrefs,
                  BytecodeCfgPanel cfg, Runnable openLiveTracer, Runnable openXrefs, Runnable openCfg) {
-        this(mappingWorkspace, liveTracer, xrefs, cfg, openLiveTracer, openXrefs, openCfg, new ExtensionRegistry());
+        this(mappingWorkspace, liveTracer, xrefs, cfg, openLiveTracer, openXrefs, openCfg, new ExtensionRegistry(),
+                new RuntimeTimelineStore());
     }
 
     public ClassesPanel(DeobfuscationWorkspace mappingWorkspace, LiveTracerPanel liveTracer, XrefsPanel xrefs,
                  BytecodeCfgPanel cfg, Runnable openLiveTracer, Runnable openXrefs, Runnable openCfg,
                  ExtensionRegistry extensions) {
+        this(mappingWorkspace, liveTracer, xrefs, cfg, openLiveTracer, openXrefs, openCfg, extensions,
+                new RuntimeTimelineStore());
+    }
+
+    public ClassesPanel(DeobfuscationWorkspace mappingWorkspace, LiveTracerPanel liveTracer, XrefsPanel xrefs,
+                 BytecodeCfgPanel cfg, Runnable openLiveTracer, Runnable openXrefs, Runnable openCfg,
+                 ExtensionRegistry extensions, RuntimeTimelineStore timeline) {
         super(new BorderLayout(0, 16));
         this.mappingWorkspace = mappingWorkspace;
+        this.timeline = timeline;
         this.liveTracer = liveTracer;
         this.xrefs = xrefs;
         this.cfg = cfg;
@@ -1037,16 +1050,23 @@ public final class ClassesPanel extends JPanel implements SessionAware {
         final InspectorSession current = session;
         if (current == null) return;
         Async.run(() -> current.requestText(Operation.CLASS_EVENTS, ""), raw -> {
+            if (session != current) return;
             StringBuilder formatted = new StringBuilder();
             SimpleDateFormat time = new SimpleDateFormat("HH:mm:ss.SSS");
             for (String line : raw.split("\n")) {
                 String[] columns = line.split("\t", -1);
                 if (columns.length != 5) continue;
                 try {
-                    formatted.append(time.format(new Date(Long.parseLong(columns[0])))).append("  ")
+                    long timestamp = Long.parseLong(columns[0]);
+                    formatted.append(time.format(new Date(timestamp))).append("  ")
                             .append(String.format("%-11s", columns[4])).append("  ")
                             .append(String.format("%8s bytes", columns[3])).append("  ")
                             .append(columns[1]).append("  [").append(columns[2]).append("]\n");
+                    String key = "class:" + timestamp + ":" + columns[1] + ":" + columns[2] + ":" + columns[4];
+                    timeline.publish(new TimelineEvent(key, timestamp, TimelineSource.CLASS_LOAD, "", "", "",
+                            columns[4] + " " + mappingWorkspace.classAlias(columns[1]),
+                            "Class: " + columns[1] + "\nClassloader: " + columns[2]
+                                    + "\nBytecode size: " + columns[3] + " bytes"));
                 } catch (NumberFormatException ignored) { }
             }
             events.setText(formatted.length() == 0 ? "No class definitions captured yet." : formatted.toString());

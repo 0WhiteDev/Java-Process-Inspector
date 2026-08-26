@@ -26,6 +26,8 @@ import dev.whitedev.jpi.ui.system.OverviewPanel;
 import dev.whitedev.jpi.ui.tracing.ApiHooksPanel;
 import dev.whitedev.jpi.ui.tracing.LiveTracerPanel;
 import dev.whitedev.jpi.ui.tracing.XrefsPanel;
+import dev.whitedev.jpi.ui.timeline.RuntimeTimelinePanel;
+import dev.whitedev.jpi.ui.timeline.RuntimeTimelineStore;
 import dev.whitedev.jpi.ui.workspace.DeobfuscationWorkspacePanel;
 import dev.whitedev.jpi.ui.workspace.ExecutorPanel;
 import dev.whitedev.jpi.ui.inspection.ConstantSearchPanel;
@@ -71,6 +73,7 @@ public final class MainFrame extends JFrame {
     private final JPanel workspacePluginNavigation = new JPanel();
     private final JPanel advancedPluginNavigation = new JPanel();
     private final PluginManager pluginManager;
+    private final RuntimeTimelineStore timelineStore = new RuntimeTimelineStore();
     private InspectorSession session;
 
     public MainFrame() {
@@ -89,7 +92,8 @@ public final class MainFrame extends JFrame {
 
         DeobfuscationWorkspace mappingWorkspace = new DeobfuscationWorkspace();
         OverviewPanel overview = new OverviewPanel();
-        LiveTracerPanel tracer = new LiveTracerPanel(mappingWorkspace);
+        RuntimeTimelinePanel timeline = new RuntimeTimelinePanel(timelineStore);
+        LiveTracerPanel tracer = new LiveTracerPanel(mappingWorkspace, timelineStore);
         XrefsPanel xrefs = new XrefsPanel(mappingWorkspace);
         BytecodeCfgPanel cfg = new BytecodeCfgPanel(mappingWorkspace);
         InvestigationPanel investigation = new InvestigationPanel(mappingWorkspace,
@@ -104,29 +108,30 @@ public final class MainFrame extends JFrame {
                     selectView("Bytecode CFG");
                 });
         ApiHooksPanel apiHooks = new ApiHooksPanel(mappingWorkspace, xrefs, () -> selectView("Xrefs"),
-                pluginManager.extensions());
+                pluginManager.extensions(), timelineStore);
         ClassesPanel classes = new ClassesPanel(mappingWorkspace, tracer, xrefs, cfg,
                 () -> selectView("Live tracer"), () -> selectView("Xrefs"), () -> selectView("Bytecode CFG"),
-                pluginManager.extensions());
+                pluginManager.extensions(), timelineStore);
         DeobfuscationWorkspacePanel deobfuscation = new DeobfuscationWorkspacePanel(mappingWorkspace);
         ExecutorPanel executor = new ExecutorPanel(mappingWorkspace);
-        FieldsPanel fields = new FieldsPanel(mappingWorkspace);
+        FieldsPanel fields = new FieldsPanel(mappingWorkspace, timelineStore);
         HeapObjectPanel heapObjects = new HeapObjectPanel(mappingWorkspace);
-        EnvironmentPanel environment = new EnvironmentPanel();
+        EnvironmentPanel environment = new EnvironmentPanel(timelineStore);
         ConstantSearchPanel constantSearch = new ConstantSearchPanel(mappingWorkspace, value -> {
             investigation.investigate(value);
             selectView("Investigation");
         });
         WindowsNativeAccess windows = new WindowsNativeAccess();
-        NetworkPanel network = new NetworkPanel(new WindowsNetworkAccess());
+        NetworkPanel network = new NetworkPanel(new WindowsNetworkAccess(), timelineStore);
         MemoryPanel memory = new MemoryPanel(windows);
         DllPanel dll = new DllPanel(windows);
         NativeSymbolsPanel nativeSymbols = new NativeSymbolsPanel();
         PluginsPanel plugins = new PluginsPanel(pluginManager);
-        views = new ArrayList<>(Arrays.asList(overview, classes, tracer, apiHooks, xrefs, cfg, investigation, deobfuscation,
+        views = new ArrayList<>(Arrays.asList(overview, timeline, classes, tracer, apiHooks, xrefs, cfg, investigation, deobfuscation,
                 constantSearch, executor, fields, environment, network, heapObjects, nativeSymbols, memory, dll, plugins));
 
         addCard("Overview", overview);
+        addCard("Runtime timeline", timeline);
         addCard("Loaded classes", classes);
         addCard("Live tracer", tracer);
         addCard("API hooks", apiHooks);
@@ -212,6 +217,7 @@ public final class MainFrame extends JFrame {
         workspace.setAlignmentX(Component.LEFT_ALIGNMENT);
         sidebar.add(workspace);
         addNavigation(sidebar, "Overview");
+        addNavigation(sidebar, "Runtime timeline");
         addNavigation(sidebar, "Loaded classes");
         addNavigation(sidebar, "Live tracer");
         addNavigation(sidebar, "API hooks");
@@ -549,6 +555,7 @@ public final class MainFrame extends JFrame {
 
     private void setSession(InspectorSession value) {
         session = value;
+        timelineStore.beginSession(value == null ? "" : value.target().id());
         pluginManager.setSession(value);
         for (SessionAware view : views) view.setSession(value);
         for (SessionAware view : pluginViews) view.setSession(value);

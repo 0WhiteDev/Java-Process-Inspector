@@ -104,6 +104,7 @@ This message commonly appears when a Java 21 agent is loaded into a target runni
 | Tab | Purpose |
 |---|---|
 | Overview | Live heap, non-heap, class, thread, GC, uptime, and full thread-dump data |
+| Runtime timeline | Unified trace, API hook, network, class-load, static-field, snapshot, and action-marker events correlated by call ID, parent call, thread, and time |
 | Classes | Paged live definitions, original editable or mapped read-only decompilation, full-source HotSwap, modern method patches, raw bytecode editing, rollback, dumps, and selectable CFR, Vineflower, or Procyon engines |
 | Live tracer | Bounded runtime probes with arguments, results, exceptions, duration, threads, object identity, caller stacks, Time Tunnel, and an interactive call tree |
 | API hooks | Ready-to-use Network, Crypto, Files, Reflection, and Class loading profiles that identify exact application call sites |
@@ -158,6 +159,26 @@ The interface uses FlatLaf with a focused sidebar workspace instead of nested ut
 Open <strong>Constant search</strong>, search for a value such as <code>https://api.example.com/license</code>, and click <strong>Investigate</strong>. JPI opens the Investigation workspace with ranked method-level users and interesting related constants. Select an entry point and click <strong>Analyze selected</strong> to load its Xrefs and CFG. Use <strong>Prepare tracer</strong>, perform the action in the target, then return and click <strong>Refresh runtime</strong> to add observed calls and caller paths to the same report. Use <strong>Trace branches 30s</strong> when branch-level evidence is needed.
 
 Confidence is an analysis aid, not a correctness guarantee. CFG target-block hits approximate taken branch counts when several edges can reach the same target. Starting CFG counters can stop an active method probe for the selected class because both features temporarily transform the same definition.
+
+</details>
+
+<details>
+<summary><strong>Runtime timeline</strong></summary>
+
+- Reuse events already collected by Live Tracer, Automatic API Hooks, Network activity, Loaded classes, Static fields, and session snapshots
+- Represent traced invocations as separate entry and completion events with the original call ID and parent call ID
+- Resolve every traced invocation to its root call and associate API events on the same thread within a bounded time window
+- Associate network and class-load events with the closest trace call only when they fall inside a narrow time window
+- Add a manual action marker before clicking or performing an operation in the target application
+- Re-evaluate correlation when later trace events arrive, allowing an earlier action marker to join the resulting call
+- Filter all sources at once by method, class, endpoint, thread, text, or root call ID
+- Pause rendering without stopping collection, show only correlated evidence, and copy complete event details
+- Retain at most 20,000 deduplicated events per attached session
+- Watch static field changes only for an explicit class filter and publish old and new values to the same timeline
+
+Open <strong>Runtime timeline</strong>, click <strong>Add action marker...</strong>, describe the action, and then perform it in the target application. Active Live Tracer probes and API Hook profiles continue collecting through their existing bounded pipelines. Events sharing a traced call show the same root identifier such as <code>#142</code>. Use that identifier in the filter to isolate the complete runtime path around one action.
+
+Call ID is the strongest correlation. Thread and time correlation is labeled separately in event details. Network and class-load events do not expose a target JVM thread through their current data sources, so their time-only relationship is evidence of proximity, not proof of causation.
 
 </details>
 
@@ -501,6 +522,7 @@ flowchart LR
 | `dev.whitedev.jpi.ui.connection` | Guided agent-server, SSH tunnel, and remote client setup |
 | `dev.whitedev.jpi.ui.browser` | Loaded-class navigation, decompilation, bytecode, and live editing |
 | `dev.whitedev.jpi.ui.tracing` | Live tracer, automatic hooks, and Xref views |
+| `dev.whitedev.jpi.ui.timeline` | Bounded multi-source runtime events, call-tree correlation, filtering, and unified timeline presentation |
 | `dev.whitedev.jpi.ui.analysis` | Interactive bytecode CFG rendering and coverage presentation |
 | `dev.whitedev.jpi.ui.inspection` | Fields, constants, and heap-object views |
 | `dev.whitedev.jpi.ui.workspace` | Deobfuscation workspace and target-side code executor |
@@ -583,6 +605,7 @@ A manual run of the Release workflow builds downloadable workflow artifacts with
 - Existing lambdas can be edited with the Java compiler backend when their synthetic method count and captured-variable shape remain compatible. Adding more lambda bodies or changing their capture signature would add or change methods and is rejected by standard HotSwap.
 - Constructors, class initializers, abstract methods, and native methods are not available in method-only mode or Live Tracer.
 - Live Tracer currently targets modifiable non-bootstrap classes whose classloader can resolve the JPI trace runtime.
+- Runtime Timeline gives exact call-tree correlation for trace events and bounded heuristic correlation for other sources. Matching by thread and time or time alone does not prove that one event caused another.
 - Heap / Object Inspector counts and paths cover only the bounded graph reachable from explicitly selected static roots. Reflective access can be denied by target modules, and weak sample handles can expire at any time. Full HPROF export is HotSpot-specific and can pause the target or consume substantial disk space.
 - Automatic API Hooks observe direct bytecode call sites available in loaded non-bootstrap classes. Calls made entirely inside JDK internals, native code, unavailable definitions, or classes loaded after a profile starts are not included in that run. Restart the selected profiles to scan newly loaded classes.
 - Dynamic Xrefs cover traced methods and aggregate observed call sites for the active session. Static reverse scans are bounded and can omit definitions whose bytecode is unavailable.

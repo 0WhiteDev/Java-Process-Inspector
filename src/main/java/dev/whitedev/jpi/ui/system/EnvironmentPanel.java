@@ -7,6 +7,9 @@ import dev.whitedev.jpi.ui.Ui;
 import dev.whitedev.jpi.attach.InspectorSession;
 import dev.whitedev.jpi.protocol.Operation;
 import dev.whitedev.jpi.export.SessionSnapshotExporter;
+import dev.whitedev.jpi.ui.timeline.RuntimeTimelineStore;
+import dev.whitedev.jpi.ui.timeline.TimelineEvent;
+import dev.whitedev.jpi.ui.timeline.TimelineSource;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -17,12 +20,18 @@ import java.util.Locale;
 
 public final class EnvironmentPanel extends JPanel implements SessionAware {
     private final JTextArea output = Ui.outputArea();
+    private final RuntimeTimelineStore timeline;
     private final JButton refresh = Ui.primaryButton("Refresh");
     private final JButton export = Ui.secondaryButton("Export snapshot...");
     private InspectorSession session;
 
     public EnvironmentPanel() {
+        this(new RuntimeTimelineStore());
+    }
+
+    public EnvironmentPanel(RuntimeTimelineStore timeline) {
         super(new BorderLayout(0, 16));
+        this.timeline = timeline;
         setBorder(new EmptyBorder(4, 0, 0, 0));
         setOpaque(false);
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
@@ -83,10 +92,16 @@ public final class EnvironmentPanel extends JPanel implements SessionAware {
         refresh.setEnabled(false);
         output.setText("Collecting session snapshot...");
         Async.run(() -> SessionSnapshotExporter.export(current, destination.toPath()), path -> {
+            if (session != current) return;
             refresh.setEnabled(true);
             output.setText("Snapshot exported to:\n" + path + "\n\n"
                     + "The archive contains metrics, environment, loaded classes, class events, and a thread dump.");
+            long timestamp = System.currentTimeMillis();
+            timeline.publish(new TimelineEvent("snapshot:" + timestamp + ":" + path, timestamp,
+                    TimelineSource.SNAPSHOT, "", "", "", "Session snapshot exported",
+                    "Target PID: " + current.target().id() + "\nArchive: " + path));
         }, error -> {
+            if (session != current) return;
             refresh.setEnabled(true);
             Ui.error(this, error);
         });
