@@ -6,6 +6,7 @@ public enum TimelineSource {
     NETWORK("Network"),
     CLASS_LOAD("Class load"),
     FIELD("Static field"),
+    FIELD_WRITE("Field write"),
     SNAPSHOT("Snapshot"),
     MARKER("Marker");
 

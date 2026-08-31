@@ -79,6 +79,12 @@ public final class TraceRuntime {
         }
     }
 
+    public static long currentCallId() {
+        ArrayDeque<Long> stack = CALL_STACK.get();
+        Long current = stack.peekLast();
+        return current == null ? 0L : current.longValue();
+    }
+
     static void register(TraceProbe probe) {
         List<TraceCondition> conditions = TraceCondition.parse(probe.config.condition);
         ProbeState state = new ProbeState(probe, conditions);

@@ -120,7 +120,7 @@ This message commonly appears when a Java 21 agent is loaded into a target runni
 | Tab | Purpose |
 |---|---|
 | Overview | Live heap, non-heap, class, thread, GC, uptime, and full thread-dump data |
-| Runtime timeline | Unified trace, API hook, network, class-load, static-field, snapshot, and action-marker events correlated by call ID, parent call, thread, and time |
+| Runtime timeline | Unified trace, API hook, network, class-load, field-write, snapshot, and action-marker events correlated by call ID, parent call, thread, and time |
 | Classes | Paged live definitions, original editable or mapped read-only decompilation, full-source HotSwap, modern method patches, raw bytecode editing, rollback, dumps, and selectable CFR, Vineflower, or Procyon engines |
 | Live tracer | Bounded runtime probes with arguments, results, exceptions, duration, threads, object identity, caller stacks, Time Tunnel, and an interactive call tree |
 | API hooks | Ready-to-use Network, Crypto, Files, Reflection, and Class loading profiles that identify exact application call sites |
@@ -131,6 +131,7 @@ This message commonly appears when a Java 21 agent is loaded into a target runni
 | Constant search | Global search through strings, descriptors, class names, methods, and fields in available class constant pools |
 | Executor | Java editor with syntax highlighting, line numbers, folding, bracket matching, and Ctrl+Enter execution |
 | Fields | Inspect existing static fields without constructing arbitrary target classes |
+| Field writes | Find every bytecode write to a field and capture the exact runtime value transition, writer, thread, source line, call ID, object, and caller stack |
 | Heap objects | Bounded traversal from explicit static roots, reachable instance counts, samples, fields, outgoing references, known-root paths, value search, and confirmed HPROF export |
 | VM environment | VM arguments, redacted system properties, command line, and classloader inventory |
 | Session snapshot | One ZIP containing metrics, environment, class inventory, load events, and a thread dump |
@@ -281,6 +282,27 @@ Open **Loaded classes**, select a modifiable class and method, then click **Trac
 The tracer does not call arbitrary application toString implementations while rendering captured objects. Strings, primitive wrappers, enums, arrays, and byte arrays receive bounded representations. Other objects are represented by type and identity. Replay is intentionally not automatic because invoking an observed method again can repeat network, file, state, or payment side effects.
 
 Bootstrap classes, constructors, class initializers, native methods, abstract methods, and JVM-unmodifiable classes are excluded from the current tracer backend. Application and child classloaders must be able to resolve the JPI trace runtime.
+
+</details>
+
+<details>
+<summary><strong>Why is this value this?</strong></summary>
+
+- Select a static field directly from <strong>Static fields</strong> or enter any declaring class and field name manually
+- Resolve the exact JVM field descriptor from the loaded declaring class
+- Scan up to 10,000 loaded definitions for matching <code>PUTFIELD</code> and <code>PUTSTATIC</code> instructions
+- Report writer class, method, descriptor, opcode, source line, and the number of matching instructions
+- Instrument only confirmed write instructions instead of tracing every invocation of every candidate method
+- Capture the previous value, new value, receiving object identity, target thread, exact writer, and bounded caller stack
+- Attach the current Live Tracer call ID when the write occurs inside an active traced path
+- Publish every captured transition to Runtime Timeline for correlation with API, network, class-load, and action-marker events
+- Limit events, rate per second, value length, stack depth, writer classes, and probe lifetime
+- Avoid calling application <code>toString()</code> methods while rendering values
+- Restore every instrumented writer class when the probe stops, expires, the session ends, or another transformation needs that class
+
+Open <strong>Static fields</strong>, inspect a narrow class filter, select a row, and click <strong>Trace writes</strong>. JPI opens the field-write workspace and performs the static scan automatically. Review the candidate methods, start the bounded probe, then perform the relevant action in the target application. Runtime writes show transitions such as <code>false -&gt; true</code> together with the method and stack that produced the new value.
+
+For instance fields that are not present in Static fields, open <strong>Field writes</strong> directly and enter the declaring binary class name or exact class ID plus the field name. Static analysis remains available when a writer class cannot be modified. Dynamic capture requires modifiable non-bootstrap writer classes whose classloaders can resolve the JPI field runtime.
 
 </details>
 
@@ -485,6 +507,7 @@ flowchart LR
     AGENT[Embedded Instrumentation agent]
     INSPECT[Metrics, classes, fields, bytecode]
     TRACE[Bounded live method probes]
+    FIELD[Bounded field write probes]
     XREF[Static and observed Xrefs]
     MAP[Persistent deobfuscation overlay]
     EXEC[Isolated source executor]
@@ -495,6 +518,7 @@ flowchart LR
   CLIENT <-->|authenticated loopback or port-forwarded loopback| AGENT
   AGENT --> INSPECT
   AGENT --> TRACE
+  AGENT --> FIELD
   TRACE --> XREF
   INSPECT --> XREF
   XREF --> MAP
@@ -517,6 +541,7 @@ flowchart LR
 | `dev.whitedev.jpi.agent` | Agent entry point, control server, class registry, and target orchestration |
 | `dev.whitedev.jpi.agent.analysis` | Constant-pool search, deobfuscation inventory, and Xref analysis |
 | `dev.whitedev.jpi.agent.cfg` | Static control-flow analysis and bounded runtime block coverage |
+| `dev.whitedev.jpi.agent.field` | Exact PUTFIELD and PUTSTATIC instrumentation, bounded value transitions, stacks, and restoration |
 | `dev.whitedev.jpi.agent.heap` | Reachable-object inspection and optional heap dumps |
 | `dev.whitedev.jpi.agent.hook` | Automatic API hook profiles and call-site instrumentation |
 | `dev.whitedev.jpi.agent.patch` | Runtime compilation, schema validation, method patching, and source execution |
@@ -540,7 +565,7 @@ flowchart LR
 | `dev.whitedev.jpi.ui.tracing` | Live tracer, automatic hooks, and Xref views |
 | `dev.whitedev.jpi.ui.timeline` | Bounded multi-source runtime events, call-tree correlation, filtering, and unified timeline presentation |
 | `dev.whitedev.jpi.ui.analysis` | Interactive bytecode CFG rendering and coverage presentation |
-| `dev.whitedev.jpi.ui.inspection` | Fields, constants, and heap-object views |
+| `dev.whitedev.jpi.ui.inspection` | Static fields, field-write provenance, constants, and heap-object views |
 | `dev.whitedev.jpi.ui.workspace` | Deobfuscation workspace and target-side code executor |
 | `dev.whitedev.jpi.ui.system` | Runtime overview and environment snapshot views |
 | `dev.whitedev.jpi.ui.nativeview` | Native symbols plus Windows network, memory, and DLL views |
@@ -574,7 +599,7 @@ java -jar target/jpi.jar
 
 Integration tests cover late attach, an executable JAR launched with the early agent, and the reversed agent-server transport used through tunnels. The tunnel test authenticates a desktop client and dumps a real class from a child JVM. The early-agent test verifies that the application class is captured before `main()` and appears in the dynamic load timeline. A Windows-only test allocates a native buffer, writes through the production `WriteProcessMemory` path, and reads the replacement value back from the same address.
 
-The late-attach integration test scans a known static heap root, inspects a sampled object through a weak handle, reads a scoped deobfuscation inventory, installs a Crypto API profile, captures a real MessageDigest call and restores its call-site class, installs a live trace probe, captures a real invocation, verifies static and dynamic Xrefs plus method-level string search, restores the traced definition, compiles replacement Java source inside the running target, patches ordinary and lambda-based methods, reapplies raw class bytes, and verifies rollback after every mode.
+The late-attach integration test scans a known static heap root, inspects a sampled object through a weak handle, discovers and instruments a real static field write, verifies its before and after values, reads a scoped deobfuscation inventory, installs a Crypto API profile, captures a real MessageDigest call and restores its call-site class, installs a live trace probe, captures a real invocation, verifies static and dynamic Xrefs plus method-level string search, restores the traced definition, compiles replacement Java source inside the running target, patches ordinary and lambda-based methods, reapplies raw class bytes, and verifies rollback after every mode.
 
 ### Build output
 
@@ -622,6 +647,7 @@ A manual run of the Release workflow builds downloadable workflow artifacts with
 - Constructors, class initializers, abstract methods, and native methods are not available in method-only mode or Live Tracer.
 - Live Tracer currently targets modifiable non-bootstrap classes whose classloader can resolve the JPI trace runtime.
 - Runtime Timeline gives exact call-tree correlation for trace events and bounded heuristic correlation for other sources. Matching by thread and time or time alone does not prove that one event caused another.
+- Field-write tracing observes direct bytecode PUTFIELD and PUTSTATIC instructions in available loaded classes. Writes performed entirely by native code, Unsafe, VarHandle internals, reflection internals, hidden definitions, or classes loaded after the scan are not captured by that probe.
 - Heap / Object Inspector counts and paths cover only the bounded graph reachable from explicitly selected static roots. Reflective access can be denied by target modules, and weak sample handles can expire at any time. Full HPROF export is HotSpot-specific and can pause the target or consume substantial disk space.
 - Automatic API Hooks observe direct bytecode call sites available in loaded non-bootstrap classes. Calls made entirely inside JDK internals, native code, unavailable definitions, or classes loaded after a profile starts are not included in that run. Restart the selected profiles to scan newly loaded classes.
 - Dynamic Xrefs cover traced methods and aggregate observed call sites for the active session. Static reverse scans are bounded and can omit definitions whose bytecode is unavailable.

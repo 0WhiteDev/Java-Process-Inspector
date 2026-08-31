@@ -14,21 +14,28 @@ import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 public final class FieldsPanel extends JPanel implements SessionAware {
     private final DeobfuscationWorkspace workspace;
     private final RuntimeTimelineStore timeline;
+    private final FieldWritesPanel fieldWrites;
+    private final Runnable openFieldWrites;
     private final JTextField filter = new JTextField();
     private final DefaultTableModel model = new DefaultTableModel(
             new Object[]{"Class", "Field", "Type", "Value"}, 0) {
         @Override public boolean isCellEditable(int row, int column) { return false; }
     };
     private final JButton inspect = Ui.primaryButton("Inspect fields");
+    private final JButton traceWrites = Ui.secondaryButton("Trace writes");
     private final JCheckBox watch = new JCheckBox("Watch changes");
     private final JLabel resultCount = new JLabel("No results");
     private final Map<String, FieldValue> previousValues = new LinkedHashMap<>();
+    private final List<FieldValue> fieldRows = new ArrayList<>();
+    private final JTable table = new JTable(model);
     private final Timer watchTimer = new Timer(1500, event -> {
         if (watch.isSelected()) inspect();
     });
@@ -36,13 +43,20 @@ public final class FieldsPanel extends JPanel implements SessionAware {
     private boolean loading;
 
     public FieldsPanel(DeobfuscationWorkspace workspace) {
-        this(workspace, new RuntimeTimelineStore());
+        this(workspace, new RuntimeTimelineStore(), null, () -> { });
     }
 
     public FieldsPanel(DeobfuscationWorkspace workspace, RuntimeTimelineStore timeline) {
+        this(workspace, timeline, null, () -> { });
+    }
+
+    public FieldsPanel(DeobfuscationWorkspace workspace, RuntimeTimelineStore timeline,
+                       FieldWritesPanel fieldWrites, Runnable openFieldWrites) {
         super(new BorderLayout(0, 16));
         this.workspace = workspace;
         this.timeline = timeline;
+        this.fieldWrites = fieldWrites;
+        this.openFieldWrites = openFieldWrites;
         setBorder(new EmptyBorder(4, 0, 0, 0));
         setOpaque(false);
         add(Ui.sectionHeader("Static fields",
@@ -60,9 +74,11 @@ public final class FieldsPanel extends JPanel implements SessionAware {
         filter.putClientProperty("JTextField.showClearButton", true);
         filter.addActionListener(e -> inspect());
         watch.addActionListener(event -> toggleWatch());
+        traceWrites.addActionListener(event -> traceSelectedField());
         query.add(label);
         query.add(filter);
         query.add(watch);
+        query.add(traceWrites);
         query.add(inspect);
         resultCount.setForeground(Ui.MUTED);
         toolbar.add(query, BorderLayout.WEST);
@@ -70,13 +86,14 @@ public final class FieldsPanel extends JPanel implements SessionAware {
         inspect.addActionListener(e -> inspect());
         body.add(toolbar, BorderLayout.NORTH);
 
-        JTable table = new JTable(model);
         table.setAutoCreateRowSorter(true);
         table.setAutoResizeMode(JTable.AUTO_RESIZE_LAST_COLUMN);
         table.getColumnModel().getColumn(0).setPreferredWidth(280);
         table.getColumnModel().getColumn(1).setPreferredWidth(160);
         table.getColumnModel().getColumn(2).setPreferredWidth(150);
         table.getColumnModel().getColumn(3).setPreferredWidth(420);
+        table.getSelectionModel().addListSelectionListener(event -> traceWrites.setEnabled(
+                session != null && table.getSelectedRow() >= 0 && fieldWrites != null));
         JPanel tableCard = Ui.card(new BorderLayout());
         tableCard.add(Ui.scroll(table), BorderLayout.CENTER);
         body.add(tableCard, BorderLayout.CENTER);
@@ -91,8 +108,10 @@ public final class FieldsPanel extends JPanel implements SessionAware {
         watch.setSelected(false);
         watch.setEnabled(session != null);
         inspect.setEnabled(session != null);
+        traceWrites.setEnabled(false);
         if (session == null) {
             model.setRowCount(0);
+            fieldRows.clear();
             resultCount.setText("Attach required");
         } else {
             resultCount.setText("Ready");
@@ -107,6 +126,7 @@ public final class FieldsPanel extends JPanel implements SessionAware {
         inspect.setEnabled(false);
         resultCount.setText("Inspecting...");
         model.setRowCount(0);
+        fieldRows.clear();
         Async.run(() -> current.requestText(Operation.FIELDS, query), value -> {
             if (session != current) return;
             Map<String, FieldValue> currentValues = new LinkedHashMap<>();
@@ -115,6 +135,7 @@ public final class FieldsPanel extends JPanel implements SessionAware {
                 if (columns.length == 4) {
                     FieldValue field = new FieldValue(columns[0], columns[1], columns[2], columns[3]);
                     currentValues.put(field.key(), field);
+                    fieldRows.add(field);
                     String mappedClass = workspace.classAlias(columns[0]);
                     String mappedField = workspace.fieldAlias(columns[0], columns[1]);
                     if (!mappedClass.equals(columns[0])) columns[0] = mappedClass + " [" + columns[0] + "]";
@@ -135,6 +156,16 @@ public final class FieldsPanel extends JPanel implements SessionAware {
             inspect.setEnabled(true);
             Ui.error(this, error);
         });
+    }
+
+    private void traceSelectedField() {
+        int viewRow = table.getSelectedRow();
+        if (viewRow < 0 || fieldWrites == null) return;
+        int row = table.convertRowIndexToModel(viewRow);
+        if (row < 0 || row >= fieldRows.size()) return;
+        FieldValue selected = fieldRows.get(row);
+        fieldWrites.selectField(selected.owner, selected.name);
+        openFieldWrites.run();
     }
 
     private void toggleWatch() {

@@ -126,6 +126,10 @@ final class AgentServer implements Runnable {
             case CFG_TRACE_START: return WireProtocol.utf8(inspector.startCfgTrace(payload));
             case CFG_TRACE_STOP: return WireProtocol.utf8(inspector.stopCfgTrace(payload));
             case CFG_SNAPSHOT: return WireProtocol.utf8(inspector.cfgSnapshot(payload));
+            case FIELD_WRITE_SITES: return WireProtocol.utf8(inspector.fieldWriteSites(payload));
+            case FIELD_TRACE_START: return WireProtocol.utf8(inspector.startFieldTrace(payload));
+            case FIELD_TRACE_STOP: return WireProtocol.utf8(inspector.stopFieldTrace());
+            case FIELD_TRACE_EVENTS: return WireProtocol.utf8(inspector.fieldTraceEvents());
             case DISCONNECT: return WireProtocol.utf8("disconnected");
             default: throw new IllegalArgumentException("Unsupported operation: " + request.operation());
         }

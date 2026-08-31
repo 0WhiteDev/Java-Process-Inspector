@@ -2,11 +2,13 @@ package dev.whitedev.jpi.agent;
 
 import dev.whitedev.jpi.agent.analysis.ConstantPoolSearch;
 import dev.whitedev.jpi.agent.analysis.DeobfuscationInventory;
+import dev.whitedev.jpi.agent.analysis.FieldWriteAnalyzer;
 import dev.whitedev.jpi.agent.analysis.XrefAnalyzer;
 import dev.whitedev.jpi.agent.cfg.BytecodeCfgAnalyzer;
 import dev.whitedev.jpi.agent.cfg.CfgManager;
 import dev.whitedev.jpi.agent.heap.HeapDumpService;
 import dev.whitedev.jpi.agent.heap.HeapObjectInspector;
+import dev.whitedev.jpi.agent.field.FieldWriteManager;
 import dev.whitedev.jpi.agent.hook.ApiHookManager;
 import dev.whitedev.jpi.agent.patch.ClassSchema;
 import dev.whitedev.jpi.agent.patch.MethodBodyPatcher;
@@ -14,6 +16,7 @@ import dev.whitedev.jpi.agent.patch.ModernMethodPatcher;
 import dev.whitedev.jpi.agent.patch.RuntimeJavaCompiler;
 import dev.whitedev.jpi.agent.trace.TraceManager;
 import dev.whitedev.jpi.agent.trace.TraceRuntime;
+import org.objectweb.asm.Type;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -51,6 +54,7 @@ final class TargetInspector {
     private final TraceManager traceManager;
     private final ApiHookManager apiHookManager;
     private final CfgManager cfgManager;
+    private final FieldWriteManager fieldWriteManager;
     private final HeapObjectInspector heapInspector;
     private final Map<String, WeakReference<Class<?>>> classIndex = new ConcurrentHashMap<>();
 
@@ -60,6 +64,7 @@ final class TargetInspector {
         this.traceManager = new TraceManager(instrumentation);
         this.apiHookManager = new ApiHookManager(instrumentation, registry);
         this.cfgManager = new CfgManager(instrumentation);
+        this.fieldWriteManager = new FieldWriteManager(instrumentation);
         this.heapInspector = new HeapObjectInspector(instrumentation);
     }
 
@@ -196,6 +201,7 @@ final class TargetInspector {
         requireRedefinable(target);
         cfgManager.stopForClass(target);
         apiHookManager.stopForClass(target);
+        fieldWriteManager.stopForClass(target);
         return traceManager.start(target, identifier, method, descriptor, settings, classBytes(identifier));
     }
 
@@ -231,6 +237,7 @@ final class TargetInspector {
         requireRedefinable(target);
         traceManager.stopForClass(target);
         apiHookManager.stopForClass(target);
+        fieldWriteManager.stopForClass(target);
         return cfgManager.start(target, values[1], values[2], classBytes(values[0]), duration);
     }
 
@@ -245,6 +252,7 @@ final class TargetInspector {
     String startApiHooks(String payload) throws Exception {
         cfgManager.stopAll();
         traceManager.stopAll();
+        fieldWriteManager.stopAll();
         return apiHookManager.start(payload);
     }
 
@@ -254,6 +262,74 @@ final class TargetInspector {
 
     String apiHookEvents() {
         return apiHookManager.events();
+    }
+
+    String fieldWriteSites(String payload) throws Exception {
+        FieldTarget field = fieldTarget(payload, false);
+        StringBuilder output = new StringBuilder();
+        output.append('F').append('\t').append(encoded(field.targetIdentifier)).append('\t')
+                .append(encoded(field.owner)).append('\t').append(encoded(field.name)).append('\t')
+                .append(encoded(field.descriptor)).append('\t').append(field.modifiers).append('\n');
+        int scanned = 0;
+        int results = 0;
+        long deadline = System.nanoTime() + 10_000_000_000L;
+        String owner = field.owner.replace('.', '/');
+        for (Class<?> candidate : instrumentation.getAllLoadedClasses()) {
+            if (++scanned > 10_000 || results >= 1_000 || System.nanoTime() > deadline) break;
+            byte[] bytecode = availableBytes(candidate);
+            if (bytecode == null) continue;
+            String identifier = index(candidate);
+            try {
+                for (FieldWriteAnalyzer.WriteSite site : FieldWriteAnalyzer.find(bytecode, identifier,
+                        candidate.getName(), owner, field.name, field.descriptor)) {
+                    output.append('W').append('\t').append(encoded(site.classIdentifier)).append('\t')
+                            .append(encoded(site.className)).append('\t').append(encoded(site.methodName)).append('\t')
+                            .append(encoded(site.methodDescriptor)).append('\t').append(site.line).append('\t')
+                            .append(site.opcode).append('\t').append(site.count).append('\n');
+                    if (++results >= 1_000) break;
+                }
+            } catch (IOException ignored) {
+            }
+        }
+        return output.toString();
+    }
+
+    String startFieldTrace(String payload) throws Exception {
+        FieldTarget field = fieldTarget(payload, true);
+        fieldWriteManager.stopAll();
+        Map<Class<?>, byte[]> candidates = new LinkedHashMap<Class<?>, byte[]>();
+        String owner = field.owner.replace('.', '/');
+        int maximumClasses = setting(field.settings, "maxClasses", 500, 1, 2_000);
+        int scanned = 0;
+        long deadline = System.nanoTime() + 10_000_000_000L;
+        for (Class<?> candidate : instrumentation.getAllLoadedClasses()) {
+            if (++scanned > 10_000 || candidates.size() >= maximumClasses || System.nanoTime() > deadline) break;
+            if (!instrumentation.isModifiableClass(candidate) || candidate.isArray() || candidate.isPrimitive()) continue;
+            byte[] bytecode = availableBytes(candidate);
+            if (bytecode == null) continue;
+            try {
+                if (FieldWriteAnalyzer.count(bytecode, owner, field.name, field.descriptor) > 0) {
+                    candidates.put(candidate, bytecode);
+                }
+            } catch (IOException ignored) {
+            }
+        }
+        if (candidates.isEmpty()) throw new IOException("No loaded bytecode writes to " + field.owner + "." + field.name);
+        for (Class<?> candidate : candidates.keySet()) {
+            cfgManager.stopForClass(candidate);
+            traceManager.stopForClass(candidate);
+            apiHookManager.stopForClass(candidate);
+        }
+        return fieldWriteManager.start(field.targetIdentifier, field.owner, field.name, field.descriptor,
+                field.settings, candidates);
+    }
+
+    String stopFieldTrace() {
+        return fieldWriteManager.stopAll();
+    }
+
+    String fieldTraceEvents() {
+        return fieldWriteManager.events();
     }
 
     String heapScan(String payload) throws Exception {
@@ -371,6 +447,7 @@ final class TargetInspector {
         cfgManager.close();
         traceManager.close();
         apiHookManager.close();
+        fieldWriteManager.close();
         heapInspector.clear();
     }
 
@@ -401,6 +478,7 @@ final class TargetInspector {
         cfgManager.stopForClass(target);
         traceManager.stopForClass(target);
         apiHookManager.stopForClass(target);
+        fieldWriteManager.stopForClass(target);
         if (registry.originalBytecodeFor(target) == null) classBytes(identifier);
         byte[] original = registry.originalBytecodeFor(target);
         if (original == null) throw new IOException("Original bytecode is unavailable for " + target.getName());
@@ -649,6 +727,7 @@ final class TargetInspector {
         cfgManager.stopForClass(target);
         traceManager.stopForClass(target);
         apiHookManager.stopForClass(target);
+        fieldWriteManager.stopForClass(target);
         ClassSchema.verifyCompatible(current, replacement);
         instrumentation.redefineClasses(new ClassDefinition(target, replacement));
         registry.recordApplied(target, replacement);
@@ -756,5 +835,58 @@ final class TargetInspector {
         int read;
         while ((read = stream.read(buffer)) >= 0) out.write(buffer, 0, read);
         return out.toByteArray();
+    }
+
+    private FieldTarget fieldTarget(String payload, boolean settingsRequired) throws Exception {
+        String[] values = payload == null ? new String[0] : payload.split("\\n", 3);
+        if (values.length < 2 || values[0].isEmpty() || values[1].isEmpty()
+                || settingsRequired && values.length < 3) {
+            throw new IOException("Missing field owner, field name, or trace settings");
+        }
+        Class<?> owner = resolveClass(values[0]);
+        Field selected;
+        try {
+            selected = owner.getDeclaredField(values[1]);
+        } catch (NoSuchFieldException error) {
+            throw new IOException("Field is not declared by " + owner.getName() + ": " + values[1], error);
+        }
+        return new FieldTarget(values[0], owner.getName(), selected.getName(), Type.getDescriptor(selected.getType()),
+                selected.getModifiers(), values.length < 3 ? "" : values[2]);
+    }
+
+    private static int setting(String settings, String key, int fallback, int minimum, int maximum) throws IOException {
+        for (String item : settings.split("[;\\n]")) {
+            int separator = item.indexOf('=');
+            if (separator <= 0 || !key.equals(item.substring(0, separator).trim())) continue;
+            try {
+                int value = Integer.parseInt(item.substring(separator + 1).trim());
+                if (value < minimum || value > maximum) {
+                    throw new IOException(key + " must be between " + minimum + " and " + maximum);
+                }
+                return value;
+            } catch (NumberFormatException error) {
+                throw new IOException("Invalid " + key, error);
+            }
+        }
+        return fallback;
+    }
+
+    private static final class FieldTarget {
+        final String targetIdentifier;
+        final String owner;
+        final String name;
+        final String descriptor;
+        final int modifiers;
+        final String settings;
+
+        FieldTarget(String targetIdentifier, String owner, String name, String descriptor,
+                    int modifiers, String settings) {
+            this.targetIdentifier = targetIdentifier;
+            this.owner = owner;
+            this.name = name;
+            this.descriptor = descriptor;
+            this.modifiers = modifiers;
+            this.settings = settings;
+        }
     }
 }

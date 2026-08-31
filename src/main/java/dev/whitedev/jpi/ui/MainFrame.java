@@ -32,6 +32,7 @@ import dev.whitedev.jpi.ui.workspace.DeobfuscationWorkspacePanel;
 import dev.whitedev.jpi.ui.workspace.ExecutorPanel;
 import dev.whitedev.jpi.ui.inspection.ConstantSearchPanel;
 import dev.whitedev.jpi.ui.inspection.FieldsPanel;
+import dev.whitedev.jpi.ui.inspection.FieldWritesPanel;
 import dev.whitedev.jpi.ui.inspection.HeapObjectPanel;
 import dev.whitedev.jpi.ui.plugins.PluginsPanel;
 import com.formdev.flatlaf.extras.FlatSVGIcon;
@@ -114,7 +115,9 @@ public final class MainFrame extends JFrame {
                 pluginManager.extensions(), timelineStore);
         DeobfuscationWorkspacePanel deobfuscation = new DeobfuscationWorkspacePanel(mappingWorkspace);
         ExecutorPanel executor = new ExecutorPanel(mappingWorkspace);
-        FieldsPanel fields = new FieldsPanel(mappingWorkspace, timelineStore);
+        FieldWritesPanel fieldWrites = new FieldWritesPanel(mappingWorkspace, timelineStore);
+        FieldsPanel fields = new FieldsPanel(mappingWorkspace, timelineStore, fieldWrites,
+                () -> selectView("Field writes"));
         HeapObjectPanel heapObjects = new HeapObjectPanel(mappingWorkspace);
         EnvironmentPanel environment = new EnvironmentPanel(timelineStore);
         ConstantSearchPanel constantSearch = new ConstantSearchPanel(mappingWorkspace, value -> {
@@ -128,7 +131,8 @@ public final class MainFrame extends JFrame {
         NativeSymbolsPanel nativeSymbols = new NativeSymbolsPanel();
         PluginsPanel plugins = new PluginsPanel(pluginManager);
         views = new ArrayList<>(Arrays.asList(overview, timeline, classes, tracer, apiHooks, xrefs, cfg, investigation, deobfuscation,
-                constantSearch, executor, fields, environment, network, heapObjects, nativeSymbols, memory, dll, plugins));
+                constantSearch, executor, fields, fieldWrites, environment, network, heapObjects, nativeSymbols,
+                memory, dll, plugins));
 
         addCard("Overview", overview);
         addCard("Runtime timeline", timeline);
@@ -142,6 +146,7 @@ public final class MainFrame extends JFrame {
         addCard("Constant search", constantSearch);
         addCard("Code executor", executor);
         addCard("Static fields", fields);
+        addCard("Field writes", fieldWrites);
         addCard("Heap objects", heapObjects);
         addCard("Native symbols", nativeSymbols);
         addCard("VM environment", environment);
@@ -228,6 +233,7 @@ public final class MainFrame extends JFrame {
         addNavigation(sidebar, "Constant search");
         addNavigation(sidebar, "Code executor");
         addNavigation(sidebar, "Static fields");
+        addNavigation(sidebar, "Field writes");
         addNavigation(sidebar, "VM environment");
         addNavigation(sidebar, "Network activity");
         configurePluginNavigation(workspacePluginNavigation);
