@@ -123,6 +123,7 @@ This message commonly appears when a Java 21 agent is loaded into a target runni
 | Runtime timeline | Unified trace, API hook, network, class-load, field-write, snapshot, and action-marker events correlated by call ID, parent call, thread, and time |
 | Classes | Paged live definitions, original editable or mapped read-only decompilation, full-source HotSwap, modern method patches, raw bytecode editing, rollback, dumps, and selectable CFR, Vineflower, or Procyon engines |
 | Live tracer | Bounded runtime probes with arguments, results, exceptions, duration, threads, object identity, caller stacks, Time Tunnel, and an interactive call tree |
+| Call graph | Live heatmap of observed callers and callees with exact probe counts, total and average time, exceptions, unique callers, and weighted edges |
 | API hooks | Ready-to-use Network, Crypto, Files, Reflection, and Class loading profiles that identify exact application call sites |
 | Xrefs | Static and observed Called by and Calls edges, field and type references, constants, and method-level string or endpoint users |
 | Bytecode CFG | Interactive basic-block graph with branches, exception edges, dominators, complexity, dead code, and live execution counts |
@@ -177,6 +178,26 @@ The interface uses FlatLaf with a focused sidebar workspace instead of nested ut
 Open <strong>Constant search</strong>, search for a value such as <code>https://api.example.com/license</code>, and click <strong>Investigate</strong>. JPI opens the Investigation workspace with ranked method-level users and interesting related constants. Select an entry point and click <strong>Analyze selected</strong> to load its Xrefs and CFG. Use <strong>Prepare tracer</strong>, perform the action in the target, then return and click <strong>Refresh runtime</strong> to add observed calls and caller paths to the same report. Use <strong>Trace branches 30s</strong> when branch-level evidence is needed.
 
 Confidence is an analysis aid, not a correctness guarantee. CFG target-block hits approximate taken branch counts when several edges can reach the same target. Starting CFG counters can stop an active method probe for the selected class because both features temporarily transform the same definition.
+
+</details>
+
+<details>
+<summary><strong>Call graph heatmap</strong></summary>
+
+- Reuse Live Tracer instrumentation while keeping graph statistics separate from bounded Time Tunnel events
+- Count every invocation and completed call for an active method probe even when full event capture uses sampling or rate limits
+- Accumulate inclusive total time, average time, exception count, active-probe state, and unique observed callers per method
+- Capture outgoing bytecode calls with exact JVM descriptors and distinguish reflective edges
+- Scale edge width logarithmically by call count so both low-frequency logic and hot loops remain readable
+- Color nodes by calls, total time, average time, or exceptions
+- Filter by class, method, descriptor, minimum call count, and a bounded maximum number of visible nodes
+- Keep complete metrics in the agent while limiting the rendered graph to at most 500 selected nodes
+- Inspect sorted incoming and outgoing edges for a selected method and copy its complete report
+- Pause desktop refresh without stopping collection or reset accumulated statistics without removing active probes
+
+Start one or more probes in <strong>Live tracer</strong>, perform the target action, and open <strong>Call graph</strong>. Use <strong>Minimum calls</strong> to hide one-off framework noise. Select <strong>Total time</strong> or <strong>Average time</strong> when a frequently called method is cheap but a rare method is slow. Click a node to inspect its callers, callees, failures, and exact descriptor.
+
+Method timing is inclusive and measures time from entry to return or uncaught exception. A method observed only as a callee has an edge count but no timing until it receives its own Live Tracer probe. Incoming callers discovered from an uninstrumented root stack follow the existing sampled caller evidence, while edges emitted by instrumented caller bytecode are counted for every invocation.
 
 </details>
 
@@ -567,7 +588,7 @@ flowchart LR
 | `dev.whitedev.jpi.agent.heap` | Reachable-object inspection and optional heap dumps |
 | `dev.whitedev.jpi.agent.hook` | Automatic API hook profiles and call-site instrumentation |
 | `dev.whitedev.jpi.agent.patch` | Runtime compilation, schema validation, method patching, and source execution |
-| `dev.whitedev.jpi.agent.trace` | Method probes, conditions, instrumentation, events, and dynamic call graphs |
+| `dev.whitedev.jpi.agent.trace` | Method probes, conditions, events, exact runtime metrics, and dynamic call graphs |
 | `dev.whitedev.jpi.protocol` | Binary protocol with stable operations and bounds |
 | `dev.whitedev.jpi.nativeaccess` | Typed JNA boundary for process, memory, network, and DLL operations |
 | `dev.whitedev.jpi.symbols` | Native symbol-source discovery, merging, C++ demangling, and report assembly |
@@ -584,6 +605,7 @@ flowchart LR
 | `dev.whitedev.jpi.ui` | Application shell, shared styling, editors, and asynchronous execution |
 | `dev.whitedev.jpi.ui.connection` | Guided agent-server, SSH tunnel, and remote client setup |
 | `dev.whitedev.jpi.ui.browser` | Loaded-class navigation, decompilation, bytecode, and live editing |
+| `dev.whitedev.jpi.ui.callgraph` | Runtime graph parsing, heat filtering, hierarchical layout, and weighted rendering |
 | `dev.whitedev.jpi.ui.tracing` | Live tracer, automatic hooks, and Xref views |
 | `dev.whitedev.jpi.ui.timeline` | Bounded multi-source runtime events, call-tree correlation, filtering, and unified timeline presentation |
 | `dev.whitedev.jpi.ui.analysis` | Investigation sessions, interactive bytecode CFG, coverage, and two-run difference tracing |
@@ -668,6 +690,7 @@ A manual run of the Release workflow builds downloadable workflow artifacts with
 - Existing lambdas can be edited with the Java compiler backend when their synthetic method count and captured-variable shape remain compatible. Adding more lambda bodies or changing their capture signature would add or change methods and is rejected by standard HotSwap.
 - Constructors, class initializers, abstract methods, and native methods are not available in method-only mode or Live Tracer.
 - Live Tracer currently targets modifiable non-bootstrap classes whose classloader can resolve the JPI trace runtime.
+- Call graph timing adds a lightweight token and monotonic clock read to every invocation of a traced method. Argument rendering, stack capture, conditions, and Time Tunnel storage remain governed by the selected probe limits. Timing is inclusive, and callers outside instrumented methods can be incomplete when their stack samples were dropped.
 - Runtime Timeline gives exact call-tree correlation for trace events and bounded heuristic correlation for other sources. Matching by thread and time or time alone does not prove that one event caused another.
 - Difference tracing compares only events captured by active probes and profiles during each recording. Ordered branch comparison covers one explicitly selected method, is capped at 20,000 transitions per run, and can perturb timing in very hot methods.
 - Field-write tracing observes direct bytecode PUTFIELD and PUTSTATIC instructions in available loaded classes. Writes performed entirely by native code, Unsafe, VarHandle internals, reflection internals, hidden definitions, or classes loaded after the scan are not captured by that probe.

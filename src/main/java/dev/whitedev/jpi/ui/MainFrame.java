@@ -17,6 +17,7 @@ import dev.whitedev.jpi.ui.analysis.BytecodeCfgPanel;
 import dev.whitedev.jpi.ui.analysis.DifferenceTracingPanel;
 import dev.whitedev.jpi.ui.analysis.InvestigationPanel;
 import dev.whitedev.jpi.ui.browser.ClassesPanel;
+import dev.whitedev.jpi.ui.callgraph.CallGraphHeatmapPanel;
 import dev.whitedev.jpi.ui.connection.TunnelAgentDialog;
 import dev.whitedev.jpi.ui.nativeview.DllPanel;
 import dev.whitedev.jpi.ui.nativeview.MemoryPanel;
@@ -99,6 +100,7 @@ public final class MainFrame extends JFrame {
         XrefsPanel xrefs = new XrefsPanel(mappingWorkspace);
         BytecodeCfgPanel cfg = new BytecodeCfgPanel(mappingWorkspace);
         DifferenceTracingPanel differences = new DifferenceTracingPanel(mappingWorkspace, timelineStore);
+        CallGraphHeatmapPanel callGraph = new CallGraphHeatmapPanel(mappingWorkspace);
         InvestigationPanel investigation = new InvestigationPanel(mappingWorkspace,
                 target -> {
                     xrefs.selectTarget(target.classIdentifier(), target.className(), target.methodName(), target.descriptor());
@@ -132,7 +134,8 @@ public final class MainFrame extends JFrame {
         DllPanel dll = new DllPanel(windows);
         NativeSymbolsPanel nativeSymbols = new NativeSymbolsPanel();
         PluginsPanel plugins = new PluginsPanel(pluginManager);
-        views = new ArrayList<>(Arrays.asList(overview, timeline, classes, tracer, apiHooks, xrefs, cfg, differences,
+        views = new ArrayList<>(Arrays.asList(overview, timeline, classes, tracer, callGraph, apiHooks, xrefs,
+                cfg, differences,
                 investigation, deobfuscation,
                 constantSearch, executor, fields, fieldWrites, environment, network, heapObjects, nativeSymbols,
                 memory, dll, plugins));
@@ -141,6 +144,7 @@ public final class MainFrame extends JFrame {
         addCard("Runtime timeline", timeline);
         addCard("Loaded classes", classes);
         addCard("Live tracer", tracer);
+        addCard("Call graph", callGraph);
         addCard("API hooks", apiHooks);
         addCard("Xrefs", xrefs);
         addCard("Bytecode CFG", cfg);
@@ -229,6 +233,7 @@ public final class MainFrame extends JFrame {
         addNavigation(sidebar, "Runtime timeline");
         addNavigation(sidebar, "Loaded classes");
         addNavigation(sidebar, "Live tracer");
+        addNavigation(sidebar, "Call graph");
         addNavigation(sidebar, "API hooks");
         addNavigation(sidebar, "Xrefs");
         addNavigation(sidebar, "Bytecode CFG");

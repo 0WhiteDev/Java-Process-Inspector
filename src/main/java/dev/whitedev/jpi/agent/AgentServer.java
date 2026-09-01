@@ -113,6 +113,8 @@ final class AgentServer implements Runnable {
             case TRACE_START: return WireProtocol.utf8(inspector.startTrace(payload));
             case TRACE_STOP: return WireProtocol.utf8(inspector.stopTrace(payload));
             case TRACE_EVENTS: return WireProtocol.utf8(inspector.traceEvents());
+            case TRACE_GRAPH: return WireProtocol.utf8(inspector.traceGraph());
+            case TRACE_GRAPH_CLEAR: return WireProtocol.utf8(inspector.clearTraceGraph());
             case METHOD_XREFS: return WireProtocol.utf8(inspector.methodXrefs(payload));
             case XREF_SEARCH: return WireProtocol.utf8(inspector.xrefSearch(payload));
             case DEOBFUSCATION_INVENTORY: return WireProtocol.utf8(inspector.deobfuscationInventory(payload));

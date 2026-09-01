@@ -144,6 +144,10 @@ class AttachIntegrationIT {
                         session.requestText(Operation.TRACE_EVENTS, ""));
                 assertTrue(investigation.entryPoints().stream().anyMatch(entry ->
                         "runtimeValue".equals(entry.methodName()) && entry.runtimeHits() > 0));
+                String heatmap = session.requestText(Operation.TRACE_GRAPH, "");
+                assertTrue(heatmap.startsWith("G\t"));
+                assertTrue(heatmap.contains("\nN\t"));
+                assertTrue(session.requestText(Operation.TRACE_GRAPH_CLEAR, "").contains("cleared"));
                 assertTrue(session.requestText(Operation.TRACE_STOP, traceId).contains("Stopped"));
                 assertEquals("before", session.requestText(Operation.EXECUTE, probe));
                 String methodPatch = classId + "\nruntimeValue\n()Ljava/lang/String;\n{ return \"method-patched\"; }";

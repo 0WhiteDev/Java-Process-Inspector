@@ -124,6 +124,15 @@ public final class TraceManager {
         return TraceRuntime.statusAndDrain();
     }
 
+    public String graph() {
+        return TraceRuntime.graphSnapshot();
+    }
+
+    public String clearGraph() {
+        TraceRuntime.clearGraph();
+        return "Call graph statistics cleared";
+    }
+
     public synchronized void close() {
         stopAll();
         scheduler.shutdownNow();

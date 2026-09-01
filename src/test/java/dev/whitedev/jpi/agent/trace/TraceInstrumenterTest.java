@@ -59,6 +59,45 @@ class TraceInstrumenterTest {
         assertTrue(failureGraph.contains("R\tFAILED\tCALLS\t"));
     }
 
+    @Test void heatmapMetricsRemainExactWhenEventCaptureIsSampled() throws Exception {
+        TraceConfig config = TraceConfig.parse(
+                "sampleEvery=100\nmaxEvents=10\nrateLimit=100\nstopAfterMillis=60000\ncondition=");
+        TraceProbe probe = new TraceProbe("trace-heat", "fixture", TraceFixture.class.getName(),
+                "combine", "(Ljava/lang/String;I)Ljava/lang/String;", config);
+        TraceRuntime.register(probe);
+        FixtureLoader loader = new FixtureLoader(getClass().getClassLoader());
+        byte[] instrumented = TraceInstrumenter.instrument(fixtureBytes(), loader, Arrays.asList(probe));
+        Class<?> fixtureType = loader.define(TraceFixture.class.getName(), instrumented);
+        java.lang.reflect.Constructor<?> constructor = fixtureType.getDeclaredConstructor();
+        constructor.setAccessible(true);
+        Object fixture = constructor.newInstance();
+        Method combine = fixtureType.getDeclaredMethod("combine", String.class, int.class);
+        combine.setAccessible(true);
+
+        for (int index = 0; index < 25; index++) assertEquals("value:" + index,
+                combine.invoke(fixture, "value", index));
+
+        String snapshot = TraceRuntime.graphSnapshot();
+        String nodePrefix = "N\t" + encoded(TraceFixture.class.getName()) + "\t"
+                + encoded("combine") + "\t" + encoded("(Ljava/lang/String;I)Ljava/lang/String;") + "\t";
+        String node = Arrays.stream(snapshot.split("\n"))
+                .filter(line -> line.startsWith(nodePrefix)).findFirst().orElseThrow();
+        String[] values = node.split("\t", -1);
+        assertEquals("25", values[4]);
+        assertEquals("25", values[5]);
+        assertTrue(Long.parseLong(values[6]) > 0L);
+        assertTrue(Arrays.stream(snapshot.split("\n"))
+                .filter(line -> line.startsWith("E\t"))
+                .map(line -> line.split("\t", -1))
+                .anyMatch(edge -> "25".equals(edge[7])));
+
+        TraceRuntime.clearGraph();
+        String cleared = TraceRuntime.graphSnapshot();
+        String clearedNode = Arrays.stream(cleared.split("\n"))
+                .filter(line -> line.startsWith(nodePrefix)).findFirst().orElseThrow();
+        assertEquals("0", clearedNode.split("\t", -1)[4]);
+    }
+
     private byte[] fixtureBytes() throws Exception {
         String resource = "/" + TraceFixture.class.getName().replace('.', '/') + ".class";
         try (InputStream input = TraceFixture.class.getResourceAsStream(resource)) {

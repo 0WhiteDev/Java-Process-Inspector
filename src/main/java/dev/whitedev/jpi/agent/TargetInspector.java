@@ -213,6 +213,14 @@ final class TargetInspector {
         return traceManager.events();
     }
 
+    String traceGraph() {
+        return traceManager.graph();
+    }
+
+    String clearTraceGraph() {
+        return traceManager.clearGraph();
+    }
+
     String bytecodeCfg(String payload) throws Exception {
         String[] values = payload.split("\n", 3);
         if (values.length != 3 || values[0].isEmpty() || values[1].isEmpty() || values[2].isEmpty()) {

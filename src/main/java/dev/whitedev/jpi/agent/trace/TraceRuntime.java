@@ -5,18 +5,26 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 public final class TraceRuntime {
     private static final int MAX_QUEUED_EVENTS = 5000;
     private static final int MAX_GRAPH_EDGES = 20000;
+    private static final int MAX_GRAPH_NODES = 20000;
     private static final AtomicLong SEQUENCE = new AtomicLong();
     private static final Map<String, ProbeState> STATES = new ConcurrentHashMap<String, ProbeState>();
     private static final Map<Long, ActiveCall> CALLS = new ConcurrentHashMap<Long, ActiveCall>();
     private static final Map<EdgeKey, DynamicEdge> GRAPH = new ConcurrentHashMap<EdgeKey, DynamicEdge>();
+    private static final Map<MethodKey, NodeStats> NODES = new ConcurrentHashMap<MethodKey, NodeStats>();
     private static final ArrayDeque<TraceEvent> EVENTS = new ArrayDeque<TraceEvent>();
     private static final ThreadLocal<ArrayDeque<Long>> CALL_STACK = new ThreadLocal<ArrayDeque<Long>>() {
         @Override protected ArrayDeque<Long> initialValue() {
@@ -31,26 +39,23 @@ public final class TraceRuntime {
             ProbeState state = STATES.get(probeId);
             if (state == null || !state.active) return 0L;
             long callNumber = state.calls.incrementAndGet();
-            if ((callNumber - 1L) % state.probe.config.sampleEvery != 0L) {
-                state.dropped.incrementAndGet();
-                return 0L;
-            }
-            if (!state.acquireRateSlot() || state.limitReached()) {
-                state.dropped.incrementAndGet();
-                return 0L;
-            }
+            state.stats.calls.incrementAndGet();
+            boolean sampled = (callNumber - 1L) % state.probe.config.sampleEvery == 0L;
+            boolean capture = sampled && !state.limitReached() && state.acquireRateSlot();
+            if (!capture) state.dropped.incrementAndGet();
 
             long token = SEQUENCE.incrementAndGet();
             ArrayDeque<Long> stack = CALL_STACK.get();
-            Long parent = stack.peekLast();
+            long parent = capture ? capturedParent(stack) : 0L;
             Thread thread = Thread.currentThread();
-            StackTraceElement[] frames = thread.getStackTrace();
-            ActiveCall call = new ActiveCall(token, parent == null ? 0L : parent.longValue(), state,
-                    receiver, arguments == null ? new Object[0] : arguments,
+            StackTraceElement[] frames = capture ? thread.getStackTrace() : new StackTraceElement[0];
+            ActiveCall call = new ActiveCall(token, parent, state, capture,
+                    capture ? receiver : null, capture && arguments != null ? arguments : new Object[0],
                     System.currentTimeMillis(), System.nanoTime(), thread.getName(),
-                    state.probe.config.captureStack ? stackTrace(frames, state.probe.config.maxStackDepth) : "");
+                    capture && state.probe.config.captureStack
+                            ? stackTrace(frames, state.probe.config.maxStackDepth) : "");
             CALLS.put(Long.valueOf(token), call);
-            recordIncoming(call, frames);
+            if (capture) recordIncoming(call, frames);
             stack.addLast(Long.valueOf(token));
             return token;
         } catch (Throwable ignored) {
@@ -81,21 +86,26 @@ public final class TraceRuntime {
 
     public static long currentCallId() {
         ArrayDeque<Long> stack = CALL_STACK.get();
-        Long current = stack.peekLast();
-        return current == null ? 0L : current.longValue();
+        return capturedParent(stack);
     }
 
     static void register(TraceProbe probe) {
         List<TraceCondition> conditions = TraceCondition.parse(probe.config.condition);
-        ProbeState state = new ProbeState(probe, conditions);
+        NodeStats stats = node(new MethodKey(probe.className, probe.methodName, probe.descriptor));
+        stats.active.incrementAndGet();
+        ProbeState state = new ProbeState(probe, conditions, stats);
         if (STATES.putIfAbsent(probe.id, state) != null) {
+            stats.active.decrementAndGet();
             throw new IllegalArgumentException("Trace probe already exists: " + probe.id);
         }
     }
 
     static void unregister(String probeId) {
         ProbeState state = STATES.remove(probeId);
-        if (state != null) state.active = false;
+        if (state != null) {
+            state.active = false;
+            state.stats.active.decrementAndGet();
+        }
     }
 
     static String statusAndDrain() {
@@ -136,11 +146,70 @@ public final class TraceRuntime {
         return output.toString();
     }
 
+    public static String graphSnapshot() {
+        List<DynamicEdge> edges = new ArrayList<DynamicEdge>(GRAPH.values());
+        Collections.sort(edges, new Comparator<DynamicEdge>() {
+            @Override public int compare(DynamicEdge left, DynamicEdge right) {
+                return left.key().compareTo(right.key());
+            }
+        });
+        Map<MethodKey, Set<MethodKey>> callers = new HashMap<MethodKey, Set<MethodKey>>();
+        Map<MethodKey, Long> incoming = new HashMap<MethodKey, Long>();
+        Set<MethodKey> methods = new LinkedHashSet<MethodKey>(NODES.keySet());
+        for (DynamicEdge edge : edges) {
+            MethodKey caller = edge.caller();
+            MethodKey callee = edge.callee();
+            methods.add(caller);
+            methods.add(callee);
+            Set<MethodKey> values = callers.get(callee);
+            if (values == null) {
+                values = new HashSet<MethodKey>();
+                callers.put(callee, values);
+            }
+            values.add(caller);
+            Long count = incoming.get(callee);
+            incoming.put(callee, Long.valueOf((count == null ? 0L : count.longValue()) + edge.count.get()));
+        }
+        List<MethodKey> ordered = new ArrayList<MethodKey>(methods);
+        Collections.sort(ordered);
+        StringBuilder output = new StringBuilder();
+        output.append('G').append('\t').append(System.currentTimeMillis()).append('\t')
+                .append(ordered.size()).append('\t').append(edges.size()).append('\n');
+        for (MethodKey method : ordered) {
+            NodeStats stats = NODES.get(method);
+            long calls = stats == null ? value(incoming.get(method)) : stats.calls.get();
+            long completed = stats == null ? 0L : stats.completed.get();
+            long totalNanos = stats == null ? -1L : stats.totalNanos.get();
+            long exceptions = stats == null ? 0L : stats.exceptions.get();
+            long active = stats == null ? 0L : stats.active.get();
+            Set<MethodKey> unique = callers.get(method);
+            output.append('N').append('\t').append(encoded(method.className)).append('\t')
+                    .append(encoded(method.methodName)).append('\t').append(encoded(method.descriptor)).append('\t')
+                    .append(calls).append('\t').append(completed).append('\t').append(totalNanos).append('\t')
+                    .append(exceptions).append('\t').append(unique == null ? 0 : unique.size()).append('\t')
+                    .append(active > 0L).append('\n');
+        }
+        for (DynamicEdge edge : edges) {
+            output.append('E').append('\t').append(encoded(edge.callerClass)).append('\t')
+                    .append(encoded(edge.callerMethod)).append('\t').append(encoded(edge.callerDescriptor)).append('\t')
+                    .append(encoded(edge.calleeClass)).append('\t').append(encoded(edge.calleeMethod)).append('\t')
+                    .append(encoded(edge.calleeDescriptor)).append('\t').append(edge.count.get()).append('\t')
+                    .append(edge.failures.get()).append('\t').append(edge.reflective).append('\n');
+        }
+        return output.toString();
+    }
+
+    public static void clearGraph() {
+        GRAPH.clear();
+        for (NodeStats stats : NODES.values()) stats.reset();
+    }
+
     static void clear() {
         for (ProbeState state : STATES.values()) state.active = false;
         STATES.clear();
         CALLS.clear();
         GRAPH.clear();
+        NODES.clear();
         synchronized (EVENTS) {
             EVENTS.clear();
         }
@@ -154,7 +223,11 @@ public final class TraceRuntime {
             removeFromStack(token);
             if (call == null) return;
             long duration = Math.max(0L, System.nanoTime() - call.startedNanos);
+            call.state.stats.completed.incrementAndGet();
+            call.state.stats.totalNanos.addAndGet(duration);
+            if (exception != null) call.state.stats.exceptions.incrementAndGet();
             if (exception != null && call.lastEdge != null) call.lastEdge.failures.incrementAndGet();
+            if (!call.capture) return;
             TraceCondition.Context context = new TraceCondition.Context(call.receiver, call.arguments,
                     returnValue, exception, duration, call.threadName);
             if (!TraceCondition.matches(call.state.conditions, context)) {
@@ -190,6 +263,16 @@ public final class TraceRuntime {
         if (last != null && last.longValue() == token) stack.removeLast();
         else stack.remove(Long.valueOf(token));
         if (stack.isEmpty()) CALL_STACK.remove();
+    }
+
+    private static long capturedParent(ArrayDeque<Long> stack) {
+        java.util.Iterator<Long> values = stack.descendingIterator();
+        while (values.hasNext()) {
+            Long token = values.next();
+            ActiveCall call = CALLS.get(token);
+            if (call != null && call.capture) return token.longValue();
+        }
+        return 0L;
     }
 
     private static String arguments(Object[] values, TraceConfig config) {
@@ -320,6 +403,19 @@ public final class TraceRuntime {
         return current;
     }
 
+    private static NodeStats node(MethodKey key) {
+        NodeStats current = NODES.get(key);
+        if (current != null) return current;
+        if (NODES.size() >= MAX_GRAPH_NODES) return NodeStats.DISCARDED;
+        NodeStats created = new NodeStats();
+        NodeStats raced = NODES.putIfAbsent(key, created);
+        return raced == null ? created : raced;
+    }
+
+    private static long value(Long value) {
+        return value == null ? 0L : value.longValue();
+    }
+
     private static void appendGraph(StringBuilder output, String layer, String relation, long count,
                                     String targetIdentifier, String className, String member,
                                     String descriptor, String detail) {
@@ -350,13 +446,15 @@ public final class TraceRuntime {
         final AtomicLong calls = new AtomicLong();
         final AtomicLong captured = new AtomicLong();
         final AtomicLong dropped = new AtomicLong();
+        final NodeStats stats;
         volatile boolean active = true;
         private long rateWindow;
         private int rateCount;
 
-        ProbeState(TraceProbe probe, List<TraceCondition> conditions) {
+        ProbeState(TraceProbe probe, List<TraceCondition> conditions, NodeStats stats) {
             this.probe = probe;
             this.conditions = conditions;
+            this.stats = stats;
         }
 
         synchronized boolean acquireRateSlot() {
@@ -385,6 +483,7 @@ public final class TraceRuntime {
         final long token;
         final long parent;
         final ProbeState state;
+        final boolean capture;
         final Object receiver;
         final Object[] arguments;
         final long startedMillis;
@@ -393,17 +492,70 @@ public final class TraceRuntime {
         final String stack;
         volatile DynamicEdge lastEdge;
 
-        ActiveCall(long token, long parent, ProbeState state, Object receiver, Object[] arguments,
+        ActiveCall(long token, long parent, ProbeState state, boolean capture, Object receiver, Object[] arguments,
                    long startedMillis, long startedNanos, String threadName, String stack) {
             this.token = token;
             this.parent = parent;
             this.state = state;
+            this.capture = capture;
             this.receiver = receiver;
             this.arguments = arguments;
             this.startedMillis = startedMillis;
             this.startedNanos = startedNanos;
             this.threadName = threadName;
             this.stack = stack;
+        }
+    }
+
+    private static final class MethodKey implements Comparable<MethodKey> {
+        final String className;
+        final String methodName;
+        final String descriptor;
+
+        MethodKey(String className, String methodName, String descriptor) {
+            this.className = className;
+            this.methodName = methodName;
+            this.descriptor = descriptor;
+        }
+
+        @Override public int compareTo(MethodKey other) {
+            int result = className.compareTo(other.className);
+            if (result == 0) result = methodName.compareTo(other.methodName);
+            return result == 0 ? descriptor.compareTo(other.descriptor) : result;
+        }
+
+        @Override public boolean equals(Object value) {
+            if (this == value) return true;
+            if (!(value instanceof MethodKey)) return false;
+            MethodKey other = (MethodKey) value;
+            return className.equals(other.className) && methodName.equals(other.methodName)
+                    && descriptor.equals(other.descriptor);
+        }
+
+        @Override public int hashCode() {
+            int result = className.hashCode();
+            result = 31 * result + methodName.hashCode();
+            return 31 * result + descriptor.hashCode();
+        }
+
+        String text() {
+            return className + "." + methodName + descriptor;
+        }
+    }
+
+    private static final class NodeStats {
+        static final NodeStats DISCARDED = new NodeStats();
+        final AtomicLong calls = new AtomicLong();
+        final AtomicLong completed = new AtomicLong();
+        final AtomicLong totalNanos = new AtomicLong();
+        final AtomicLong exceptions = new AtomicLong();
+        final AtomicLong active = new AtomicLong();
+
+        void reset() {
+            calls.set(0L);
+            completed.set(0L);
+            totalNanos.set(0L);
+            exceptions.set(0L);
         }
     }
 
@@ -467,6 +619,18 @@ public final class TraceRuntime {
             calleeMethod = key.calleeMethod;
             calleeDescriptor = key.calleeDescriptor;
             reflective = key.reflective;
+        }
+
+        MethodKey caller() {
+            return new MethodKey(callerClass, callerMethod, callerDescriptor);
+        }
+
+        MethodKey callee() {
+            return new MethodKey(calleeClass, calleeMethod, calleeDescriptor);
+        }
+
+        String key() {
+            return caller().text() + " -> " + callee().text() + (reflective ? " reflective" : "");
         }
     }
 
