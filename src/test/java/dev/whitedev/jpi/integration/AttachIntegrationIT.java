@@ -98,6 +98,8 @@ class AttachIntegrationIT {
                         .filter(line -> line.startsWith("H\t"))
                         .map(line -> line.split("\t", -1))
                         .anyMatch(values -> Long.parseLong(values[2]) > 0L));
+                assertTrue(Arrays.stream(cfgSnapshot.split("\n"))
+                        .anyMatch(line -> line.startsWith("T\t")));
                 assertTrue(session.requestText(Operation.CFG_TRACE_STOP, cfgId).contains("Stopped"));
                 assertEquals("8", session.requestText(Operation.EXECUTE, branchProbe));
                 String apiHookResponse = session.requestText(Operation.API_HOOK_START,

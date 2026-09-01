@@ -478,7 +478,8 @@ public final class LiveTracerPanel extends JPanel implements SessionAware {
                 + "\nReceiver: " + empty(event.receiver) + "\nArguments: " + empty(event.arguments)
                 + "\nCaller:\n" + empty(event.stack);
         timeline.publish(new TimelineEvent("trace:0:start:" + callId, event.timestamp, TimelineSource.TRACE,
-                event.thread, callId, parent, method + " entered", common));
+                event.thread, callId, parent, method + " entered", common,
+                event.className + "." + event.methodName + event.descriptor, "ENTER", ""));
         long finished = event.duration < 0L ? event.timestamp
                 : event.timestamp + Math.max(1L, (event.duration + 999_999L) / 1_000_000L);
         String result = event.exception.isEmpty() ? compact(event.result) : compact(event.exception);
@@ -486,7 +487,10 @@ public final class LiveTracerPanel extends JPanel implements SessionAware {
         String completion = "Duration: " + duration(event.duration) + "\nReturn: " + empty(event.result)
                 + "\nException: " + empty(event.exception);
         timeline.publish(new TimelineEvent("trace:1:end:" + callId, finished, TimelineSource.TRACE,
-                event.thread, callId, parent, summary, completion));
+                event.thread, callId, parent, summary, completion,
+                event.className + "." + event.methodName + event.descriptor,
+                event.exception.isEmpty() ? "RETURN" : "THROW",
+                event.exception.isEmpty() ? event.result : event.exception));
     }
 
     private static String compact(String value) {

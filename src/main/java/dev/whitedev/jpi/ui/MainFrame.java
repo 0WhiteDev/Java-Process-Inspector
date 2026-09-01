@@ -14,6 +14,7 @@ import dev.whitedev.jpi.plugin.api.ui.TabGroup;
 import dev.whitedev.jpi.plugin.runtime.PluginManager;
 import dev.whitedev.jpi.plugin.runtime.RegisteredExtension;
 import dev.whitedev.jpi.ui.analysis.BytecodeCfgPanel;
+import dev.whitedev.jpi.ui.analysis.DifferenceTracingPanel;
 import dev.whitedev.jpi.ui.analysis.InvestigationPanel;
 import dev.whitedev.jpi.ui.browser.ClassesPanel;
 import dev.whitedev.jpi.ui.connection.TunnelAgentDialog;
@@ -97,6 +98,7 @@ public final class MainFrame extends JFrame {
         LiveTracerPanel tracer = new LiveTracerPanel(mappingWorkspace, timelineStore);
         XrefsPanel xrefs = new XrefsPanel(mappingWorkspace);
         BytecodeCfgPanel cfg = new BytecodeCfgPanel(mappingWorkspace);
+        DifferenceTracingPanel differences = new DifferenceTracingPanel(mappingWorkspace, timelineStore);
         InvestigationPanel investigation = new InvestigationPanel(mappingWorkspace,
                 target -> {
                     xrefs.selectTarget(target.classIdentifier(), target.className(), target.methodName(), target.descriptor());
@@ -110,9 +112,9 @@ public final class MainFrame extends JFrame {
                 });
         ApiHooksPanel apiHooks = new ApiHooksPanel(mappingWorkspace, xrefs, () -> selectView("Xrefs"),
                 pluginManager.extensions(), timelineStore);
-        ClassesPanel classes = new ClassesPanel(mappingWorkspace, tracer, xrefs, cfg,
+        ClassesPanel classes = new ClassesPanel(mappingWorkspace, tracer, xrefs, cfg, differences,
                 () -> selectView("Live tracer"), () -> selectView("Xrefs"), () -> selectView("Bytecode CFG"),
-                pluginManager.extensions(), timelineStore);
+                () -> selectView("Difference tracing"), pluginManager.extensions(), timelineStore);
         DeobfuscationWorkspacePanel deobfuscation = new DeobfuscationWorkspacePanel(mappingWorkspace);
         ExecutorPanel executor = new ExecutorPanel(mappingWorkspace);
         FieldWritesPanel fieldWrites = new FieldWritesPanel(mappingWorkspace, timelineStore);
@@ -130,7 +132,8 @@ public final class MainFrame extends JFrame {
         DllPanel dll = new DllPanel(windows);
         NativeSymbolsPanel nativeSymbols = new NativeSymbolsPanel();
         PluginsPanel plugins = new PluginsPanel(pluginManager);
-        views = new ArrayList<>(Arrays.asList(overview, timeline, classes, tracer, apiHooks, xrefs, cfg, investigation, deobfuscation,
+        views = new ArrayList<>(Arrays.asList(overview, timeline, classes, tracer, apiHooks, xrefs, cfg, differences,
+                investigation, deobfuscation,
                 constantSearch, executor, fields, fieldWrites, environment, network, heapObjects, nativeSymbols,
                 memory, dll, plugins));
 
@@ -141,6 +144,7 @@ public final class MainFrame extends JFrame {
         addCard("API hooks", apiHooks);
         addCard("Xrefs", xrefs);
         addCard("Bytecode CFG", cfg);
+        addCard("Difference tracing", differences);
         addCard("Investigation", investigation);
         addCard("Deobfuscation", deobfuscation);
         addCard("Constant search", constantSearch);
@@ -228,6 +232,7 @@ public final class MainFrame extends JFrame {
         addNavigation(sidebar, "API hooks");
         addNavigation(sidebar, "Xrefs");
         addNavigation(sidebar, "Bytecode CFG");
+        addNavigation(sidebar, "Difference tracing");
         addNavigation(sidebar, "Investigation");
         addNavigation(sidebar, "Deobfuscation");
         addNavigation(sidebar, "Constant search");

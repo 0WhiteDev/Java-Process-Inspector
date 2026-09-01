@@ -126,6 +126,7 @@ This message commonly appears when a Java 21 agent is loaded into a target runni
 | API hooks | Ready-to-use Network, Crypto, Files, Reflection, and Class loading profiles that identify exact application call sites |
 | Xrefs | Static and observed Called by and Calls edges, field and type references, constants, and method-level string or endpoint users |
 | Bytecode CFG | Interactive basic-block graph with branches, exception edges, dominators, complexity, dead code, and live execution counts |
+| Difference tracing | Two-run behavioral comparison with common and unique methods, ordered branch transitions, changed returns, API-call differences, and the first observed divergence |
 | Investigation | Guided constant-to-code workflow with ranked entry points, correlated Xrefs, suggested probes, runtime caller paths, and interesting CFG branches |
 | Deobfuscation | Persistent aliases, notes, tags, colors, scoped AutoMap, package exclusions, mapping exports, and Code Executor name resolution |
 | Constant search | Global search through strings, descriptors, class names, methods, and fields in available class constant pools |
@@ -196,6 +197,26 @@ Confidence is an analysis aid, not a correctness guarantee. CFG target-block hit
 Open <strong>Runtime timeline</strong>, click <strong>Add action marker...</strong>, describe the action, and then perform it in the target application. Active Live Tracer probes and API Hook profiles continue collecting through their existing bounded pipelines. Events sharing a traced call show the same root identifier such as <code>#142</code>. Use that identifier in the filter to isolate the complete runtime path around one action.
 
 Call ID is the strongest correlation. Thread and time correlation is labeled separately in event details. Network and class-load events do not expose a target JVM thread through their current data sources, so their time-only relationship is evidence of proximity, not proof of causation.
+
+</details>
+
+<details>
+<summary><strong>Difference tracing</strong></summary>
+
+- Record a baseline Run A and a changed Run B without creating a separate target-side event system
+- Reuse structured Live Tracer and Automatic API Hook events already published to Runtime Timeline
+- Optionally instrument one selected method with bounded, ordered basic-block transitions for exact branch comparison
+- Count distinct methods common to both runs and methods observed only in one run
+- Compare return values and thrown exceptions by method and invocation order
+- Compare ordered API calls together with their application callers
+- Show the first changed CFG route, such as <code>B4 -&gt; B7</code> against <code>B4 -&gt; B5</code>
+- Fall back to the first method, result, exception, or API event divergence when no CFG target is selected
+- Keep at most 20,000 CFG transitions per run and report through the existing bounded desktop timeline
+- Copy a compact text report containing metrics, the first divergence, and every detected change
+
+Open <strong>Loaded classes</strong>, decompile a class, select a method in <strong>Method patch</strong>, and click <strong>Compare runs</strong>. Start any wider Live Tracer probes or API Hook profiles that should contribute to the comparison. In <strong>Difference tracing</strong>, click <strong>Record Run A</strong>, perform the baseline action, and stop the recording. Repeat with <strong>Record Run B</strong> after changing the input or state. JPI compares both captures automatically.
+
+The selected method is used for ordered CFG evidence. Clear <strong>Capture ordered CFG branches</strong> when only method, return, exception, and API evidence is needed. CFG instrumentation temporarily replaces the selected class definition and can stop another active probe on that same class. Method and API counts describe the explicitly active probes and profiles, not every method executed by the JVM.
 
 </details>
 
@@ -540,7 +561,8 @@ flowchart LR
 | `dev.whitedev.jpi.attach` | JVM discovery, agent loading, and session lifecycle |
 | `dev.whitedev.jpi.agent` | Agent entry point, control server, class registry, and target orchestration |
 | `dev.whitedev.jpi.agent.analysis` | Constant-pool search, deobfuscation inventory, and Xref analysis |
-| `dev.whitedev.jpi.agent.cfg` | Static control-flow analysis and bounded runtime block coverage |
+| `dev.whitedev.jpi.agent.cfg` | Static control-flow analysis, bounded runtime block coverage, and ordered transitions |
+| `dev.whitedev.jpi.analysis.difference` | Immutable run captures, CFG transition parsing, and behavioral comparison |
 | `dev.whitedev.jpi.agent.field` | Exact PUTFIELD and PUTSTATIC instrumentation, bounded value transitions, stacks, and restoration |
 | `dev.whitedev.jpi.agent.heap` | Reachable-object inspection and optional heap dumps |
 | `dev.whitedev.jpi.agent.hook` | Automatic API hook profiles and call-site instrumentation |
@@ -564,7 +586,7 @@ flowchart LR
 | `dev.whitedev.jpi.ui.browser` | Loaded-class navigation, decompilation, bytecode, and live editing |
 | `dev.whitedev.jpi.ui.tracing` | Live tracer, automatic hooks, and Xref views |
 | `dev.whitedev.jpi.ui.timeline` | Bounded multi-source runtime events, call-tree correlation, filtering, and unified timeline presentation |
-| `dev.whitedev.jpi.ui.analysis` | Interactive bytecode CFG rendering and coverage presentation |
+| `dev.whitedev.jpi.ui.analysis` | Investigation sessions, interactive bytecode CFG, coverage, and two-run difference tracing |
 | `dev.whitedev.jpi.ui.inspection` | Static fields, field-write provenance, constants, and heap-object views |
 | `dev.whitedev.jpi.ui.workspace` | Deobfuscation workspace and target-side code executor |
 | `dev.whitedev.jpi.ui.system` | Runtime overview and environment snapshot views |
@@ -647,6 +669,7 @@ A manual run of the Release workflow builds downloadable workflow artifacts with
 - Constructors, class initializers, abstract methods, and native methods are not available in method-only mode or Live Tracer.
 - Live Tracer currently targets modifiable non-bootstrap classes whose classloader can resolve the JPI trace runtime.
 - Runtime Timeline gives exact call-tree correlation for trace events and bounded heuristic correlation for other sources. Matching by thread and time or time alone does not prove that one event caused another.
+- Difference tracing compares only events captured by active probes and profiles during each recording. Ordered branch comparison covers one explicitly selected method, is capped at 20,000 transitions per run, and can perturb timing in very hot methods.
 - Field-write tracing observes direct bytecode PUTFIELD and PUTSTATIC instructions in available loaded classes. Writes performed entirely by native code, Unsafe, VarHandle internals, reflection internals, hidden definitions, or classes loaded after the scan are not captured by that probe.
 - Heap / Object Inspector counts and paths cover only the bounded graph reachable from explicitly selected static roots. Reflective access can be denied by target modules, and weak sample handles can expire at any time. Full HPROF export is HotSpot-specific and can pause the target or consume substantial disk space.
 - Automatic API Hooks observe direct bytecode call sites available in loaded non-bootstrap classes. Calls made entirely inside JDK internals, native code, unavailable definitions, or classes loaded after a profile starts are not included in that run. Restart the selected profiles to scan newly loaded classes.

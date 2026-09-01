@@ -370,7 +370,9 @@ public final class ApiHooksPanel extends JPanel implements SessionAware {
         timeline.publish(new TimelineEvent("api-hook:" + event.sequence, event.timestamp, TimelineSource.API_HOOK,
                 event.thread, "", "", api,
                 "Profile: " + displayProfile(event.profile) + "\nApplication caller: " + caller
-                        + "\nObserved API: " + api + "\nInvocation: " + event.invocationKind));
+                        + "\nObserved API: " + api + "\nInvocation: " + event.invocationKind,
+                event.apiClass + "." + event.apiMethod + event.apiDescriptor, "CALL",
+                event.callerClass + "." + event.callerMethod + event.callerDescriptor));
     }
 
     private void showSelected() {

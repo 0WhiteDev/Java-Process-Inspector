@@ -89,6 +89,12 @@ public final class RuntimeTimelineStore {
         return List.copyOf(output);
     }
 
+    public synchronized List<TimelineEvent> events() {
+        List<TimelineEvent> ordered = new ArrayList<>(events.values());
+        ordered.sort(Comparator.comparingLong(TimelineEvent::timestamp).thenComparing(TimelineEvent::key));
+        return List.copyOf(ordered);
+    }
+
     public void addListener(Runnable listener) {
         listeners.add(listener);
     }

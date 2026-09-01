@@ -27,6 +27,7 @@ import dev.whitedev.jpi.plugin.api.deobfuscation.MappingSuggestion;
 import dev.whitedev.jpi.plugin.runtime.ExtensionRegistry;
 import dev.whitedev.jpi.plugin.runtime.RegisteredExtension;
 import dev.whitedev.jpi.ui.analysis.BytecodeCfgPanel;
+import dev.whitedev.jpi.ui.analysis.DifferenceTracingPanel;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 
 import javax.swing.*;
@@ -51,9 +52,11 @@ public final class ClassesPanel extends JPanel implements SessionAware {
     private final LiveTracerPanel liveTracer;
     private final XrefsPanel xrefs;
     private final BytecodeCfgPanel cfg;
+    private final DifferenceTracingPanel differences;
     private final Runnable openLiveTracer;
     private final Runnable openXrefs;
     private final Runnable openCfg;
+    private final Runnable openDifferences;
     private final DefaultListModel<LoadedClassInfo> model = new DefaultListModel<>();
     private final JList<LoadedClassInfo> list = new JList<>(model);
     private final JTextField search = new JTextField();
@@ -66,6 +69,7 @@ public final class ClassesPanel extends JPanel implements SessionAware {
     private final JButton traceMethod = Ui.secondaryButton("Trace method");
     private final JButton showXrefs = Ui.secondaryButton("Xrefs");
     private final JButton showCfg = Ui.secondaryButton("CFG");
+    private final JButton showDifferences = Ui.secondaryButton("Compare runs");
     private final JButton applyHex = Ui.primaryButton("Apply hex bytecode");
     private final JLabel methodStatus = new JLabel("Select a class and method");
     private final JLabel classCount = new JLabel("0 classes");
@@ -117,15 +121,25 @@ public final class ClassesPanel extends JPanel implements SessionAware {
     public ClassesPanel(DeobfuscationWorkspace mappingWorkspace, LiveTracerPanel liveTracer, XrefsPanel xrefs,
                  BytecodeCfgPanel cfg, Runnable openLiveTracer, Runnable openXrefs, Runnable openCfg,
                  ExtensionRegistry extensions, RuntimeTimelineStore timeline) {
+        this(mappingWorkspace, liveTracer, xrefs, cfg, null, openLiveTracer, openXrefs, openCfg, null,
+                extensions, timeline);
+    }
+
+    public ClassesPanel(DeobfuscationWorkspace mappingWorkspace, LiveTracerPanel liveTracer, XrefsPanel xrefs,
+                 BytecodeCfgPanel cfg, DifferenceTracingPanel differences, Runnable openLiveTracer,
+                 Runnable openXrefs, Runnable openCfg, Runnable openDifferences,
+                 ExtensionRegistry extensions, RuntimeTimelineStore timeline) {
         super(new BorderLayout(0, 16));
         this.mappingWorkspace = mappingWorkspace;
         this.timeline = timeline;
         this.liveTracer = liveTracer;
         this.xrefs = xrefs;
         this.cfg = cfg;
+        this.differences = differences;
         this.openLiveTracer = openLiveTracer;
         this.openXrefs = openXrefs;
         this.openCfg = openCfg;
+        this.openDifferences = openDifferences;
         this.extensions = extensions;
         setBorder(new EmptyBorder(4, 0, 0, 0));
         setOpaque(false);
@@ -281,6 +295,7 @@ public final class ClassesPanel extends JPanel implements SessionAware {
         traceMethod.setEnabled(false);
         showXrefs.setEnabled(false);
         showCfg.setEnabled(false);
+        showDifferences.setEnabled(false);
         applyHex.setEnabled(false);
         refreshPluginTools();
         live.setEnabled(connected);
@@ -664,8 +679,10 @@ public final class ClassesPanel extends JPanel implements SessionAware {
         traceMethod.addActionListener(event -> traceSelectedMethod());
         showXrefs.addActionListener(event -> showSelectedXrefs());
         showCfg.addActionListener(event -> showSelectedCfg());
+        showDifferences.addActionListener(event -> showSelectedDifferences());
         controls.add(refresh);
         controls.add(showCfg);
+        controls.add(showDifferences);
         controls.add(showXrefs);
         controls.add(traceMethod);
         controls.add(patchMethod);
@@ -820,6 +837,8 @@ public final class ClassesPanel extends JPanel implements SessionAware {
         String cfgUnavailable = cfgUnavailableReason(selected, method);
         showCfg.setEnabled(cfgUnavailable == null);
         showCfg.setToolTipText(cfgUnavailable);
+        showDifferences.setEnabled(differences != null && cfgUnavailable == null);
+        showDifferences.setToolTipText(differences == null ? "Difference tracing is unavailable" : cfgUnavailable);
         patchMethod.setEnabled(available);
         if (available) {
             String warning = MethodBodyCompatibility.unsupportedReason(methodBody.getText());
@@ -860,6 +879,19 @@ public final class ClassesPanel extends JPanel implements SessionAware {
         }
         cfg.selectTarget(selected.id, selected.name, method.name, method.descriptor);
         openCfg.run();
+    }
+
+    private void showSelectedDifferences() {
+        LoadedClassInfo selected = list.getSelectedValue();
+        MethodInfo method = (MethodInfo) methodSelector.getSelectedItem();
+        String unavailable = cfgUnavailableReason(selected, method);
+        if (unavailable != null || differences == null || openDifferences == null) {
+            Ui.error(this, new IllegalStateException(unavailable == null
+                    ? "Difference tracing is unavailable" : unavailable));
+            return;
+        }
+        differences.selectTarget(selected.id, selected.name, method.name, method.descriptor);
+        openDifferences.run();
     }
 
     private void showSelectedXrefs() {

@@ -7,6 +7,7 @@ public enum TimelineSource {
     CLASS_LOAD("Class load"),
     FIELD("Static field"),
     FIELD_WRITE("Field write"),
+    CFG("CFG branch"),
     SNAPSHOT("Snapshot"),
     MARKER("Marker");
 
