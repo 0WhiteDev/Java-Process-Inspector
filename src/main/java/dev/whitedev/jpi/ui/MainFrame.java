@@ -19,6 +19,7 @@ import dev.whitedev.jpi.ui.analysis.InvestigationPanel;
 import dev.whitedev.jpi.ui.browser.ClassesPanel;
 import dev.whitedev.jpi.ui.callgraph.CallGraphHeatmapPanel;
 import dev.whitedev.jpi.ui.connection.TunnelAgentDialog;
+import dev.whitedev.jpi.ui.debug.DebuggerPanel;
 import dev.whitedev.jpi.ui.nativeview.DllPanel;
 import dev.whitedev.jpi.ui.nativeview.MemoryPanel;
 import dev.whitedev.jpi.ui.nativeview.NativeSymbolsPanel;
@@ -96,6 +97,7 @@ public final class MainFrame extends JFrame {
         DeobfuscationWorkspace mappingWorkspace = new DeobfuscationWorkspace();
         OverviewPanel overview = new OverviewPanel();
         RuntimeTimelinePanel timeline = new RuntimeTimelinePanel(timelineStore);
+        DebuggerPanel debugger = new DebuggerPanel(timelineStore);
         LiveTracerPanel tracer = new LiveTracerPanel(mappingWorkspace, timelineStore);
         XrefsPanel xrefs = new XrefsPanel(mappingWorkspace);
         BytecodeCfgPanel cfg = new BytecodeCfgPanel(mappingWorkspace);
@@ -117,6 +119,7 @@ public final class MainFrame extends JFrame {
         ClassesPanel classes = new ClassesPanel(mappingWorkspace, tracer, xrefs, cfg, differences,
                 () -> selectView("Live tracer"), () -> selectView("Xrefs"), () -> selectView("Bytecode CFG"),
                 () -> selectView("Difference tracing"), pluginManager.extensions(), timelineStore);
+        classes.setDebuggerIntegration(debugger, () -> selectView("Debugger"));
         DeobfuscationWorkspacePanel deobfuscation = new DeobfuscationWorkspacePanel(mappingWorkspace);
         ExecutorPanel executor = new ExecutorPanel(mappingWorkspace);
         FieldWritesPanel fieldWrites = new FieldWritesPanel(mappingWorkspace, timelineStore);
@@ -134,7 +137,7 @@ public final class MainFrame extends JFrame {
         DllPanel dll = new DllPanel(windows);
         NativeSymbolsPanel nativeSymbols = new NativeSymbolsPanel();
         PluginsPanel plugins = new PluginsPanel(pluginManager);
-        views = new ArrayList<>(Arrays.asList(overview, timeline, classes, tracer, callGraph, apiHooks, xrefs,
+        views = new ArrayList<>(Arrays.asList(overview, timeline, debugger, classes, tracer, callGraph, apiHooks, xrefs,
                 cfg, differences,
                 investigation, deobfuscation,
                 constantSearch, executor, fields, fieldWrites, environment, network, heapObjects, nativeSymbols,
@@ -142,6 +145,7 @@ public final class MainFrame extends JFrame {
 
         addCard("Overview", overview);
         addCard("Runtime timeline", timeline);
+        addCard("Debugger", debugger);
         addCard("Loaded classes", classes);
         addCard("Live tracer", tracer);
         addCard("Call graph", callGraph);
@@ -181,6 +185,7 @@ public final class MainFrame extends JFrame {
         addWindowListener(new WindowAdapter() {
             @Override public void windowClosed(WindowEvent event) {
                 disconnect();
+                debugger.close();
                 pluginManager.close();
             }
         });
@@ -231,6 +236,7 @@ public final class MainFrame extends JFrame {
         sidebar.add(workspace);
         addNavigation(sidebar, "Overview");
         addNavigation(sidebar, "Runtime timeline");
+        addNavigation(sidebar, "Debugger");
         addNavigation(sidebar, "Loaded classes");
         addNavigation(sidebar, "Live tracer");
         addNavigation(sidebar, "Call graph");

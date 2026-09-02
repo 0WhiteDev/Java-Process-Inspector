@@ -4,6 +4,7 @@ import dev.whitedev.jpi.ui.Async;
 import dev.whitedev.jpi.ui.CodeEditors;
 import dev.whitedev.jpi.ui.SessionAware;
 import dev.whitedev.jpi.ui.Ui;
+import dev.whitedev.jpi.ui.debug.DebuggerPanel;
 import dev.whitedev.jpi.ui.tracing.LiveTracerPanel;
 import dev.whitedev.jpi.ui.tracing.XrefsPanel;
 import dev.whitedev.jpi.ui.timeline.RuntimeTimelineStore;
@@ -70,6 +71,7 @@ public final class ClassesPanel extends JPanel implements SessionAware {
     private final JButton showXrefs = Ui.secondaryButton("Xrefs");
     private final JButton showCfg = Ui.secondaryButton("CFG");
     private final JButton showDifferences = Ui.secondaryButton("Compare runs");
+    private final JButton debugMethod = Ui.secondaryButton("Debug breakpoint");
     private final JButton applyHex = Ui.primaryButton("Apply hex bytecode");
     private final JLabel methodStatus = new JLabel("Select a class and method");
     private final JLabel classCount = new JLabel("0 classes");
@@ -104,6 +106,8 @@ public final class ClassesPanel extends JPanel implements SessionAware {
     private boolean methodBodyLoading;
     private boolean methodBodyReady;
     private boolean redefinitionControlsEnabled = true;
+    private DebuggerPanel debugger;
+    private Runnable openDebugger;
 
     public ClassesPanel(DeobfuscationWorkspace mappingWorkspace, LiveTracerPanel liveTracer, XrefsPanel xrefs,
                  BytecodeCfgPanel cfg, Runnable openLiveTracer, Runnable openXrefs, Runnable openCfg) {
@@ -296,6 +300,7 @@ public final class ClassesPanel extends JPanel implements SessionAware {
         showXrefs.setEnabled(false);
         showCfg.setEnabled(false);
         showDifferences.setEnabled(false);
+        debugMethod.setEnabled(false);
         applyHex.setEnabled(false);
         refreshPluginTools();
         live.setEnabled(connected);
@@ -680,10 +685,12 @@ public final class ClassesPanel extends JPanel implements SessionAware {
         showXrefs.addActionListener(event -> showSelectedXrefs());
         showCfg.addActionListener(event -> showSelectedCfg());
         showDifferences.addActionListener(event -> showSelectedDifferences());
+        debugMethod.addActionListener(event -> debugSelectedMethod());
         controls.add(refresh);
         controls.add(showCfg);
         controls.add(showDifferences);
         controls.add(showXrefs);
+        controls.add(debugMethod);
         controls.add(traceMethod);
         controls.add(patchMethod);
         header.add(methodSelector, BorderLayout.CENTER);
@@ -839,6 +846,7 @@ public final class ClassesPanel extends JPanel implements SessionAware {
         showCfg.setToolTipText(cfgUnavailable);
         showDifferences.setEnabled(differences != null && cfgUnavailable == null);
         showDifferences.setToolTipText(differences == null ? "Difference tracing is unavailable" : cfgUnavailable);
+        debugMethod.setEnabled(debugger != null && methodAvailable);
         patchMethod.setEnabled(available);
         if (available) {
             String warning = MethodBodyCompatibility.unsupportedReason(methodBody.getText());
@@ -879,6 +887,24 @@ public final class ClassesPanel extends JPanel implements SessionAware {
         }
         cfg.selectTarget(selected.id, selected.name, method.name, method.descriptor);
         openCfg.run();
+    }
+
+    public void setDebuggerIntegration(DebuggerPanel debugger, Runnable openDebugger) {
+        this.debugger = debugger;
+        this.openDebugger = openDebugger;
+        refreshMethodPatchState();
+    }
+
+    private void debugSelectedMethod() {
+        LoadedClassInfo selected = list.getSelectedValue();
+        MethodInfo method = (MethodInfo) methodSelector.getSelectedItem();
+        String unavailable = methodUnavailableReason(selected, method);
+        if (unavailable != null || debugger == null || openDebugger == null) {
+            Ui.error(this, new IllegalStateException(unavailable == null ? "Debugger is unavailable" : unavailable));
+            return;
+        }
+        debugger.selectTarget(selected.name, method.name, method.descriptor);
+        openDebugger.run();
     }
 
     private void showSelectedDifferences() {

@@ -121,6 +121,7 @@ This message commonly appears when a Java 21 agent is loaded into a target runni
 |---|---|
 | Overview | Live heap, non-heap, class, thread, GC, uptime, and full thread-dump data |
 | Runtime timeline | Unified trace, API hook, network, class-load, field-write, snapshot, and action-marker events correlated by call ID, parent call, thread, and time |
+| Debugger | JDWP launch or remote attach, method/source/BCI breakpoints, pause, continue, source or instruction stepping, call stacks, lazy variables, value editing, evaluation, and force return |
 | Classes | Paged live definitions, original editable or mapped read-only decompilation, full-source HotSwap, modern method patches, raw bytecode editing, rollback, dumps, and selectable CFR, Vineflower, or Procyon engines |
 | Live tracer | Bounded runtime probes with arguments, results, exceptions, duration, threads, object identity, caller stacks, Time Tunnel, and an interactive call tree |
 | Call graph | Live heatmap of observed callers and callees with exact probe counts, total and average time, exceptions, unique callers, and weighted edges |
@@ -178,6 +179,29 @@ The interface uses FlatLaf with a focused sidebar workspace instead of nested ut
 Open <strong>Constant search</strong>, search for a value such as <code>https://api.example.com/license</code>, and click <strong>Investigate</strong>. JPI opens the Investigation workspace with ranked method-level users and interesting related constants. Select an entry point and click <strong>Analyze selected</strong> to load its Xrefs and CFG. Use <strong>Prepare tracer</strong>, perform the action in the target, then return and click <strong>Refresh runtime</strong> to add observed calls and caller paths to the same report. Use <strong>Trace branches 30s</strong> when branch-level evidence is needed.
 
 Confidence is an analysis aid, not a correctness guarantee. CFG target-block hits approximate taken branch counts when several edges can reach the same target. Starting CFG counters can stop an active method probe for the selected class because both features temporarily transform the same definition.
+
+</details>
+
+<details>
+<summary><strong>Interactive JVM debugger</strong></summary>
+
+- Launch an executable JAR suspended before its main method through the JDK JDI launching connector
+- Attach to an existing authorized JDWP endpoint by host and port
+- Add method-entry, source-line, or exact bytecode-index breakpoints before or after a class is loaded
+- Keep pending breakpoints and install them when the matching class is prepared
+- Suspend the event thread or the complete VM, pause manually, continue, and resume all threads
+- Step into, over, or out by source line or by the smallest available JVM instruction location
+- Inspect suspended threads, call frames, exact source line, source path, bytecode index, and nearby bytecode bytes
+- Browse this, arguments, locals, static fields, instance fields, and arrays with bounded lazy expansion
+- Edit compatible local, field, array, primitive, String, and null values while execution is suspended
+- Evaluate literals, local names, this, and field-access paths without invoking arbitrary target methods
+- Force an early return from the top frame when the target JVM exposes that capability
+- Publish debugger stops, steps, exceptions, pauses, resumes, value changes, and force returns to Runtime Timeline
+- Prepare a method breakpoint directly from Loaded classes without copying its owner, name, or descriptor
+
+Open <strong>Debugger</strong> and choose <strong>Launch with debugger...</strong> to start an executable JAR under JPI control. Add breakpoints before clicking <strong>Continue</strong> if execution must be observed from startup. For an existing JVM, start it with an authorized JDWP listener such as <code>-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=127.0.0.1:5005</code>, then use <strong>Attach JDWP...</strong>. An ordinary JPI agent attachment does not silently enable debugging and the Debugger view reports that distinction.
+
+Double-click a breakpoint row to enable or disable it. Double-click an editable variable to change it. Object fields and array entries are fetched only when their tree node is expanded. Forced return applies only to the selected top frame and is intentionally confirmed with a warning because it changes the target's control flow.
 
 </details>
 
@@ -544,6 +568,7 @@ flowchart LR
     WIN[Windows tools via JNA]
     SYMBOLS[Offline native symbol analysis]
     PLUGINS[Plugin manager and extension registry]
+    DEBUGGER[Interactive debugger]
   end
   subgraph target [Target JVM]
     AGENT[Embedded Instrumentation agent]
@@ -553,8 +578,11 @@ flowchart LR
     XREF[Static and observed Xrefs]
     MAP[Persistent deobfuscation overlay]
     EXEC[Isolated source executor]
+    JDWP[JDI debug endpoint]
   end
   GUI --> ATTACH
+  GUI --> DEBUGGER
+  DEBUGGER <-->|JDWP debug events and suspended state| JDWP
   ATTACH -->|load the same jpi.jar| AGENT
   GUI --> CLIENT
   CLIENT <-->|authenticated loopback or port-forwarded loopback| AGENT
@@ -580,6 +608,7 @@ flowchart LR
 | Package | Responsibility |
 |---|---|
 | `dev.whitedev.jpi.attach` | JVM discovery, agent loading, and session lifecycle |
+| `dev.whitedev.jpi.debug` | JDI connectors, event loop, breakpoints, stepping, stacks, variables, evaluation, and lifecycle |
 | `dev.whitedev.jpi.agent` | Agent entry point, control server, class registry, and target orchestration |
 | `dev.whitedev.jpi.agent.analysis` | Constant-pool search, deobfuscation inventory, and Xref analysis |
 | `dev.whitedev.jpi.agent.cfg` | Static control-flow analysis, bounded runtime block coverage, and ordered transitions |
@@ -604,6 +633,7 @@ flowchart LR
 | dev.whitedev.jpi.deobfuscation.search | Structured multi-kind mapping queries |
 | `dev.whitedev.jpi.ui` | Application shell, shared styling, editors, and asynchronous execution |
 | `dev.whitedev.jpi.ui.connection` | Guided agent-server, SSH tunnel, and remote client setup |
+| `dev.whitedev.jpi.ui.debug` | Interactive debugger controls, breakpoint management, frames, and lazy variable tree |
 | `dev.whitedev.jpi.ui.browser` | Loaded-class navigation, decompilation, bytecode, and live editing |
 | `dev.whitedev.jpi.ui.callgraph` | Runtime graph parsing, heat filtering, hierarchical layout, and weighted rendering |
 | `dev.whitedev.jpi.ui.tracing` | Live tracer, automatic hooks, and Xref views |
@@ -680,6 +710,9 @@ A manual run of the Release workflow builds downloadable workflow artifacts with
 ## Limitations
 
 - Attach can be disabled by JVM flags, container boundaries, OS policy, or a different user account.
+- Interactive debugging requires a JVM launched by JPI's debugger or an existing JDWP endpoint. The Instrumentation agent cannot enable JDWP after JVM startup, and JPI does not attempt to bypass target security policy.
+- Source-line stepping, local variable names, and source breakpoints depend on LineNumberTable and LocalVariableTable debug metadata. Method and bytecode-index breakpoints remain available without source symbols when the JVM exposes the requested location.
+- Value editing follows JDI type compatibility. The MVP does not replace arbitrary object references, invoke methods during evaluation, add HotSwap schema changes, or replay side-effecting expressions.
 - A JVM that already attempted to load an incompatible older JPI agent must be restarted before retrying with a rebuilt JAR.
 - Early-agent mode requires control over the target launch command and is not a security-boundary bypass.
 - Tunneled mode requires the same JPI build on the remote side, a reachable port-forwarding mechanism, and permission to attach to or start the target JVM. The listener accepts one authenticated session and closes when its timeout expires or the session ends.

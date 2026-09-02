@@ -9,6 +9,7 @@ public enum TimelineSource {
     FIELD_WRITE("Field write"),
     CFG("CFG branch"),
     SNAPSHOT("Snapshot"),
+    DEBUG("Debugger"),
     MARKER("Marker");
 
     private final String label;
