@@ -28,10 +28,43 @@ public final class BasicExpressionEvaluator {
     }
 
     private Value resolve(StackFrame frame, String expression) throws Exception {
-        String[] path = expression.split("\\.");
-        Value current = root(frame, path[0]);
-        for (int index = 1; index < path.length; index++) current = member(current, path[index]);
+        int position = boundary(expression, 0);
+        Value current = root(frame, expression.substring(0, position));
+        while (position < expression.length()) {
+            char marker = expression.charAt(position);
+            if (marker == '.') {
+                int start = ++position;
+                position = boundary(expression, start);
+                if (start == position) throw new IllegalArgumentException("Missing field name");
+                current = member(current, expression.substring(start, position));
+            } else if (marker == '[') {
+                int close = expression.indexOf(']', position + 1);
+                if (close < 0) throw new IllegalArgumentException("Missing closing array bracket");
+                current = arrayItem(current, expression.substring(position + 1, close));
+                position = close + 1;
+            } else {
+                throw new IllegalArgumentException("Unexpected expression character at " + position);
+            }
+        }
         return current;
+    }
+
+    private static int boundary(String value, int start) {
+        int position = start;
+        while (position < value.length() && value.charAt(position) != '.' && value.charAt(position) != '[') position++;
+        return position;
+    }
+
+    private static Value arrayItem(Value value, String indexText) {
+        if (!(value instanceof ArrayReference array)) throw new IllegalArgumentException("Value is not an array");
+        final int index;
+        try {
+            index = Integer.parseInt(indexText.trim());
+        } catch (NumberFormatException error) {
+            throw new IllegalArgumentException("Array index must be an integer", error);
+        }
+        if (index < 0 || index >= array.length()) throw new IllegalArgumentException("Array index is out of bounds");
+        return array.getValue(index);
     }
 
     private Value root(StackFrame frame, String name) throws Exception {

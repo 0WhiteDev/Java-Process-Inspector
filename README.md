@@ -121,7 +121,7 @@ This message commonly appears when a Java 21 agent is loaded into a target runni
 |---|---|
 | Overview | Live heap, non-heap, class, thread, GC, uptime, and full thread-dump data |
 | Runtime timeline | Unified trace, API hook, network, class-load, field-write, snapshot, and action-marker events correlated by call ID, parent call, thread, and time |
-| Debugger | JDWP launch or remote attach, method/source/BCI breakpoints, pause, continue, source or instruction stepping, call stacks, lazy variables, value editing, evaluation, and force return |
+| Debugger | JDWP launch or remote attach, method/source/BCI/exception breakpoints, pause, continue, Resume All, stepping, call stacks, grouped lazy variables, value editing, evaluation, decompiled source, and force return |
 | Classes | Paged live definitions, original editable or mapped read-only decompilation, full-source HotSwap, modern method patches, raw bytecode editing, rollback, dumps, and selectable CFR, Vineflower, or Procyon engines |
 | Live tracer | Bounded runtime probes with arguments, results, exceptions, duration, threads, object identity, caller stacks, Time Tunnel, and an interactive call tree |
 | Call graph | Live heatmap of observed callers and callees with exact probe counts, total and average time, exceptions, unique callers, and weighted edges |
@@ -187,21 +187,30 @@ Confidence is an analysis aid, not a correctness guarantee. CFG target-block hit
 
 - Launch an executable JAR suspended before its main method through the JDK JDI launching connector
 - Attach to an existing authorized JDWP endpoint by host and port
+- Select an already running local JVM by PID when it was started with JDWP in server mode
 - Add method-entry, source-line, or exact bytecode-index breakpoints before or after a class is loaded
+- Add caught and uncaught exception breakpoints for an exception type and its subclasses
 - Keep pending breakpoints and install them when the matching class is prepared
-- Suspend the event thread or the complete VM, pause manually, continue, and resume all threads
+- Suspend the event thread or the complete VM, pause manually, continue, and explicitly release every debugger suspension with Resume All
 - Step into, over, or out by source line or by the smallest available JVM instruction location
 - Inspect suspended threads, call frames, exact source line, source path, bytecode index, and nearby bytecode bytes
-- Browse this, arguments, locals, static fields, instance fields, and arrays with bounded lazy expansion
+- Browse grouped this, arguments, locals, static fields, instance fields, and arrays with lazy expansion limited to depth 3 and 100 children per node
 - Edit compatible local, field, array, primitive, String, and null values while execution is suspended
-- Evaluate literals, local names, this, and field-access paths without invoking arbitrary target methods
+- Evaluate literals, local names, this, field-access paths, array length, and expressions such as <code>args[0].field</code> without invoking arbitrary target methods
 - Force an early return from the top frame when the target JVM exposes that capability
 - Publish debugger stops, steps, exceptions, pauses, resumes, value changes, and force returns to Runtime Timeline
-- Prepare a method breakpoint directly from Loaded classes without copying its owner, name, or descriptor
+- Create method breakpoints directly from Loaded classes, Xrefs, Live Tracer, and Investigation
+- Convert a selected CFG block's executable instruction ordinal into its exact JVM bytecode index and create a breakpoint at that location
+- Send the currently selected debugger frame directly to Live Tracer
+- Open an existing breakpoint, enable or disable it, remove it, or change its suspend policy
 
 Open <strong>Debugger</strong> and choose <strong>Launch with debugger...</strong> to start an executable JAR under JPI control. Add breakpoints before clicking <strong>Continue</strong> if execution must be observed from startup. For an existing JVM, start it with an authorized JDWP listener such as <code>-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=127.0.0.1:5005</code>, then use <strong>Attach JDWP...</strong>. An ordinary JPI agent attachment does not silently enable debugging and the Debugger view reports that distinction.
 
-Double-click a breakpoint row to enable or disable it. Double-click an editable variable to change it. Object fields and array entries are fetched only when their tree node is expanded. Forced return applies only to the selected top frame and is intentionally confirmed with a warning because it changes the target's control flow.
+Double-click a breakpoint row to enable or disable it. Use <strong>Open location</strong> to load its coordinates and select a matching suspended frame when one exists. Use <strong>Change suspend...</strong> to switch an existing breakpoint between the current thread and all threads. Right-click an editable variable and choose <strong>Set Value...</strong>. Object fields and array entries are fetched only when their tree node is expanded.
+
+When an Instrumentation session is connected to the same target, selecting a debugger frame also loads a CFR method view beside its exact JDI location. Decompiled lines are clearly treated as an analysis view and never used as source breakpoint coordinates. Duplicate binary names from different classloaders are not guessed. In that case JPI keeps the exact JDI location visible and asks the user to open the matching definition in Loaded classes.
+
+Forced return applies only to the selected top frame. The confirmation explicitly warns that the rest of the method is skipped, finally blocks may not execute, and target state can become inconsistent.
 
 </details>
 
@@ -673,7 +682,7 @@ java -jar target/jpi.jar
 
 Integration tests cover late attach, an executable JAR launched with the early agent, and the reversed agent-server transport used through tunnels. The tunnel test authenticates a desktop client and dumps a real class from a child JVM. The early-agent test verifies that the application class is captured before `main()` and appears in the dynamic load timeline. A Windows-only test allocates a native buffer, writes through the production `WriteProcessMemory` path, and reads the replacement value back from the same address.
 
-The late-attach integration test scans a known static heap root, inspects a sampled object through a weak handle, discovers and instruments a real static field write, verifies its before and after values, reads a scoped deobfuscation inventory, installs a Crypto API profile, captures a real MessageDigest call and restores its call-site class, installs a live trace probe, captures a real invocation, verifies static and dynamic Xrefs plus method-level string search, restores the traced definition, compiles replacement Java source inside the running target, patches ordinary and lambda-based methods, reapplies raw class bytes, and verifies rollback after every mode.
+The late-attach integration test scans a known static heap root, inspects a sampled object through a weak handle, discovers and instruments a real static field write, verifies its before and after values, reads a scoped deobfuscation inventory, installs a Crypto API profile, captures a real MessageDigest call and restores its call-site class, installs a live trace probe, captures a real invocation, verifies static and dynamic Xrefs plus method-level string search, restores the traced definition, compiles replacement Java source inside the running target, patches ordinary and lambda-based methods, reapplies raw class bytes, and verifies rollback after every mode. A separate debugger integration test launches a real suspended JVM, installs a pending method breakpoint before class preparation, steps by source line, reads and changes a local argument, evaluates an array item, changes breakpoint suspend policy, performs Force Early Return when supported, resumes every suspended thread, and verifies deterministic cleanup.
 
 ### Build output
 

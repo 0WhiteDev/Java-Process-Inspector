@@ -23,6 +23,7 @@ import java.util.Map;
 public final class StackFrameManager {
     private static final int MAX_FRAMES = 256;
     private static final int MAX_ITEMS = 100;
+    private static final int MAX_DEPTH = 3;
     private final VirtualMachine vm;
     private final ThreadManager threads;
     private final ValueFormatter formatter = new ValueFormatter();
@@ -113,8 +114,8 @@ public final class StackFrameManager {
             int count = Math.min(MAX_ITEMS, array.length());
             for (int index = 0; index < count; index++) {
                 Value item = array.getValue(index);
-                values.add(variable("[" + index + "]", typeName(item), item, Kind.ARRAY_ITEM,
-                        null, null, null, null, null, index, array));
+                values.add(childVariable(variable, "[" + index + "]", typeName(item), item, Kind.ARRAY_ITEM,
+                        null, null, null, null, index, array));
             }
         } else if (value instanceof ObjectReference object) {
             List<Field> fields = new ArrayList<>();
@@ -123,8 +124,8 @@ public final class StackFrameManager {
             Map<Field, Value> current = object.getValues(fields.subList(0, Math.min(MAX_ITEMS, fields.size())));
             for (Map.Entry<Field, Value> entry : current.entrySet()) {
                 Field field = entry.getKey();
-                values.add(variable(field.name(), field.typeName(), entry.getValue(), Kind.INSTANCE_FIELD,
-                        null, null, object, null, field, -1));
+                values.add(childVariable(variable, field.name(), field.typeName(), entry.getValue(),
+                        Kind.INSTANCE_FIELD, null, object, null, field, -1, null));
             }
         }
         return List.copyOf(values);
@@ -165,12 +166,21 @@ public final class StackFrameManager {
     private VariableView variable(String name, String type, Value value, Kind kind, StackFrame frame,
                                   LocalVariable local, ObjectReference object, ReferenceType owner,
                                   Field field, int index, ArrayReference array) {
-        return new VariableView(name, type, formatter.format(value), expandable(value), kind,
-                value, frame, local, object, owner, field, array, index);
+        return new VariableView(name, type, formatter.format(value), expandable(value, 0), kind,
+                value, frame, local, object, owner, field, array, index, 0);
     }
 
-    private static boolean expandable(Value value) {
-        return value instanceof ObjectReference && !(value instanceof com.sun.jdi.StringReference);
+    private VariableView childVariable(VariableView parent, String name, String type, Value value, Kind kind,
+                                       LocalVariable local, ObjectReference object, ReferenceType owner,
+                                       Field field, int index, ArrayReference array) {
+        int depth = parent.depth + 1;
+        return new VariableView(name, type, formatter.format(value), expandable(value, depth), kind,
+                value, null, local, object, owner, field, array, index, depth);
+    }
+
+    private static boolean expandable(Value value, int depth) {
+        return depth < MAX_DEPTH && value instanceof ObjectReference
+                && !(value instanceof com.sun.jdi.StringReference);
     }
 
     private static String typeName(Value value) {
@@ -207,10 +217,11 @@ public final class StackFrameManager {
         private final Field field;
         private final ArrayReference array;
         private final int index;
+        private final int depth;
 
         VariableView(String name, String type, String displayValue, boolean expandable, Kind kind,
                      Value value, StackFrame frame, LocalVariable local, ObjectReference object,
-                     ReferenceType owner, Field field, ArrayReference array, int index) {
+                     ReferenceType owner, Field field, ArrayReference array, int index, int depth) {
             this.name = name;
             this.type = type;
             this.displayValue = displayValue;
@@ -224,6 +235,7 @@ public final class StackFrameManager {
             this.field = field;
             this.array = array;
             this.index = index;
+            this.depth = depth;
         }
 
         public String name() { return name; }

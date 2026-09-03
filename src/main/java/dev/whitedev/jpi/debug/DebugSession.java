@@ -6,6 +6,7 @@ import com.sun.jdi.Method;
 import com.sun.jdi.ThreadReference;
 import com.sun.jdi.Value;
 import com.sun.jdi.VirtualMachine;
+import com.sun.jdi.VMDisconnectedException;
 
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -20,6 +21,7 @@ public final class DebugSession implements AutoCloseable {
     private final ThreadManager threads;
     private final StackFrameManager frames;
     private final BasicExpressionEvaluator evaluator;
+    private final MethodLocationResolver locations;
     private final DebugEventLoop events;
     private final List<Listener> listeners = new CopyOnWriteArrayList<>();
     private final AtomicBoolean closed = new AtomicBoolean();
@@ -35,6 +37,7 @@ public final class DebugSession implements AutoCloseable {
         threads = new ThreadManager(vm);
         frames = new StackFrameManager(vm, threads);
         evaluator = new BasicExpressionEvaluator(vm, threads);
+        locations = new MethodLocationResolver(vm);
         events = new DebugEventLoop(this, vm, initiallySuspended);
         state = initiallySuspended ? DebugState.SUSPENDED : DebugState.RUNNING;
         events.start();
@@ -42,6 +45,16 @@ public final class DebugSession implements AutoCloseable {
 
     public static DebugSession attach(String host, int port) throws Exception {
         VirtualMachine vm = new JdiConnector().attach(host, port);
+        try {
+            return new DebugSession(vm, null, false);
+        } catch (Exception | Error error) {
+            vm.dispose();
+            throw error;
+        }
+    }
+
+    public static DebugSession attach(long processId) throws Exception {
+        VirtualMachine vm = new JdiConnector().attach(processId);
         try {
             return new DebugSession(vm, null, false);
         } catch (Exception | Error error) {
@@ -98,6 +111,10 @@ public final class DebugSession implements AutoCloseable {
         return evaluator;
     }
 
+    public MethodLocationResolver locations() {
+        return locations;
+    }
+
     public void addListener(Listener listener) {
         listeners.add(listener);
     }
@@ -123,7 +140,19 @@ public final class DebugSession implements AutoCloseable {
     }
 
     public void resumeAll() {
-        continueExecution();
+        requireOpen();
+        try {
+            for (ThreadReference thread : vm.allThreads()) {
+                int attempts = 0;
+                while (thread.isSuspended() && thread.suspendCount() > 0 && attempts++ < 64) thread.resume();
+            }
+        } catch (VMDisconnectedException error) {
+            disconnected("Target VM disconnected");
+            return;
+        }
+        stoppedThreadId = -1L;
+        changed(DebugState.RUNNING);
+        emit(DebugEvent.Type.RESUME, null, "", "all suspend counts released");
     }
 
     public void step(long threadId, StepManager.Depth depth, StepManager.Mode mode) {

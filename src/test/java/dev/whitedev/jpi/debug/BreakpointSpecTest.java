@@ -10,6 +10,8 @@ class BreakpointSpecTest {
         assertEquals("sample.Target.run()V", spec(BreakpointSpec.Type.METHOD, null, null).location());
         assertEquals("sample.Target:42", spec(BreakpointSpec.Type.LINE, 42, null).location());
         assertEquals("sample.Target.run()V @ BCI 19", spec(BreakpointSpec.Type.BYTECODE, null, 19L).location());
+        assertEquals("exception java.lang.Throwable", new BreakpointSpec("java.lang.Throwable", "", "",
+                null, null, BreakpointSpec.Type.EXCEPTION, BreakpointSpec.SuspendPolicy.ALL, true).location());
     }
 
     @Test void validatesRequiredLocations() {

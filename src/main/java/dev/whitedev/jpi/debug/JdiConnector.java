@@ -26,6 +26,23 @@ public final class JdiConnector {
         return connector.attach(arguments);
     }
 
+    public VirtualMachine attach(long processId) throws Exception {
+        if (processId < 1) throw new IllegalArgumentException("Process ID must be positive");
+        AttachingConnector connector = Bootstrap.virtualMachineManager().attachingConnectors().stream()
+                .filter(value -> "com.sun.jdi.ProcessAttach".equals(value.name())).findFirst()
+                .orElseThrow(() -> new IOException("JDI process attach connector is unavailable in this JDK"));
+        Map<String, Connector.Argument> arguments = connector.defaultArguments();
+        arguments.get("pid").setValue(Long.toString(processId));
+        Connector.Argument timeout = arguments.get("timeout");
+        if (timeout != null) timeout.setValue("15000");
+        try {
+            return connector.attach(arguments);
+        } catch (Exception error) {
+            throw new IOException("Could not attach debugger to PID " + processId
+                    + ". The running JVM must already have JDWP enabled with server=y.", error);
+        }
+    }
+
     public LaunchResult launch(File jar, List<String> vmArguments, List<String> applicationArguments) throws Exception {
         File target = jar.getCanonicalFile();
         if (!target.isFile() || !target.getName().toLowerCase().endsWith(".jar")) {

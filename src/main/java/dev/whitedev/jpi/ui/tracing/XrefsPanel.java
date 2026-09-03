@@ -3,6 +3,7 @@ package dev.whitedev.jpi.ui.tracing;
 import dev.whitedev.jpi.ui.Async;
 import dev.whitedev.jpi.ui.SessionAware;
 import dev.whitedev.jpi.ui.Ui;
+import dev.whitedev.jpi.ui.debug.DebuggerPanel;
 
 import dev.whitedev.jpi.attach.InspectorSession;
 import dev.whitedev.jpi.deobfuscation.DeobfuscationWorkspace;
@@ -29,6 +30,7 @@ public final class XrefsPanel extends JPanel implements SessionAware {
     private final JTextField stringQuery = new JTextField();
     private final JButton refresh = Ui.primaryButton("Refresh Xrefs");
     private final JButton search = Ui.secondaryButton("Find string users");
+    private final JButton debugBreakpoint = Ui.secondaryButton("Debug breakpoint");
     private final JLabel status = new JLabel("Select a method from Loaded classes");
     private final ReferenceTable calledBy = new ReferenceTable();
     private final ReferenceTable calls = new ReferenceTable();
@@ -37,6 +39,9 @@ public final class XrefsPanel extends JPanel implements SessionAware {
     private final JTabbedPane tabs = new JTabbedPane();
     private InspectorSession session;
     private String classIdentifier = "";
+    private String actualClassName = "";
+    private DebuggerPanel debugger;
+    private Runnable openDebugger;
     private long xrefGeneration;
     private long searchGeneration;
 
@@ -52,8 +57,10 @@ public final class XrefsPanel extends JPanel implements SessionAware {
         stringQuery.addActionListener(event -> searchStrings());
         search.addActionListener(event -> searchStrings());
         refresh.addActionListener(event -> refresh());
+        debugBreakpoint.addActionListener(event -> debugBreakpoint());
         actions.add(stringQuery);
         actions.add(search);
+        actions.add(debugBreakpoint);
         actions.add(refresh);
         add(Ui.sectionHeader("Xrefs and call graph",
                 "Static bytecode references combined with calls observed by Live Tracer", actions),
@@ -97,6 +104,7 @@ public final class XrefsPanel extends JPanel implements SessionAware {
 
     public void selectTarget(String identifier, String owner, String methodName, String methodDescriptor) {
         classIdentifier = identifier;
+        actualClassName = owner;
         String mappedClass = workspace.classAlias(owner);
         className.setText(mappedClass.equals(owner) ? owner : mappedClass + " [" + owner + "]");
         method.setText(methodName);
@@ -105,17 +113,25 @@ public final class XrefsPanel extends JPanel implements SessionAware {
         refresh();
     }
 
+    public void setDebuggerIntegration(DebuggerPanel debugger, Runnable openDebugger) {
+        this.debugger = debugger;
+        this.openDebugger = openDebugger;
+        debugBreakpoint.setEnabled(debugger != null && !actualClassName.isEmpty() && !method.getText().isEmpty());
+    }
+
     @Override public void setSession(InspectorSession value) {
         session = value;
         boolean attached = value != null;
         refresh.setEnabled(attached && !classIdentifier.isEmpty());
         search.setEnabled(attached);
         stringQuery.setEnabled(attached);
+        debugBreakpoint.setEnabled(debugger != null && !actualClassName.isEmpty() && !method.getText().isEmpty());
         clearTables();
         xrefGeneration++;
         searchGeneration++;
         if (!attached) {
             classIdentifier = "";
+            actualClassName = "";
             className.setText("");
             method.setText("");
             descriptor.setText("");
@@ -203,6 +219,7 @@ public final class XrefsPanel extends JPanel implements SessionAware {
     private void navigate(XrefRow row) {
         if (row.className.isEmpty() || row.member.isEmpty() || "<dynamic>".equals(row.className)) return;
         classIdentifier = row.targetIdentifier.isEmpty() ? row.className : row.targetIdentifier;
+        actualClassName = row.className;
         String mappedClass = workspace.classAlias(row.className);
         className.setText(mappedClass.equals(row.className) ? row.className : mappedClass + " [" + row.className + "]");
         method.setText(row.member);
@@ -225,6 +242,12 @@ public final class XrefsPanel extends JPanel implements SessionAware {
             }
             status.setText("The target method is no longer available");
         }, error -> Ui.error(this, error));
+    }
+
+    private void debugBreakpoint() {
+        if (debugger == null || actualClassName.isEmpty() || method.getText().isEmpty()) return;
+        debugger.prepareMethodBreakpoint(actualClassName, method.getText(), descriptor.getText());
+        if (openDebugger != null) openDebugger.run();
     }
 
     private void clearTables() {

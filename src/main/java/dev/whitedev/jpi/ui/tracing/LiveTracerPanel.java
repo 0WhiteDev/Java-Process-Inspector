@@ -3,6 +3,7 @@ package dev.whitedev.jpi.ui.tracing;
 import dev.whitedev.jpi.ui.Async;
 import dev.whitedev.jpi.ui.SessionAware;
 import dev.whitedev.jpi.ui.Ui;
+import dev.whitedev.jpi.ui.debug.DebuggerPanel;
 
 import dev.whitedev.jpi.attach.InspectorSession;
 import dev.whitedev.jpi.deobfuscation.DeobfuscationWorkspace;
@@ -62,6 +63,7 @@ public final class LiveTracerPanel extends JPanel implements SessionAware {
     private final JButton stop = Ui.secondaryButton("Stop selected");
     private final JButton stopAll = Ui.secondaryButton("Stop all");
     private final JButton clear = Ui.secondaryButton("Clear tunnel");
+    private final JButton debugNextCall = Ui.secondaryButton("Break next call");
     private final JLabel status = new JLabel("Attach to a JVM and select a method");
     private final DefaultTableModel probeModel = readOnlyModel(
             "Probe", "Method", "Calls", "Captured", "Dropped", "Expires");
@@ -81,6 +83,8 @@ public final class LiveTracerPanel extends JPanel implements SessionAware {
     private boolean loadingMethods;
     private boolean polling;
     private String currentClassName = "";
+    private DebuggerPanel debugger;
+    private Runnable openDebugger;
 
     public LiveTracerPanel(DeobfuscationWorkspace workspace) {
         this(workspace, new RuntimeTimelineStore());
@@ -100,8 +104,10 @@ public final class LiveTracerPanel extends JPanel implements SessionAware {
         clear.addActionListener(event -> clearTunnel());
         JButton copy = Ui.secondaryButton("Copy event");
         copy.addActionListener(event -> copyEvent());
+        debugNextCall.addActionListener(event -> debugNextCall());
         headerActions.add(copy);
         headerActions.add(clear);
+        headerActions.add(debugNextCall);
         headerActions.add(stop);
         headerActions.add(stopAll);
         add(Ui.sectionHeader("Live behavior tracer",
@@ -120,6 +126,14 @@ public final class LiveTracerPanel extends JPanel implements SessionAware {
             @Override public void mouseClicked(MouseEvent event) {
                 if (event.getClickCount() == 2) useSelectedAsProbe();
             }
+
+            @Override public void mousePressed(MouseEvent event) {
+                showDebugMenu(event, events);
+            }
+
+            @Override public void mouseReleased(MouseEvent event) {
+                showDebugMenu(event, events);
+            }
         });
         callTree.setRootVisible(true);
         callTree.addTreeSelectionListener(event -> {
@@ -132,6 +146,15 @@ public final class LiveTracerPanel extends JPanel implements SessionAware {
                     Object selected = selectedTreeValue();
                     if (selected instanceof TraceEvent) useAsProbe((TraceEvent) selected);
                 }
+            }
+
+
+            @Override public void mousePressed(MouseEvent event) {
+                showDebugMenu(event, callTree);
+            }
+
+            @Override public void mouseReleased(MouseEvent event) {
+                showDebugMenu(event, callTree);
             }
         });
 
@@ -171,6 +194,7 @@ public final class LiveTracerPanel extends JPanel implements SessionAware {
         probes.getSelectionModel().addListSelectionListener(event -> stop.setEnabled(
                 session != null && probes.getSelectedRow() >= 0));
         pollTimer.start();
+        debugNextCall.setEnabled(false);
     }
 
     public void selectTarget(String identifier, String className, String methodName, String descriptor) {
@@ -186,6 +210,13 @@ public final class LiveTracerPanel extends JPanel implements SessionAware {
         methods.setSelectedItem(method);
         status.setText("Ready to trace " + mappedClass + "." + mappedMethod + descriptor);
         start.setEnabled(session != null);
+        debugNextCall.setEnabled(debugger != null);
+    }
+
+    public void setDebuggerIntegration(DebuggerPanel debugger, Runnable openDebugger) {
+        this.debugger = debugger;
+        this.openDebugger = openDebugger;
+        debugNextCall.setEnabled(debugger != null && methods.getSelectedItem() != null);
     }
 
     @Override public void setSession(InspectorSession session) {
@@ -558,6 +589,45 @@ public final class LiveTracerPanel extends JPanel implements SessionAware {
         if (event == null) return;
         selectTarget(event.targetIdentifier, event.className, event.methodName, event.descriptor);
         status.setText("Event #" + event.sequence + " prepared as the next trace target");
+    }
+
+    private void debugNextCall() {
+        if (debugger == null) return;
+        TraceEvent event = selectedTraceEvent();
+        if (event != null) {
+            debugger.prepareMethodBreakpoint(event.className, event.methodName, event.descriptor);
+        } else {
+            TraceMethod method = (TraceMethod) methods.getSelectedItem();
+            if (method == null || currentClassName.isEmpty()) return;
+            debugger.prepareMethodBreakpoint(currentClassName, method.name, method.descriptor);
+        }
+        if (openDebugger != null) openDebugger.run();
+    }
+
+    private TraceEvent selectedTraceEvent() {
+        int row = events.getSelectedRow();
+        if (row >= 0) {
+            Object id = eventModel.getValueAt(row, 0);
+            if (id instanceof Number) return captured.get(((Number) id).longValue());
+        }
+        Object selected = selectedTreeValue();
+        return selected instanceof TraceEvent ? (TraceEvent) selected : null;
+    }
+
+    private void showDebugMenu(MouseEvent event, JComponent source) {
+        if (!event.isPopupTrigger() || debugger == null) return;
+        if (source == events) {
+            int row = events.rowAtPoint(event.getPoint());
+            if (row >= 0) events.setRowSelectionInterval(row, row);
+        } else if (source == callTree) {
+            TreePath path = callTree.getPathForLocation(event.getX(), event.getY());
+            if (path != null) callTree.setSelectionPath(path);
+        }
+        JPopupMenu menu = new JPopupMenu();
+        JMenuItem item = new JMenuItem("Break next time this method is called");
+        item.addActionListener(action -> debugNextCall());
+        menu.add(item);
+        menu.show(source, event.getX(), event.getY());
     }
 
     private Object selectedTreeValue() {

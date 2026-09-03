@@ -9,6 +9,7 @@ import dev.whitedev.jpi.protocol.Operation;
 import dev.whitedev.jpi.ui.Async;
 import dev.whitedev.jpi.ui.SessionAware;
 import dev.whitedev.jpi.ui.Ui;
+import dev.whitedev.jpi.ui.debug.DebuggerPanel;
 
 import javax.swing.BorderFactory;
 import javax.swing.BoxLayout;
@@ -68,6 +69,8 @@ public final class InvestigationPanel extends JPanel implements SessionAware {
 
     private final JButton cfg = Ui.secondaryButton("Open CFG");
 
+    private final JButton debuggerButton = Ui.secondaryButton("Debug breakpoint");
+
     private final JLabel status = new JLabel("Attach to a JVM to begin an investigation");
 
     private final JLabel classes = metric("0");
@@ -115,6 +118,10 @@ public final class InvestigationPanel extends JPanel implements SessionAware {
     private boolean polling;
 
     private long generation;
+
+    private DebuggerPanel debugger;
+
+    private Runnable openDebugger;
 
     public InvestigationPanel(DeobfuscationWorkspace workspace,
                               Consumer<InvestigationTarget> openXrefs,
@@ -184,6 +191,12 @@ public final class InvestigationPanel extends JPanel implements SessionAware {
     public void investigate(String value) {
         query.setText(value == null ? "" : value.trim());
         investigate();
+    }
+
+    public void setDebuggerIntegration(DebuggerPanel debugger, Runnable openDebugger) {
+        this.debugger = debugger;
+        this.openDebugger = openDebugger;
+        updateButtons();
     }
 
     @Override
@@ -509,13 +522,22 @@ public final class InvestigationPanel extends JPanel implements SessionAware {
         xrefs.addActionListener(event -> use(openXrefs));
         tracer.addActionListener(event -> use(openTracer));
         cfg.addActionListener(event -> use(openCfg));
+        debuggerButton.addActionListener(event -> debugSelected());
         panel.add(analyzeSelected);
         panel.add(traceBranches);
         panel.add(stopBranchTrace);
         panel.add(xrefs);
         panel.add(tracer);
         panel.add(cfg);
+        panel.add(debuggerButton);
         return panel;
+    }
+
+    private void debugSelected() {
+        InvestigationTarget target = selectedTarget();
+        if (target == null || debugger == null) return;
+        debugger.prepareMethodBreakpoint(target.className(), target.methodName(), target.descriptor());
+        if (openDebugger != null) openDebugger.run();
     }
 
     private void use(Consumer<InvestigationTarget> action) {
@@ -547,6 +569,7 @@ public final class InvestigationPanel extends JPanel implements SessionAware {
         xrefs.setEnabled(attached && selected);
         tracer.setEnabled(attached && selected);
         cfg.setEnabled(attached && selected);
+        debuggerButton.setEnabled(debugger != null && selected);
     }
 
     private void clearMetrics() {

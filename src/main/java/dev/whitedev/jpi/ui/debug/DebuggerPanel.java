@@ -2,6 +2,9 @@ package dev.whitedev.jpi.ui.debug;
 
 import dev.whitedev.jpi.attach.CommandLineTokenizer;
 import dev.whitedev.jpi.attach.InspectorSession;
+import dev.whitedev.jpi.attach.JvmDescriptor;
+import dev.whitedev.jpi.attach.JvmDiscovery;
+import dev.whitedev.jpi.decompile.DecompilerService;
 import dev.whitedev.jpi.debug.BreakpointManager;
 import dev.whitedev.jpi.debug.BreakpointSpec;
 import dev.whitedev.jpi.debug.DebugEvent;
@@ -11,11 +14,14 @@ import dev.whitedev.jpi.debug.StackFrameManager;
 import dev.whitedev.jpi.debug.StepManager;
 import dev.whitedev.jpi.debug.ThreadManager;
 import dev.whitedev.jpi.ui.Async;
+import dev.whitedev.jpi.ui.CodeEditors;
 import dev.whitedev.jpi.ui.SessionAware;
 import dev.whitedev.jpi.ui.Ui;
 import dev.whitedev.jpi.ui.timeline.RuntimeTimelineStore;
 import dev.whitedev.jpi.ui.timeline.TimelineEvent;
 import dev.whitedev.jpi.ui.timeline.TimelineSource;
+import dev.whitedev.jpi.protocol.Operation;
+import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 
 import javax.swing.BorderFactory;
 import javax.swing.BoxLayout;
@@ -24,14 +30,17 @@ import javax.swing.JComboBox;
 import javax.swing.JFileChooser;
 import javax.swing.JLabel;
 import javax.swing.JList;
+import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
 import javax.swing.JTable;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.JTree;
+import javax.swing.JTabbedPane;
 import javax.swing.ListSelectionModel;
 import javax.swing.SwingUtilities;
 import javax.swing.border.EmptyBorder;
@@ -50,20 +59,25 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.File;
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
 public final class DebuggerPanel extends JPanel implements SessionAware {
     private final RuntimeTimelineStore timeline;
     private final AtomicLong eventIds = new AtomicLong();
     private final JButton launch = Ui.primaryButton("Launch with debugger...");
+    private final JButton attachProcess = Ui.secondaryButton("Attach process...");
     private final JButton connect = Ui.secondaryButton("Attach JDWP...");
     private final JButton disconnect = Ui.secondaryButton("Disconnect debugger");
     private final JButton pause = Ui.secondaryButton("Pause");
     private final JButton resume = Ui.primaryButton("Continue");
+    private final JButton resumeAll = Ui.secondaryButton("Resume all");
     private final JButton stepInto = Ui.secondaryButton("Step into");
     private final JButton stepOver = Ui.secondaryButton("Step over");
     private final JButton stepOut = Ui.secondaryButton("Step out");
     private final JButton forceReturn = Ui.secondaryButton("Force return...");
+    private final JButton traceMethod = Ui.secondaryButton("Trace method");
     private final JComboBox<StepManager.Mode> stepMode = new JComboBox<>(StepManager.Mode.values());
     private final JLabel state = new JLabel("Debugger disconnected");
     private final JLabel instrumentation = new JLabel("Instrumentation not attached");
@@ -73,6 +87,7 @@ public final class DebuggerPanel extends JPanel implements SessionAware {
     private final DefaultTreeModel variableModel = new DefaultTreeModel(variableRoot);
     private final JTree variables = new JTree(variableModel);
     private final JTextArea location = Ui.outputArea();
+    private final RSyntaxTextArea decompiled = CodeEditors.javaEditor(false);
     private final JTextField expression = new JTextField();
     private final JLabel evaluation = new JLabel(" ");
     private final JTextField breakpointClass = new JTextField();
@@ -81,9 +96,14 @@ public final class DebuggerPanel extends JPanel implements SessionAware {
     private final JTextField breakpointLocation = new JTextField();
     private final JComboBox<BreakpointSpec.Type> breakpointType = new JComboBox<>(BreakpointSpec.Type.values());
     private final JComboBox<BreakpointSpec.SuspendPolicy> suspendPolicy = new JComboBox<>(BreakpointSpec.SuspendPolicy.values());
-    private final DefaultTableModel breakpointModel = readOnly("ID", "Enabled", "Type", "Location", "Installed", "Status");
+    private final DefaultTableModel breakpointModel = readOnly("ID", "Enabled", "Type", "Location", "Suspend", "Installed", "Status");
     private final JTable breakpointTable = new JTable(breakpointModel);
+    private final DecompilerService decompiler = new DecompilerService();
+    private final Map<String, String> sourceCache = new LinkedHashMap<>();
     private DebugSession debugger;
+    private InspectorSession instrumentationSession;
+    private PendingInstruction pendingInstruction;
+    private MethodAction tracerAction;
 
     public DebuggerPanel(RuntimeTimelineStore timeline) {
         super(new BorderLayout(0, 12));
@@ -93,6 +113,7 @@ public final class DebuggerPanel extends JPanel implements SessionAware {
 
         JPanel headerActions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
         headerActions.setOpaque(false);
+        headerActions.add(attachProcess);
         headerActions.add(connect);
         headerActions.add(launch);
         headerActions.add(disconnect);
@@ -111,11 +132,13 @@ public final class DebuggerPanel extends JPanel implements SessionAware {
         actions.setOpaque(false);
         actions.add(pause);
         actions.add(resume);
+        actions.add(resumeAll);
         actions.add(new JLabel("Step mode"));
         actions.add(stepMode);
         actions.add(stepInto);
         actions.add(stepOver);
         actions.add(stepOut);
+        actions.add(traceMethod);
         actions.add(forceReturn);
         control.add(labels, BorderLayout.WEST);
         control.add(actions, BorderLayout.EAST);
@@ -138,7 +161,11 @@ public final class DebuggerPanel extends JPanel implements SessionAware {
         evaluate.add(expression, BorderLayout.CENTER);
         evaluate.add(evaluateButton, BorderLayout.EAST);
         evaluate.add(evaluation, BorderLayout.SOUTH);
-        JPanel source = titled("JVM location and bytecode", new JScrollPane(location));
+        decompiled.setText("Attach the Instrumentation agent to show decompiled source beside the exact JDI location.");
+        JTabbedPane codeViews = new JTabbedPane();
+        codeViews.addTab("JVM location", new JScrollPane(location));
+        codeViews.addTab("Decompiled source", CodeEditors.scrollPane(decompiled));
+        JPanel source = titled("Source and exact JVM location", codeViews);
         source.add(evaluate, BorderLayout.SOUTH);
 
         JPanel breakpointEditor = breakpointEditor();
@@ -159,21 +186,27 @@ public final class DebuggerPanel extends JPanel implements SessionAware {
         add(body, BorderLayout.CENTER);
 
         launch.addActionListener(event -> launch());
+        attachProcess.addActionListener(event -> attachProcess());
         connect.addActionListener(event -> connect());
         disconnect.addActionListener(event -> closeDebugger());
         pause.addActionListener(event -> execute(() -> debugger.pause()));
         resume.addActionListener(event -> execute(() -> debugger.continueExecution()));
+        resumeAll.addActionListener(event -> execute(() -> debugger.resumeAll()));
         stepInto.addActionListener(event -> step(StepManager.Depth.INTO));
         stepOver.addActionListener(event -> step(StepManager.Depth.OVER));
         stepOut.addActionListener(event -> step(StepManager.Depth.OUT));
         forceReturn.addActionListener(event -> forceReturn());
+        traceMethod.addActionListener(event -> traceSelectedMethod());
         evaluateButton.addActionListener(event -> evaluate());
         expression.addActionListener(event -> evaluate());
         threads.addListSelectionListener(event -> {
             if (!event.getValueIsAdjusting()) loadFrames();
         });
         frames.addListSelectionListener(event -> {
-            if (!event.getValueIsAdjusting()) loadVariables();
+            if (!event.getValueIsAdjusting()) {
+                loadVariables();
+                updateControls();
+            }
         });
         variables.addTreeWillExpandListener(new TreeWillExpandListener() {
             @Override public void treeWillExpand(TreeExpansionEvent event) throws ExpandVetoException {
@@ -186,6 +219,14 @@ public final class DebuggerPanel extends JPanel implements SessionAware {
         variables.addMouseListener(new MouseAdapter() {
             @Override public void mouseClicked(MouseEvent event) {
                 if (event.getClickCount() == 2) editSelectedValue();
+            }
+
+            @Override public void mousePressed(MouseEvent event) {
+                showVariableMenu(event);
+            }
+
+            @Override public void mouseReleased(MouseEvent event) {
+                showVariableMenu(event);
             }
         });
         breakpointTable.addMouseListener(new MouseAdapter() {
@@ -209,11 +250,55 @@ public final class DebuggerPanel extends JPanel implements SessionAware {
         addBreakpoint();
     }
 
+    public void prepareMethodBreakpoint(String owner, String method, String descriptor) {
+        selectTarget(owner, method, descriptor);
+        if (debugger != null) addBreakpoint();
+        else state.setText("Method breakpoint prepared. Connect the debugger and click Add.");
+    }
+
+    public void prepareLineBreakpoint(String owner, String method, String descriptor, int line) {
+        selectTarget(owner, method, descriptor);
+        breakpointType.setSelectedItem(BreakpointSpec.Type.LINE);
+        breakpointLocation.setText(Integer.toString(line));
+        if (debugger != null) addBreakpoint();
+        else state.setText("Source-line breakpoint prepared. Connect the debugger and click Add.");
+    }
+
+    public void prepareBytecodeBreakpoint(String owner, String method, String descriptor, long codeIndex) {
+        selectTarget(owner, method, descriptor);
+        breakpointType.setSelectedItem(BreakpointSpec.Type.BYTECODE);
+        breakpointLocation.setText(Long.toString(codeIndex));
+        if (debugger != null) addBreakpoint();
+        else state.setText("Bytecode breakpoint prepared. Connect the debugger and click Add.");
+    }
+
+    public void prepareInstructionBreakpoint(String owner, String method, String descriptor, int instructionOrdinal) {
+        selectTarget(owner, method, descriptor);
+        DebugSession current = debugger;
+        if (current == null) {
+            pendingInstruction = new PendingInstruction(owner, method, descriptor, instructionOrdinal);
+            state.setText("CFG block breakpoint prepared. It will resolve to an exact BCI after debugger connection.");
+            return;
+        }
+        pendingInstruction = null;
+        state.setText("Resolving CFG instruction " + instructionOrdinal + " to a JVM bytecode index...");
+        Async.run(() -> current.locations().codeIndex(owner, method, descriptor, instructionOrdinal),
+                codeIndex -> prepareBytecodeBreakpoint(owner, method, descriptor, codeIndex),
+                error -> Ui.error(this, error));
+    }
+
     public void close() {
         closeDebugger();
     }
 
+    public void setTracerIntegration(MethodAction action) {
+        tracerAction = action;
+        updateControls();
+    }
+
     @Override public void setSession(InspectorSession session) {
+        instrumentationSession = session;
+        sourceCache.clear();
         instrumentation.setText(session == null
                 ? "Instrumentation not attached. Existing processes require JDWP for debugging."
                 : "Instrumentation attached. Debug control still requires a separate JDWP connection.");
@@ -237,14 +322,26 @@ public final class DebuggerPanel extends JPanel implements SessionAware {
         actions.setOpaque(false);
         JButton add = Ui.primaryButton("Add");
         JButton remove = Ui.secondaryButton("Remove");
+        JButton open = Ui.secondaryButton("Open location");
+        JButton policy = Ui.secondaryButton("Change suspend...");
         actions.add(breakpointType);
         actions.add(suspendPolicy);
         actions.add(add);
+        actions.add(open);
+        actions.add(policy);
         actions.add(remove);
         add.addActionListener(event -> addBreakpoint());
         remove.addActionListener(event -> removeBreakpoint());
+        open.addActionListener(event -> openBreakpoint());
+        policy.addActionListener(event -> changeBreakpointPolicy());
         breakpointType.addActionListener(event -> breakpointLocation.setEnabled(
-                breakpointType.getSelectedItem() != BreakpointSpec.Type.METHOD));
+                breakpointType.getSelectedItem() == BreakpointSpec.Type.LINE
+                        || breakpointType.getSelectedItem() == BreakpointSpec.Type.BYTECODE));
+        breakpointType.addActionListener(event -> {
+            boolean member = breakpointType.getSelectedItem() != BreakpointSpec.Type.EXCEPTION;
+            breakpointMethod.setEnabled(member);
+            breakpointDescriptor.setEnabled(member);
+        });
         breakpointLocation.setEnabled(false);
         panel.add(fields, BorderLayout.CENTER);
         panel.add(actions, BorderLayout.SOUTH);
@@ -270,6 +367,48 @@ public final class DebuggerPanel extends JPanel implements SessionAware {
         }
         opening();
         Async.run(() -> DebugSession.attach(host.getText(), number), this::opened, this::failed);
+    }
+
+    private void attachProcess() {
+        state.setText("Discovering running JVMs...");
+        launch.setEnabled(false);
+        attachProcess.setEnabled(false);
+        connect.setEnabled(false);
+        Async.run(() -> new JvmDiscovery().discover(), this::selectProcess, this::failed);
+    }
+
+    private void selectProcess(List<JvmDescriptor> processes) {
+        if (processes.isEmpty()) {
+            state.setText("No running JVMs found");
+            updateControls();
+            return;
+        }
+        JComboBox<JvmDescriptor> selection = new JComboBox<>(processes.toArray(JvmDescriptor[]::new));
+        selection.setPreferredSize(new Dimension(520, 34));
+        JPanel form = new JPanel(new BorderLayout(0, 6));
+        form.add(new JLabel("Running JVM with an active JDWP server"), BorderLayout.NORTH);
+        form.add(selection, BorderLayout.CENTER);
+        int result = JOptionPane.showConfirmDialog(this, form, "Attach debugger to process",
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if (result != JOptionPane.OK_OPTION) {
+            state.setText("Debugger disconnected");
+            updateControls();
+            return;
+        }
+        JvmDescriptor selected = (JvmDescriptor) selection.getSelectedItem();
+        if (selected == null) {
+            updateControls();
+            return;
+        }
+        final long processId;
+        try {
+            processId = Long.parseLong(selected.id());
+        } catch (NumberFormatException error) {
+            failed(new IllegalArgumentException("Selected JVM has an invalid process ID"));
+            return;
+        }
+        opening();
+        Async.run(() -> DebugSession.attach(processId), this::opened, this::failed);
     }
 
     private void launch() {
@@ -303,6 +442,7 @@ public final class DebuggerPanel extends JPanel implements SessionAware {
         closeDebugger();
         state.setText("Connecting debugger...");
         launch.setEnabled(false);
+        attachProcess.setEnabled(false);
         connect.setEnabled(false);
     }
 
@@ -322,6 +462,10 @@ public final class DebuggerPanel extends JPanel implements SessionAware {
         publish(new DebugEvent(DebugEvent.Type.CONNECTED, System.currentTimeMillis(), -1L, "", "",
                 session.capabilities().toString()));
         refreshSuspendedState();
+        PendingInstruction pending = pendingInstruction;
+        if (pending != null) {
+            prepareInstructionBreakpoint(pending.owner(), pending.method(), pending.descriptor(), pending.ordinal());
+        }
     }
 
     private void failed(Throwable error) {
@@ -393,10 +537,28 @@ public final class DebuggerPanel extends JPanel implements SessionAware {
                         current.frames().locationDetails(frame.threadId(), frame.index())), data -> {
             if (debugger != current || frames.getSelectedValue() != frame) return;
             variableRoot.removeAllChildren();
-            for (StackFrameManager.VariableView variable : data.variables()) variableRoot.add(node(variable));
+            DefaultMutableTreeNode receiver = new DefaultMutableTreeNode("this");
+            DefaultMutableTreeNode arguments = new DefaultMutableTreeNode("Arguments");
+            DefaultMutableTreeNode locals = new DefaultMutableTreeNode("Locals");
+            DefaultMutableTreeNode statics = new DefaultMutableTreeNode("Static fields");
+            for (StackFrameManager.VariableView variable : data.variables()) {
+                switch (variable.kind()) {
+                    case THIS -> receiver.add(node(variable));
+                    case ARGUMENT, ARGUMENT_READ_ONLY -> arguments.add(node(variable));
+                    case LOCAL -> locals.add(node(variable));
+                    case STATIC_FIELD -> statics.add(node(variable));
+                    default -> locals.add(node(variable));
+                }
+            }
+            if (receiver.getChildCount() > 0) variableRoot.add(receiver);
+            if (arguments.getChildCount() > 0) variableRoot.add(arguments);
+            if (locals.getChildCount() > 0) variableRoot.add(locals);
+            if (statics.getChildCount() > 0) variableRoot.add(statics);
             variableModel.reload();
+            for (int index = 0; index < variables.getRowCount(); index++) variables.expandRow(index);
             location.setText(data.location());
             location.setCaretPosition(0);
+            loadDecompiled(frame);
         }, error -> state.setText("Frame values unavailable: " + message(error)));
     }
 
@@ -433,12 +595,75 @@ public final class DebuggerPanel extends JPanel implements SessionAware {
         }, error -> Ui.error(this, error));
     }
 
+    private void showVariableMenu(MouseEvent event) {
+        if (!event.isPopupTrigger()) return;
+        TreePath path = variables.getPathForLocation(event.getX(), event.getY());
+        if (path == null) return;
+        variables.setSelectionPath(path);
+        Object value = ((DefaultMutableTreeNode) path.getLastPathComponent()).getUserObject();
+        if (!(value instanceof StackFrameManager.VariableView variable) || !variable.editable()) return;
+        JPopupMenu menu = new JPopupMenu();
+        JMenuItem set = new JMenuItem("Set Value...");
+        set.addActionListener(action -> editSelectedValue());
+        menu.add(set);
+        menu.show(variables, event.getX(), event.getY());
+    }
+
     private void evaluate() {
         DebugSession current = debugger;
         StackFrameManager.FrameView frame = frames.getSelectedValue();
         if (current == null || frame == null) return;
         Async.run(() -> current.evaluator().evaluate(frame.threadId(), frame.index(), expression.getText()),
                 value -> evaluation.setText("= " + value), error -> evaluation.setText("Error: " + message(error)));
+    }
+
+    private void loadDecompiled(StackFrameManager.FrameView frame) {
+        InspectorSession current = instrumentationSession;
+        if (current == null) {
+            decompiled.setText("Decompiler source requires the JPI Instrumentation session.\n\n"
+                    + "The JVM location tab remains exact and can be used without the agent.");
+            return;
+        }
+        String key = frame.className() + "." + frame.methodName() + frame.descriptor();
+        String cached = sourceCache.get(key);
+        if (cached != null) {
+            decompiled.setText(cached);
+            decompiled.setCaretPosition(0);
+            return;
+        }
+        decompiled.setText("Decompiling " + key + "...\n\nDecompiler line numbers are not used as JVM breakpoint locations.");
+        Async.run(() -> {
+            String identifier = classIdentifier(current.requestText(Operation.CLASSES, ""), frame.className());
+            byte[] bytecode = current.request(Operation.CLASS_BYTES, identifier);
+            return decompiler.decompileMethod(frame.className(), frame.methodName(), bytecode);
+        }, source -> {
+            if (instrumentationSession != current || frames.getSelectedValue() != frame) return;
+            String value = "JVM location: line " + frame.sourceLine() + ", BCI " + frame.codeIndex()
+                    + "\nDecompiler lines are an analysis view and are not source breakpoint coordinates.\n\n" + source;
+            sourceCache.put(key, value);
+            while (sourceCache.size() > 64) sourceCache.remove(sourceCache.keySet().iterator().next());
+            decompiled.setText(value);
+            decompiled.setCaretPosition(0);
+        }, error -> {
+            if (instrumentationSession == current) decompiled.setText("Decompilation unavailable: " + message(error));
+        });
+    }
+
+    private static String classIdentifier(String inventory, String className) {
+        String selected = "";
+        int matches = 0;
+        for (String line : inventory.split("\\n")) {
+            String[] values = line.split("\\t", -1);
+            if (values.length != 9 || !className.equals(values[1])) continue;
+            matches++;
+            if (selected.isEmpty() || Boolean.parseBoolean(values[5])) selected = values[0];
+        }
+        if (selected.isEmpty()) throw new IllegalArgumentException("Class is not available in the Instrumentation session: " + className);
+        if (matches > 1) {
+            throw new IllegalArgumentException("Several classloaders define " + className
+                    + ". Use the exact JVM location and open the matching definition in Loaded classes.");
+        }
+        return selected;
     }
 
     private void step(StepManager.Depth depth) {
@@ -452,12 +677,20 @@ public final class DebuggerPanel extends JPanel implements SessionAware {
         DebugSession current = debugger;
         if (current == null || frame == null) return;
         String value = JOptionPane.showInputDialog(this,
-                "Force the top frame to return immediately. This changes target behavior.\nReturn value:", "null");
+                "Force Return skips the remainder of the current method.\n"
+                        + "finally blocks may not execute.\n"
+                        + "This can leave the target in an inconsistent state.\n\nReturn value:", "null");
         if (value == null) return;
         Async.run(() -> current.forceEarlyReturn(frame.threadId(), frame.index(), value), method -> {
             state.setText("Forced return from " + method);
             refreshSuspendedState();
         }, error -> Ui.error(this, error));
+    }
+
+    private void traceSelectedMethod() {
+        StackFrameManager.FrameView frame = frames.getSelectedValue();
+        if (frame == null || tracerAction == null) return;
+        tracerAction.open(frame.className(), frame.methodName(), frame.descriptor());
     }
 
     private void addBreakpoint() {
@@ -501,12 +734,63 @@ public final class DebuggerPanel extends JPanel implements SessionAware {
         refreshBreakpoints();
     }
 
+    private void openBreakpoint() {
+        BreakpointManager.BreakpointView view = selectedBreakpoint();
+        if (view == null) return;
+        BreakpointSpec spec = view.spec();
+        breakpointClass.setText(spec.className());
+        breakpointMethod.setText(spec.methodName());
+        breakpointDescriptor.setText(spec.descriptor());
+        breakpointType.setSelectedItem(spec.type());
+        breakpointLocation.setText(spec.type() == BreakpointSpec.Type.LINE
+                ? String.valueOf(spec.sourceLine()) : spec.type() == BreakpointSpec.Type.BYTECODE
+                ? String.valueOf(spec.codeIndex()) : "");
+        for (int index = 0; index < frames.getModel().getSize(); index++) {
+            StackFrameManager.FrameView frame = frames.getModel().getElementAt(index);
+            boolean member = frame.className().equals(spec.className())
+                    && (spec.methodName().isEmpty() || frame.methodName().equals(spec.methodName()))
+                    && (spec.descriptor().isEmpty() || frame.descriptor().equals(spec.descriptor()));
+            boolean position = spec.type() == BreakpointSpec.Type.LINE && frame.sourceLine() == spec.sourceLine()
+                    || spec.type() == BreakpointSpec.Type.BYTECODE && frame.codeIndex() == spec.codeIndex()
+                    || spec.type() == BreakpointSpec.Type.METHOD;
+            if (member && position) {
+                frames.setSelectedIndex(index);
+                frames.ensureIndexIsVisible(index);
+                state.setText("Opened suspended frame for " + spec.location());
+                return;
+            }
+        }
+        state.setText("Breakpoint location loaded into the editor: " + spec.location());
+    }
+
+    private void changeBreakpointPolicy() {
+        BreakpointManager.BreakpointView view = selectedBreakpoint();
+        DebugSession current = debugger;
+        if (view == null || current == null) return;
+        BreakpointSpec.SuspendPolicy selected = (BreakpointSpec.SuspendPolicy) JOptionPane.showInputDialog(this,
+                "Suspend when this breakpoint is hit", "Breakpoint suspend policy",
+                JOptionPane.PLAIN_MESSAGE, null, BreakpointSpec.SuspendPolicy.values(), view.spec().suspendPolicy());
+        if (selected == null) return;
+        execute(() -> current.breakpoints().setSuspendPolicy(view.id(), selected));
+        refreshBreakpoints();
+    }
+
+    private BreakpointManager.BreakpointView selectedBreakpoint() {
+        int row = breakpointTable.getSelectedRow();
+        if (debugger == null || row < 0) return null;
+        long id = ((Number) breakpointModel.getValueAt(breakpointTable.convertRowIndexToModel(row), 0)).longValue();
+        for (BreakpointManager.BreakpointView view : debugger.breakpoints().snapshot()) {
+            if (view.id() == id) return view;
+        }
+        return null;
+    }
+
     private void refreshBreakpoints() {
         breakpointModel.setRowCount(0);
         if (debugger == null) return;
         for (BreakpointManager.BreakpointView view : debugger.breakpoints().snapshot()) {
             breakpointModel.addRow(new Object[]{view.id(), view.spec().enabled(), view.spec().type(),
-                    view.spec().location(), view.installedLocations(), view.error().isEmpty()
+                    view.spec().location(), view.spec().suspendPolicy(), view.installedLocations(), view.error().isEmpty()
                     ? view.installedLocations() == 0 ? "Pending class load" : "Ready" : view.error()});
         }
     }
@@ -537,21 +821,27 @@ public final class DebuggerPanel extends JPanel implements SessionAware {
         variableRoot.removeAllChildren();
         variableModel.reload();
         location.setText("Suspend the target and select a frame to inspect its exact JVM location.");
+        decompiled.setText(instrumentationSession == null
+                ? "Attach the Instrumentation agent to show decompiled source beside the exact JDI location."
+                : "Suspend the target and select a frame to decompile its method.");
     }
 
     private void updateControls() {
         boolean connected = debugger != null && debugger.state() != DebugState.DISCONNECTED;
         boolean suspended = connected && debugger.state() == DebugState.SUSPENDED;
         launch.setEnabled(!connected);
+        attachProcess.setEnabled(!connected);
         connect.setEnabled(!connected);
         disconnect.setEnabled(connected);
         pause.setEnabled(connected && !suspended);
         resume.setEnabled(suspended);
+        resumeAll.setEnabled(connected);
         stepInto.setEnabled(suspended);
         stepOver.setEnabled(suspended);
         stepOut.setEnabled(suspended);
         stepMode.setEnabled(suspended);
         forceReturn.setEnabled(suspended && debugger.capabilities().forceEarlyReturn());
+        traceMethod.setEnabled(suspended && tracerAction != null && frames.getSelectedValue() != null);
     }
 
     private void publish(DebugEvent event) {
@@ -598,7 +888,14 @@ public final class DebuggerPanel extends JPanel implements SessionAware {
         void run() throws Exception;
     }
 
+    @FunctionalInterface
+    public interface MethodAction {
+        void open(String className, String methodName, String descriptor);
+    }
+
     private enum Loading { INSTANCE }
     private record FrameData(List<StackFrameManager.VariableView> variables, String location) {
+    }
+    private record PendingInstruction(String owner, String method, String descriptor, int ordinal) {
     }
 }

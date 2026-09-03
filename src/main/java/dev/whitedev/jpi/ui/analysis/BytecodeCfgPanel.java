@@ -6,6 +6,7 @@ import dev.whitedev.jpi.protocol.Operation;
 import dev.whitedev.jpi.ui.Async;
 import dev.whitedev.jpi.ui.SessionAware;
 import dev.whitedev.jpi.ui.Ui;
+import dev.whitedev.jpi.ui.debug.DebuggerPanel;
 
 import javax.swing.BorderFactory;
 import javax.swing.BoxLayout;
@@ -38,6 +39,7 @@ public final class BytecodeCfgPanel extends JPanel implements SessionAware {
     private final JButton analyze = Ui.primaryButton("Analyze CFG");
     private final JButton startTrace = Ui.primaryButton("Start block trace");
     private final JButton stopTrace = Ui.secondaryButton("Stop trace");
+    private final JButton breakAtBlock = Ui.secondaryButton("Break at block");
     private final JSpinner duration = new JSpinner(new SpinnerNumberModel(30, 1, 600, 5));
     private final JLabel status = new JLabel("Select a method from Loaded classes");
     private final JLabel blocks = metric("0");
@@ -60,6 +62,8 @@ public final class BytecodeCfgPanel extends JPanel implements SessionAware {
     private boolean analyzing;
     private boolean polling;
     private long generation;
+    private DebuggerPanel debugger;
+    private Runnable openDebugger;
 
     public BytecodeCfgPanel(DeobfuscationWorkspace workspace) {
         super(new BorderLayout(0, 16));
@@ -73,6 +77,7 @@ public final class BytecodeCfgPanel extends JPanel implements SessionAware {
         actions.add(new JLabel("Trace seconds"));
         actions.add(duration);
         actions.add(stopTrace);
+        actions.add(breakAtBlock);
         actions.add(startTrace);
         actions.add(analyze);
         add(Ui.sectionHeader("Bytecode CFG",
@@ -124,6 +129,7 @@ public final class BytecodeCfgPanel extends JPanel implements SessionAware {
         analyze.addActionListener(event -> analyze());
         startTrace.addActionListener(event -> startTrace());
         stopTrace.addActionListener(event -> stopTrace(null));
+        breakAtBlock.addActionListener(event -> breakAtBlock());
         pollTimer.start();
         setSession(null);
     }
@@ -151,6 +157,12 @@ public final class BytecodeCfgPanel extends JPanel implements SessionAware {
         };
         if (traceActive && session != null && !probeId.isEmpty()) stopTrace(select);
         else select.run();
+    }
+
+    public void setDebuggerIntegration(DebuggerPanel debugger, Runnable openDebugger) {
+        this.debugger = debugger;
+        this.openDebugger = openDebugger;
+        updateButtons();
     }
 
     @Override public void setSession(InspectorSession value) {
@@ -337,6 +349,7 @@ public final class BytecodeCfgPanel extends JPanel implements SessionAware {
 
     private void showBlockDetails(CfgGraphModel.Block block) {
         details.setContent(model == null ? "" : model.details(block));
+        updateButtons();
     }
 
     private void refreshSelectedExecutionCount() {
@@ -372,6 +385,15 @@ public final class BytecodeCfgPanel extends JPanel implements SessionAware {
         startTrace.setEnabled(target && model != null && !traceActive && !analyzing);
         stopTrace.setEnabled(attached && traceActive && !probeId.isEmpty());
         duration.setEnabled(attached && !traceActive);
+        breakAtBlock.setEnabled(debugger != null && model != null && graph.selectedBlock() != null);
+    }
+
+    private void breakAtBlock() {
+        CfgGraphModel.Block block = graph.selectedBlock();
+        if (debugger == null || block == null) return;
+        debugger.prepareInstructionBreakpoint(actualClassName, actualMethodName, actualDescriptor,
+                block.startInstruction);
+        if (openDebugger != null) openDebugger.run();
     }
 
     private static JTextField targetField() {

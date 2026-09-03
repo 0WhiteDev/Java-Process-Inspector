@@ -27,8 +27,22 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class DebuggerIntegrationIT {
+    @Test void attachesToRunningJdwpProcessByPid() throws Exception {
+        Process process = new ProcessBuilder(javaExecutable(),
+                "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=127.0.0.1:0",
+                "-jar", executableFixtureJar().getAbsolutePath()).redirectErrorStream(true).start();
+        try (DebugSession session = DebugSession.attach(process.pid())) {
+            assertEquals(DebugState.RUNNING, session.state());
+            assertTrue(process.isAlive());
+            assertNotNull(session.capabilities());
+        } finally {
+            process.destroy();
+            if (!process.waitFor(3, TimeUnit.SECONDS)) process.destroyForcibly();
+        }
+    }
+
     @Test void launchesSuspendedAndStopsAtAPendingMethodBreakpoint() throws Exception {
-        DebugSession session = DebugSession.launch(executableFixtureJar(), List.of(), List.of());
+        DebugSession session = DebugSession.launch(executableFixtureJar(), List.of(), List.of("hello"));
         Process process = session.launchedProcess();
         CountDownLatch stopped = new CountDownLatch(1);
         CountDownLatch stepped = new CountDownLatch(1);
@@ -54,17 +68,22 @@ class DebuggerIntegrationIT {
             assertTrue(session.frames().frames(session.stoppedThreadId()).getFirst().className()
                     .equals(AttachTarget.class.getName()));
             assertTrue(session.breakpoints().snapshot().getFirst().installedLocations() > 0);
+            long breakpointId = session.breakpoints().snapshot().getFirst().id();
+            session.breakpoints().setSuspendPolicy(breakpointId, BreakpointSpec.SuspendPolicy.ALL);
+            assertEquals(BreakpointSpec.SuspendPolicy.ALL,
+                    session.breakpoints().snapshot().getFirst().spec().suspendPolicy());
             session.step(session.stoppedThreadId(), StepManager.Depth.OVER, StepManager.Mode.SOURCE);
             assertTrue(stepped.await(15, TimeUnit.SECONDS), () -> "events=" + events);
             List<StackFrameManager.VariableView> variables = session.frames()
                     .variables(session.stoppedThreadId(), 0);
             StackFrameManager.VariableView arguments = variables.stream()
                     .filter(variable -> "args".equals(variable.name())).findFirst().orElseThrow();
+            assertEquals("\"hello\"", session.evaluator().evaluate(session.stoppedThreadId(), 0, "args[0]"));
             session.setValue(arguments, "null");
             assertEquals("null", session.evaluator().evaluate(session.stoppedThreadId(), 0, "args"));
             if (session.capabilities().forceEarlyReturn()) {
                 session.forceEarlyReturn(session.stoppedThreadId(), 0, "ignored");
-                session.continueExecution();
+                session.resumeAll();
                 assertTrue(process.waitFor(5, TimeUnit.SECONDS));
             }
         } finally {
@@ -74,6 +93,11 @@ class DebuggerIntegrationIT {
                 if (!process.waitFor(3, TimeUnit.SECONDS)) process.destroyForcibly();
             }
         }
+    }
+
+    private String javaExecutable() {
+        String executable = System.getProperty("os.name").toLowerCase().contains("win") ? "java.exe" : "java";
+        return new File(new File(System.getProperty("java.home"), "bin"), executable).getAbsolutePath();
     }
 
     private File executableFixtureJar() throws Exception {

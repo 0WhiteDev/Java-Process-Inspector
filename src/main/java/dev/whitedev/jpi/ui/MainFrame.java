@@ -120,6 +120,14 @@ public final class MainFrame extends JFrame {
                 () -> selectView("Live tracer"), () -> selectView("Xrefs"), () -> selectView("Bytecode CFG"),
                 () -> selectView("Difference tracing"), pluginManager.extensions(), timelineStore);
         classes.setDebuggerIntegration(debugger, () -> selectView("Debugger"));
+        xrefs.setDebuggerIntegration(debugger, () -> selectView("Debugger"));
+        cfg.setDebuggerIntegration(debugger, () -> selectView("Debugger"));
+        tracer.setDebuggerIntegration(debugger, () -> selectView("Debugger"));
+        investigation.setDebuggerIntegration(debugger, () -> selectView("Debugger"));
+        debugger.setTracerIntegration((owner, method, descriptor) -> {
+            tracer.selectTarget(owner, owner, method, descriptor);
+            selectView("Live tracer");
+        });
         DeobfuscationWorkspacePanel deobfuscation = new DeobfuscationWorkspacePanel(mappingWorkspace);
         ExecutorPanel executor = new ExecutorPanel(mappingWorkspace);
         FieldWritesPanel fieldWrites = new FieldWritesPanel(mappingWorkspace, timelineStore);

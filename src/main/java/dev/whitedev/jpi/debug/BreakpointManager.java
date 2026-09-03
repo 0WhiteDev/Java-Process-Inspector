@@ -10,6 +10,7 @@ import com.sun.jdi.request.BreakpointRequest;
 import com.sun.jdi.request.ClassPrepareRequest;
 import com.sun.jdi.request.EventRequest;
 import com.sun.jdi.request.EventRequestManager;
+import com.sun.jdi.request.ExceptionRequest;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -60,12 +61,35 @@ public final class BreakpointManager {
                 entry.spec.sourceLine(), entry.spec.codeIndex(), entry.spec.type(),
                 entry.spec.suspendPolicy(), enabled);
         for (BreakpointRequest request : entry.breakpoints) request.setEnabled(enabled);
+        for (ExceptionRequest request : entry.exceptions) request.setEnabled(enabled);
+    }
+
+    public synchronized void setSuspendPolicy(long id, BreakpointSpec.SuspendPolicy policy) {
+        Entry entry = require(id);
+        if (policy == null || entry.spec.suspendPolicy() == policy) return;
+        entry.spec = new BreakpointSpec(entry.spec.className(), entry.spec.methodName(), entry.spec.descriptor(),
+                entry.spec.sourceLine(), entry.spec.codeIndex(), entry.spec.type(), policy, entry.spec.enabled());
+        int value = policy == BreakpointSpec.SuspendPolicy.ALL
+                ? EventRequest.SUSPEND_ALL : EventRequest.SUSPEND_EVENT_THREAD;
+        for (BreakpointRequest request : entry.breakpoints) {
+            boolean enabled = request.isEnabled();
+            if (enabled) request.disable();
+            request.setSuspendPolicy(value);
+            if (enabled) request.enable();
+        }
+        for (ExceptionRequest request : entry.exceptions) {
+            boolean enabled = request.isEnabled();
+            if (enabled) request.disable();
+            request.setSuspendPolicy(value);
+            if (enabled) request.enable();
+        }
     }
 
     public synchronized void remove(long id) {
         Entry entry = entries.remove(id);
         if (entry == null) return;
         for (BreakpointRequest request : entry.breakpoints) requests.deleteEventRequest(request);
+        for (ExceptionRequest request : entry.exceptions) requests.deleteEventRequest(request);
         if (entry.prepare != null) requests.deleteEventRequest(entry.prepare);
     }
 
@@ -80,6 +104,19 @@ public final class BreakpointManager {
     }
 
     private void install(Entry entry, ReferenceType type) throws Exception {
+        if (entry.spec.type() == BreakpointSpec.Type.EXCEPTION) {
+            for (ExceptionRequest existing : entry.exceptions) {
+                if (type.equals(existing.exception())) return;
+            }
+            ExceptionRequest request = requests.createExceptionRequest(type, true, true);
+            request.setSuspendPolicy(entry.spec.suspendPolicy() == BreakpointSpec.SuspendPolicy.ALL
+                    ? EventRequest.SUSPEND_ALL : EventRequest.SUSPEND_EVENT_THREAD);
+            request.putProperty("jpi.breakpoint.id", Long.valueOf(entry.id));
+            request.setEnabled(entry.spec.enabled());
+            entry.exceptions.add(request);
+            entry.error = "";
+            return;
+        }
         List<Location> locations = locations(type, entry.spec);
         if (locations.isEmpty()) {
             entry.error = "Location is not available in " + type.name();
@@ -147,6 +184,7 @@ public final class BreakpointManager {
     private static final class Entry {
         final long id;
         final List<BreakpointRequest> breakpoints = new ArrayList<>();
+        final List<ExceptionRequest> exceptions = new ArrayList<>();
         BreakpointSpec spec;
         ClassPrepareRequest prepare;
         String error = "";
@@ -157,7 +195,7 @@ public final class BreakpointManager {
         }
 
         BreakpointView view() {
-            return new BreakpointView(id, spec, breakpoints.size(), error);
+            return new BreakpointView(id, spec, breakpoints.size() + exceptions.size(), error);
         }
     }
 

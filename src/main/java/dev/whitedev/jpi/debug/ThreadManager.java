@@ -31,7 +31,19 @@ public final class ThreadManager {
 
     public record ThreadView(long id, String name, int status, boolean suspended, int suspendCount) {
         @Override public String toString() {
-            return (suspended ? "[suspended] " : "") + name + "  #" + id;
+            return (suspended ? "[suspended] " : "[running] ") + name + "  #" + id + "  " + state(status);
+        }
+
+        private static String state(int value) {
+            return switch (value) {
+                case ThreadReference.THREAD_STATUS_MONITOR -> "monitor";
+                case ThreadReference.THREAD_STATUS_NOT_STARTED -> "not started";
+                case ThreadReference.THREAD_STATUS_RUNNING -> "runnable";
+                case ThreadReference.THREAD_STATUS_SLEEPING -> "sleeping";
+                case ThreadReference.THREAD_STATUS_WAIT -> "waiting";
+                case ThreadReference.THREAD_STATUS_ZOMBIE -> "terminated";
+                default -> "unknown";
+            };
         }
     }
 }
