@@ -9,6 +9,7 @@ import dev.whitedev.jpi.agent.cfg.CfgManager;
 import dev.whitedev.jpi.agent.heap.HeapDumpService;
 import dev.whitedev.jpi.agent.heap.HeapObjectInspector;
 import dev.whitedev.jpi.agent.field.FieldWriteManager;
+import dev.whitedev.jpi.agent.file.FileInterceptorManager;
 import dev.whitedev.jpi.agent.hook.ApiHookManager;
 import dev.whitedev.jpi.agent.patch.ClassSchema;
 import dev.whitedev.jpi.agent.patch.MethodBodyPatcher;
@@ -55,6 +56,7 @@ final class TargetInspector {
     private final ApiHookManager apiHookManager;
     private final CfgManager cfgManager;
     private final FieldWriteManager fieldWriteManager;
+    private final FileInterceptorManager fileInterceptorManager;
     private final HeapObjectInspector heapInspector;
     private final Map<String, WeakReference<Class<?>>> classIndex = new ConcurrentHashMap<>();
 
@@ -65,6 +67,7 @@ final class TargetInspector {
         this.apiHookManager = new ApiHookManager(instrumentation, registry);
         this.cfgManager = new CfgManager(instrumentation);
         this.fieldWriteManager = new FieldWriteManager(instrumentation);
+        this.fileInterceptorManager = new FileInterceptorManager(instrumentation, registry);
         this.heapInspector = new HeapObjectInspector(instrumentation);
     }
 
@@ -137,6 +140,7 @@ final class TargetInspector {
         Class<?> target = resolveClass(identifier);
         requireRedefinable(target);
         apiHookManager.stopForClass(target);
+        fileInterceptorManager.stopForClass(target);
         byte[] current = classBytes(identifier);
         byte[] replacement = RuntimeJavaCompiler.compile(target.getName(), source, runtimeClassPath(target));
         applyDefinition(target, current, replacement);
@@ -162,6 +166,7 @@ final class TargetInspector {
         Class<?> target = resolveClass(identifier);
         requireRedefinable(target);
         apiHookManager.stopForClass(target);
+        fileInterceptorManager.stopForClass(target);
         byte[] current = classBytes(identifier);
         byte[] replacement;
         String compiler;
@@ -202,6 +207,7 @@ final class TargetInspector {
         cfgManager.stopForClass(target);
         apiHookManager.stopForClass(target);
         fieldWriteManager.stopForClass(target);
+        fileInterceptorManager.stopForClass(target);
         return traceManager.start(target, identifier, method, descriptor, settings, classBytes(identifier));
     }
 
@@ -246,6 +252,7 @@ final class TargetInspector {
         traceManager.stopForClass(target);
         apiHookManager.stopForClass(target);
         fieldWriteManager.stopForClass(target);
+        fileInterceptorManager.stopForClass(target);
         return cfgManager.start(target, values[1], values[2], classBytes(values[0]), duration);
     }
 
@@ -261,6 +268,7 @@ final class TargetInspector {
         cfgManager.stopAll();
         traceManager.stopAll();
         fieldWriteManager.stopAll();
+        fileInterceptorManager.stop();
         return apiHookManager.start(payload);
     }
 
@@ -305,6 +313,7 @@ final class TargetInspector {
     String startFieldTrace(String payload) throws Exception {
         FieldTarget field = fieldTarget(payload, true);
         fieldWriteManager.stopAll();
+        fileInterceptorManager.stop();
         Map<Class<?>, byte[]> candidates = new LinkedHashMap<Class<?>, byte[]>();
         String owner = field.owner.replace('.', '/');
         int maximumClasses = setting(field.settings, "maxClasses", 500, 1, 2_000);
@@ -338,6 +347,46 @@ final class TargetInspector {
 
     String fieldTraceEvents() {
         return fieldWriteManager.events();
+    }
+
+    String startFileMonitor(String settings) throws Exception {
+        cfgManager.stopAll();
+        traceManager.stopAll();
+        apiHookManager.stopAll();
+        fieldWriteManager.stopAll();
+        return fileInterceptorManager.start(settings);
+    }
+
+    String stopFileMonitor() {
+        return fileInterceptorManager.stop();
+    }
+
+    String fileEvents() {
+        return fileInterceptorManager.events();
+    }
+
+    String clearFileEvents() {
+        return fileInterceptorManager.clearEvents();
+    }
+
+    String putFileRule(String payload) {
+        return fileInterceptorManager.putRule(payload);
+    }
+
+    String removeFileRule(String id) {
+        return fileInterceptorManager.removeRule(id);
+    }
+
+    String fileRules() {
+        return fileInterceptorManager.rules();
+    }
+
+    String setFilePolicy(String policy) {
+        return fileInterceptorManager.setPolicy(policy);
+    }
+
+    String filePolicy() {
+        return fileInterceptorManager.policy();
     }
 
     String heapScan(String payload) throws Exception {
@@ -456,6 +505,7 @@ final class TargetInspector {
         traceManager.close();
         apiHookManager.close();
         fieldWriteManager.close();
+        fileInterceptorManager.close();
         heapInspector.clear();
     }
 
@@ -736,6 +786,7 @@ final class TargetInspector {
         traceManager.stopForClass(target);
         apiHookManager.stopForClass(target);
         fieldWriteManager.stopForClass(target);
+        fileInterceptorManager.stopForClass(target);
         ClassSchema.verifyCompatible(current, replacement);
         instrumentation.redefineClasses(new ClassDefinition(target, replacement));
         registry.recordApplied(target, replacement);

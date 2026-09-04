@@ -10,6 +10,7 @@ public enum TimelineSource {
     CFG("CFG branch"),
     SNAPSHOT("Snapshot"),
     DEBUG("Debugger"),
+    FILE("File I/O"),
     MARKER("Marker");
 
     private final String label;

@@ -895,6 +895,20 @@ public final class ClassesPanel extends JPanel implements SessionAware {
         refreshMethodPatchState();
     }
 
+    public void selectClass(String className) {
+        if (className == null || className.isBlank()) return;
+        search.setText(className);
+        filter(false, () -> {
+            for (int index = 0; index < model.size(); index++) {
+                if (!className.equals(model.get(index).name)) continue;
+                list.setSelectedIndex(index);
+                list.ensureIndexIsVisible(index);
+                decompile();
+                return;
+            }
+        });
+    }
+
     private void debugSelectedMethod() {
         LoadedClassInfo selected = list.getSelectedValue();
         MethodInfo method = (MethodInfo) methodSelector.getSelectedItem();

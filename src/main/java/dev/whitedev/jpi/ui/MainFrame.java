@@ -20,6 +20,7 @@ import dev.whitedev.jpi.ui.browser.ClassesPanel;
 import dev.whitedev.jpi.ui.callgraph.CallGraphHeatmapPanel;
 import dev.whitedev.jpi.ui.connection.TunnelAgentDialog;
 import dev.whitedev.jpi.ui.debug.DebuggerPanel;
+import dev.whitedev.jpi.ui.file.FileMonitorPanel;
 import dev.whitedev.jpi.ui.nativeview.DllPanel;
 import dev.whitedev.jpi.ui.nativeview.MemoryPanel;
 import dev.whitedev.jpi.ui.nativeview.NativeSymbolsPanel;
@@ -119,6 +120,28 @@ public final class MainFrame extends JFrame {
         ClassesPanel classes = new ClassesPanel(mappingWorkspace, tracer, xrefs, cfg, differences,
                 () -> selectView("Live tracer"), () -> selectView("Xrefs"), () -> selectView("Bytecode CFG"),
                 () -> selectView("Difference tracing"), pluginManager.extensions(), timelineStore);
+        FileMonitorPanel fileMonitor = new FileMonitorPanel(timelineStore);
+        fileMonitor.setNavigation((target, event) -> {
+            switch (target) {
+                case CALLER -> {
+                    classes.selectClass(event.callerClass());
+                    selectView("Loaded classes");
+                }
+                case XREFS -> {
+                    xrefs.selectTarget(event.callerClass(), event.callerClass(), event.callerMethod(), event.callerDescriptor());
+                    selectView("Xrefs");
+                }
+                case CFG -> {
+                    cfg.selectTarget(event.callerClass(), event.callerClass(), event.callerMethod(), event.callerDescriptor());
+                    selectView("Bytecode CFG");
+                }
+                case INVESTIGATION -> {
+                    investigation.investigate(event.path());
+                    selectView("Investigation");
+                }
+                case TIMELINE -> selectView("Runtime timeline");
+            }
+        });
         classes.setDebuggerIntegration(debugger, () -> selectView("Debugger"));
         xrefs.setDebuggerIntegration(debugger, () -> selectView("Debugger"));
         cfg.setDebuggerIntegration(debugger, () -> selectView("Debugger"));
@@ -145,7 +168,7 @@ public final class MainFrame extends JFrame {
         DllPanel dll = new DllPanel(windows);
         NativeSymbolsPanel nativeSymbols = new NativeSymbolsPanel();
         PluginsPanel plugins = new PluginsPanel(pluginManager);
-        views = new ArrayList<>(Arrays.asList(overview, timeline, debugger, classes, tracer, callGraph, apiHooks, xrefs,
+        views = new ArrayList<>(Arrays.asList(overview, timeline, debugger, classes, tracer, callGraph, apiHooks, fileMonitor, xrefs,
                 cfg, differences,
                 investigation, deobfuscation,
                 constantSearch, executor, fields, fieldWrites, environment, network, heapObjects, nativeSymbols,
@@ -158,6 +181,7 @@ public final class MainFrame extends JFrame {
         addCard("Live tracer", tracer);
         addCard("Call graph", callGraph);
         addCard("API hooks", apiHooks);
+        addCard("File Monitor", fileMonitor);
         addCard("Xrefs", xrefs);
         addCard("Bytecode CFG", cfg);
         addCard("Difference tracing", differences);
@@ -249,6 +273,7 @@ public final class MainFrame extends JFrame {
         addNavigation(sidebar, "Live tracer");
         addNavigation(sidebar, "Call graph");
         addNavigation(sidebar, "API hooks");
+        addNavigation(sidebar, "File Monitor");
         addNavigation(sidebar, "Xrefs");
         addNavigation(sidebar, "Bytecode CFG");
         addNavigation(sidebar, "Difference tracing");

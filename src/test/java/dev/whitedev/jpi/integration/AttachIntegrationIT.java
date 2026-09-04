@@ -8,6 +8,10 @@ import dev.whitedev.jpi.protocol.Operation;
 import dev.whitedev.jpi.export.SessionSnapshotExporter;
 import dev.whitedev.jpi.investigation.InvestigationAnalyzer;
 import dev.whitedev.jpi.investigation.InvestigationReport;
+import dev.whitedev.jpi.file.FileDecision;
+import dev.whitedev.jpi.file.FileOperation;
+import dev.whitedev.jpi.file.FileProtocolCodec;
+import dev.whitedev.jpi.file.FileRule;
 import org.junit.jupiter.api.Test;
 import java.io.*;
 import java.net.InetAddress;
@@ -114,6 +118,33 @@ class AttachIntegrationIT {
                         AttachTarget.class.getName().getBytes("UTF-8"))));
                 assertTrue(session.requestText(Operation.API_HOOK_STOP, "").contains("restored"));
                 assertEquals("32", session.requestText(Operation.EXECUTE, cryptoProbe));
+                Path fileSandbox = Files.createTempDirectory("jpi-file-monitor-");
+                Path originalFile = fileSandbox.resolveSibling("jpi-file-original-").resolve("state.bin");
+                session.requestText(Operation.FILE_RULE_ADD, FileProtocolCodec.encodeRule(new FileRule("write-redirect",
+                        FileOperation.WRITE, "**", "*", FileDecision.REDIRECT, fileSandbox.toString())));
+                session.requestText(Operation.FILE_RULE_ADD, FileProtocolCodec.encodeRule(new FileRule("read-redirect",
+                        FileOperation.READ, "**", "*", FileDecision.REDIRECT, fileSandbox.toString())));
+                session.requestText(Operation.FILE_RULE_ADD, FileProtocolCodec.encodeRule(new FileRule("delete-block",
+                        FileOperation.DELETE, "**", "*", FileDecision.BLOCK, "")));
+                String fileMonitor = session.requestText(Operation.FILE_MONITOR_START,
+                        "maxEvents=100;maxClasses=200;maxSites=1000;captureContent=true;previewBytes=4096");
+                assertTrue(fileMonitor.contains("File Monitor active"), fileMonitor);
+                String fileProbe = "public class FileProbe { public static void execute(java.io.PrintStream out) throws Exception { out.print(dev.whitedev.jpi.integration.AttachTarget.fileRoundTrip(\""
+                        + originalFile.toString().replace("\\", "\\\\") + "\", new byte[]{4, 5, 6}).length); } }";
+                assertEquals("3", session.requestText(Operation.EXECUTE, fileProbe), fileMonitor);
+                assertFalse(Files.exists(originalFile));
+                String fileEvents = session.requestText(Operation.FILE_EVENT_BATCH, "");
+                assertTrue(fileEvents.contains("\tWRITE\t"));
+                assertTrue(fileEvents.contains("\tREAD\t"));
+                assertTrue(fileEvents.contains("\tREDIRECT\t"));
+                assertEquals("3", session.requestText(Operation.EXECUTE, fileProbe), fileMonitor);
+                assertTrue(session.requestText(Operation.FILE_EVENTS_CLEAR, "").contains("cleared"));
+                assertFalse(session.requestText(Operation.FILE_EVENT_BATCH, "").contains("\nE\t"));
+                String deleteProbe = "public class DeleteProbe { public static void execute(java.io.PrintStream out) throws Exception { out.print(dev.whitedev.jpi.integration.AttachTarget.fileDelete(\""
+                        + originalFile.toString().replace("\\", "\\\\") + "\")); } }";
+                assertThrows(IOException.class, () -> session.requestText(Operation.EXECUTE, deleteProbe));
+                assertTrue(session.requestText(Operation.FILE_EVENT_BATCH, "").contains("\tBLOCK\t"));
+                assertTrue(session.requestText(Operation.FILE_MONITOR_STOP, "").contains("restored"));
                 String probe = "public class RuntimeProbe { public static void execute(java.io.PrintStream out) { out.print(dev.whitedev.jpi.integration.AttachTarget.runtimeValue()); } }";
                 assertEquals("before", session.requestText(Operation.EXECUTE, probe));
                 assertTrue(session.requestText(Operation.CLASS_METHODS, classId)
@@ -169,7 +200,7 @@ class AttachIntegrationIT {
                 assertEquals("8", session.requestText(Operation.EXECUTE, lambdaProbe));
                 assertTrue(session.requestText(Operation.ROLLBACK_CLASS, classId).contains("Restored"));
                 assertEquals("4", session.requestText(Operation.EXECUTE, lambdaProbe));
-                String replacement = "package dev.whitedev.jpi.integration; import java.lang.management.ManagementFactory; public final class AttachTarget { public static volatile String marker = \"jpi-smoke-target\"; public static void setMarker(String value) { marker = value; } public static String runtimeValue() { return \"after\"; } public static byte[] digest(byte[] input) throws Exception { return java.security.MessageDigest.getInstance(\"SHA-256\").digest(input); } public static int lambdaValue(int input) { java.util.function.IntUnaryOperator operation = value -> value + 1; return operation.applyAsInt(input); } public static int branchValue(int input) { if (input < 0) return -1; return input % 2 == 0 ? input * 2 : input + 1; } public static void main(String[] args) throws Exception { System.out.println(ManagementFactory.getRuntimeMXBean().getName().split(\"@\", 2)[0]); System.out.flush(); while (true) Thread.sleep(1000); } }";
+                String replacement = "package dev.whitedev.jpi.integration; import java.lang.management.ManagementFactory; public final class AttachTarget { public static volatile String marker = \"jpi-smoke-target\"; public static void setMarker(String value) { marker = value; } public static String runtimeValue() { return \"after\"; } public static byte[] digest(byte[] input) throws Exception { return java.security.MessageDigest.getInstance(\"SHA-256\").digest(input); } public static int lambdaValue(int input) { java.util.function.IntUnaryOperator operation = value -> value + 1; return operation.applyAsInt(input); } public static int branchValue(int input) { if (input < 0) return -1; return input % 2 == 0 ? input * 2 : input + 1; } public static byte[] fileRoundTrip(String path, byte[] value) throws Exception { java.nio.file.Path target = java.nio.file.Paths.get(path); java.nio.file.Files.write(target, value); return java.nio.file.Files.readAllBytes(target); } public static boolean fileDelete(String path) throws Exception { return java.nio.file.Files.deleteIfExists(java.nio.file.Paths.get(path)); } public static void main(String[] args) throws Exception { System.out.println(ManagementFactory.getRuntimeMXBean().getName().split(\"@\", 2)[0]); System.out.flush(); while (true) Thread.sleep(1000); } }";
                 assertTrue(session.requestText(Operation.REDEFINE_SOURCE, classId + "\n" + replacement).contains("Redefined"));
                 assertEquals("after", session.requestText(Operation.EXECUTE, probe));
                 assertTrue(session.requestText(Operation.ROLLBACK_CLASS, classId).contains("Restored"));

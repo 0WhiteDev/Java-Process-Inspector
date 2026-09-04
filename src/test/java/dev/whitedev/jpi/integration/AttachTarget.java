@@ -17,6 +17,14 @@ public final class AttachTarget {
         if (input < 0) return -1;
         return input % 2 == 0 ? input * 2 : input + 1;
     }
+    public static byte[] fileRoundTrip(String path, byte[] value) throws Exception {
+        java.nio.file.Path target = java.nio.file.Paths.get(path);
+        java.nio.file.Files.write(target, value);
+        return java.nio.file.Files.readAllBytes(target);
+    }
+    public static boolean fileDelete(String path) throws Exception {
+        return java.nio.file.Files.deleteIfExists(java.nio.file.Paths.get(path));
+    }
     public static void main(String[] args) throws Exception {
         System.out.println(ManagementFactory.getRuntimeMXBean().getName().split("@", 2)[0]);
         System.out.flush();

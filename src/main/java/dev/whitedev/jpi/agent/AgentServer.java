@@ -132,6 +132,16 @@ final class AgentServer implements Runnable {
             case FIELD_TRACE_START: return WireProtocol.utf8(inspector.startFieldTrace(payload));
             case FIELD_TRACE_STOP: return WireProtocol.utf8(inspector.stopFieldTrace());
             case FIELD_TRACE_EVENTS: return WireProtocol.utf8(inspector.fieldTraceEvents());
+            case FILE_MONITOR_START: return WireProtocol.utf8(inspector.startFileMonitor(payload));
+            case FILE_MONITOR_STOP: return WireProtocol.utf8(inspector.stopFileMonitor());
+            case FILE_EVENT_BATCH: return WireProtocol.utf8(inspector.fileEvents());
+            case FILE_EVENTS_CLEAR: return WireProtocol.utf8(inspector.clearFileEvents());
+            case FILE_RULE_ADD:
+            case FILE_RULE_UPDATE: return WireProtocol.utf8(inspector.putFileRule(payload));
+            case FILE_RULE_REMOVE: return WireProtocol.utf8(inspector.removeFileRule(payload));
+            case FILE_RULE_LIST: return WireProtocol.utf8(inspector.fileRules());
+            case FILE_POLICY_SET: return WireProtocol.utf8(inspector.setFilePolicy(payload));
+            case FILE_POLICY_GET: return WireProtocol.utf8(inspector.filePolicy());
             case DISCONNECT: return WireProtocol.utf8("disconnected");
             default: throw new IllegalArgumentException("Unsupported operation: " + request.operation());
         }

@@ -126,6 +126,7 @@ This message commonly appears when a Java 21 agent is loaded into a target runni
 | Live tracer | Bounded runtime probes with arguments, results, exceptions, duration, threads, object identity, caller stacks, Time Tunnel, and an interactive call tree |
 | Call graph | Live heatmap of observed callers and callees with exact probe counts, total and average time, exceptions, unique callers, and weighted edges |
 | API hooks | Ready-to-use Network, Crypto, Files, Reflection, and Class loading profiles that identify exact application call sites |
+| File Monitor | Live Java file operations with caller attribution, local allow/block/redirect rules, bounded previews, and Timeline correlation |
 | Xrefs | Static and observed Called by and Calls edges, field and type references, constants, and method-level string or endpoint users |
 | Bytecode CFG | Interactive basic-block graph with branches, exception edges, dominators, complexity, dead code, and live execution counts |
 | Difference tracing | Two-run behavioral comparison with common and unique methods, ordered branch transitions, changed returns, API-call differences, and the first observed divergence |
@@ -401,6 +402,30 @@ The backend never redefines bootstrap JDK classes. It scans safely available byt
 </details>
 
 <details>
+<summary><strong>File I/O Interceptor</strong></summary>
+
+- Observe Java-level read, write, create, delete, move, copy, open, and truncate operations from application call sites
+- Cover common <code>java.nio.file.Files</code>, file stream, <code>RandomAccessFile</code>, <code>FileChannel</code>, and <code>java.io.File</code> entry points
+- Record original and normalized paths, exact caller and descriptor, thread, requested byte count, stack, decision, redirect path, and Live Tracer call ID
+- Filter events by operation, path, caller, thread, decision, blocked state, or redirected state
+- Clear both the visible history and the agent-side pending event queue from the Events view
+- Inspect an event and open its caller, Xrefs, CFG, Investigation session, or correlated Runtime Timeline entry
+- Create prioritized path and caller glob rules with ALLOW, BLOCK, or REDIRECT decisions
+- Redirect matching paths into a selected sandbox root with deterministic path mapping and traversal protection
+- Apply rules inside the target before the real file API runs, without waiting for a desktop round trip
+- Keep event queues, class scans, transformed classes, call sites, stacks, previews, and desktop history bounded
+- Keep content capture disabled by default and expose a separate preview size when it is explicitly enabled
+- Restore exact pre-monitor class definitions when monitoring stops or another JPI transformation needs a class
+
+Open <strong>File Monitor</strong>, configure the event cap and optional bounded content preview, then click <strong>Start monitor</strong>. Perform the relevant action in the target application. Select an event to inspect its exact path, caller, stack, payload preview, and Timeline correlation. Click <strong>Create rule</strong> to prefill a rule from that event, select ALLOW, BLOCK, or REDIRECT, then save it. Double-click a rule to edit it, or remove it from the same view. New decisions take effect locally in the agent without restarting the monitor.
+
+REDIRECT maps an absolute source path under the selected sandbox root, so reads and writes to the same original path resolve consistently. BLOCK throws a <code>FileSystemException</code> at the intercepted application call site. Stop the monitor before judging target behavior without interception, because rules are intentionally active while the monitor is running.
+
+This is a Java call-site interceptor, not an operating-system filesystem driver. Native I/O, JNI, memory-mapped writes performed outside covered Java entry points, unavailable bytecode, hidden classes, and classes loaded after the current scan are outside this MVP run. Successful completion and exact bytes read are not inferred from a before-call event. Payload spoofing and interactive ASK decisions are deliberately not presented as stable actions yet.
+
+</details>
+
+<details>
 <summary><strong>Xrefs and dynamic call graph</strong></summary>
 
 - Show <strong>Called by</strong> and <strong>Calls</strong> for the selected classloader-specific method
@@ -584,6 +609,7 @@ flowchart LR
     INSPECT[Metrics, classes, fields, bytecode]
     TRACE[Bounded live method probes]
     FIELD[Bounded field write probes]
+    FILEIO[Local file interception and rules]
     XREF[Static and observed Xrefs]
     MAP[Persistent deobfuscation overlay]
     EXEC[Isolated source executor]
@@ -598,6 +624,7 @@ flowchart LR
   AGENT --> INSPECT
   AGENT --> TRACE
   AGENT --> FIELD
+  AGENT --> FILEIO
   TRACE --> XREF
   INSPECT --> XREF
   XREF --> MAP
@@ -623,6 +650,7 @@ flowchart LR
 | `dev.whitedev.jpi.agent.cfg` | Static control-flow analysis, bounded runtime block coverage, and ordered transitions |
 | `dev.whitedev.jpi.analysis.difference` | Immutable run captures, CFG transition parsing, and behavioral comparison |
 | `dev.whitedev.jpi.agent.field` | Exact PUTFIELD and PUTSTATIC instrumentation, bounded value transitions, stacks, and restoration |
+| `dev.whitedev.jpi.agent.file` | Java file call-site transformation, local rules, path redirection, bounded events, and restoration |
 | `dev.whitedev.jpi.agent.heap` | Reachable-object inspection and optional heap dumps |
 | `dev.whitedev.jpi.agent.hook` | Automatic API hook profiles and call-site instrumentation |
 | `dev.whitedev.jpi.agent.patch` | Runtime compilation, schema validation, method patching, and source execution |
@@ -643,6 +671,8 @@ flowchart LR
 | `dev.whitedev.jpi.ui` | Application shell, shared styling, editors, and asynchronous execution |
 | `dev.whitedev.jpi.ui.connection` | Guided agent-server, SSH tunnel, and remote client setup |
 | `dev.whitedev.jpi.ui.debug` | Interactive debugger controls, breakpoint management, frames, and lazy variable tree |
+| `dev.whitedev.jpi.file` | File Monitor protocol models and codecs |
+| `dev.whitedev.jpi.ui.file` | File events, filters, details, rules, redirection, and analysis navigation |
 | `dev.whitedev.jpi.ui.browser` | Loaded-class navigation, decompilation, bytecode, and live editing |
 | `dev.whitedev.jpi.ui.callgraph` | Runtime graph parsing, heat filtering, hierarchical layout, and weighted rendering |
 | `dev.whitedev.jpi.ui.tracing` | Live tracer, automatic hooks, and Xref views |
@@ -682,7 +712,7 @@ java -jar target/jpi.jar
 
 Integration tests cover late attach, an executable JAR launched with the early agent, and the reversed agent-server transport used through tunnels. The tunnel test authenticates a desktop client and dumps a real class from a child JVM. The early-agent test verifies that the application class is captured before `main()` and appears in the dynamic load timeline. A Windows-only test allocates a native buffer, writes through the production `WriteProcessMemory` path, and reads the replacement value back from the same address.
 
-The late-attach integration test scans a known static heap root, inspects a sampled object through a weak handle, discovers and instruments a real static field write, verifies its before and after values, reads a scoped deobfuscation inventory, installs a Crypto API profile, captures a real MessageDigest call and restores its call-site class, installs a live trace probe, captures a real invocation, verifies static and dynamic Xrefs plus method-level string search, restores the traced definition, compiles replacement Java source inside the running target, patches ordinary and lambda-based methods, reapplies raw class bytes, and verifies rollback after every mode. A separate debugger integration test launches a real suspended JVM, installs a pending method breakpoint before class preparation, steps by source line, reads and changes a local argument, evaluates an array item, changes breakpoint suspend policy, performs Force Early Return when supported, resumes every suspended thread, and verifies deterministic cleanup.
+The late-attach integration test scans a known static heap root, inspects a sampled object through a weak handle, discovers and instruments a real static field write, verifies its before and after values, reads a scoped deobfuscation inventory, installs a Crypto API profile, captures a real MessageDigest call and restores its call-site class, installs a File Monitor redirect and block policy against real target calls, verifies emitted file events and exact class restoration, installs a live trace probe, captures a real invocation, verifies static and dynamic Xrefs plus method-level string search, restores the traced definition, compiles replacement Java source inside the running target, patches ordinary and lambda-based methods, reapplies raw class bytes, and verifies rollback after every mode. A separate debugger integration test launches a real suspended JVM, installs a pending method breakpoint before class preparation, steps by source line, reads and changes a local argument, evaluates an array item, changes breakpoint suspend policy, performs Force Early Return when supported, resumes every suspended thread, and verifies deterministic cleanup.
 
 ### Build output
 
@@ -738,6 +768,7 @@ A manual run of the Release workflow builds downloadable workflow artifacts with
 - Field-write tracing observes direct bytecode PUTFIELD and PUTSTATIC instructions in available loaded classes. Writes performed entirely by native code, Unsafe, VarHandle internals, reflection internals, hidden definitions, or classes loaded after the scan are not captured by that probe.
 - Heap / Object Inspector counts and paths cover only the bounded graph reachable from explicitly selected static roots. Reflective access can be denied by target modules, and weak sample handles can expire at any time. Full HPROF export is HotSpot-specific and can pause the target or consume substantial disk space.
 - Automatic API Hooks observe direct bytecode call sites available in loaded non-bootstrap classes. Calls made entirely inside JDK internals, native code, unavailable definitions, or classes loaded after a profile starts are not included in that run. Restart the selected profiles to scan newly loaded classes.
+- File Monitor observes covered Java call sites in available loaded application classes. Native file access, JNI, unavailable definitions, and classes loaded after the scan are not captured until the monitor is restarted. Events are emitted before the underlying call, so successful completion and exact read results are not claimed.
 - Dynamic Xrefs cover traced methods and aggregate observed call sites for the active session. Static reverse scans are bounded and can omit definitions whose bytecode is unavailable.
 - Deobfuscation mappings are a controller-side overlay keyed by JVM names and descriptors. Mapped decompilation is read-only and never redefines the target, local variables are not reconstructed, and duplicate binary names from different classloaders currently share one exported name.
 - Raw `.class` replacements must preserve the exact class name and HotSwap-compatible schema.
