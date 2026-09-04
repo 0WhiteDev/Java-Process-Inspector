@@ -549,7 +549,7 @@ Add the implementation name to:
 META-INF/services/dev.whitedev.jpi.plugin.api.JpiPlugin
 ```
 
-Build JPI with <code>mvn install</code>, declare <code>dev.whitedev:java-process-inspector:2.0.0</code> as a <code>provided</code> dependency in the plugin, then build the plugin for Java 21. Open <strong>Advanced -> Plugins</strong> to install its JAR, inspect registration failures, reload all plugin classloaders, run exporters, or open the plugin directory. A complete buildable project is available in <a href="examples/sample-plugin">examples/sample-plugin</a>.
+Build JPI with <code>mvn install</code>, declare <code>dev.whitedev:java-process-inspector:2.1.0</code> as a <code>provided</code> dependency in the plugin, then build the plugin for Java 21. Open <strong>Advanced -> Plugins</strong> to install its JAR, inspect registration failures, reload all plugin classloaders, run exporters, or open the plugin directory. A complete buildable project is available in <a href="examples/sample-plugin">examples/sample-plugin</a>.
 
 Hook profiles contain only an ID, display metadata, and exact owner and method-name pairs. JPI serializes the selected definitions to the Java 8 agent, validates their size and count again inside the target, instruments matching application call sites with the existing bounded runtime, and restores modified classes normally when hooks stop. Plugin bytecode never needs to enter the target JVM.
 
@@ -726,14 +726,14 @@ The late-attach integration test scans a known static heap root, inspects a samp
 
 The release workflow runs on Windows with Java 21 when a semantic version tag is pushed. It rejects snapshot versions and tags that do not exactly match **pom.xml**, runs all unit and attach integration tests, validates the shaded JAR contents, creates a versioned JAR and SHA-256 file, builds a changelog from commits since the previous tag, and publishes a GitHub Release.
 
-For JPI v2.0.0:
+For JPI v2.1.0:
 
 <pre><code>mvn clean verify
 git add -A
-git commit -m "Release JPI v2.0.0"
+git commit -m "Release JPI v2.1.0"
 git push origin main
-git tag -a v2.0.0 -m "JPI v2.0.0"
-git push origin v2.0.0</code></pre>
+git tag -a v2.1.0 -m "JPI v2.1.0"
+git push origin v2.1.0</code></pre>
 
 A manual run of the Release workflow builds downloadable workflow artifacts without publishing a GitHub Release.
 

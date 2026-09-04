@@ -4,7 +4,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>dev.whitedev</groupId>
     <artifactId>java-process-inspector</artifactId>
-    <version>2.0.0</version>
+    <version>2.1.0</version>
     <name>Java Process Inspector</name>
     <description>Attach-based JVM inspection and diagnostics desktop application.</description>
     <licenses>
