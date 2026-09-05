@@ -14,10 +14,13 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.EnumMap;
+import java.util.Map;
 
 final class AgentServer implements Runnable {
     private final AgentOptions options;
     private final TargetInspector inspector;
+    private final Map<Operation, AgentCommand> commands;
     private volatile Socket socket;
     private volatile ServerSocket listener;
     private volatile boolean closed;
@@ -25,6 +28,63 @@ final class AgentServer implements Runnable {
     AgentServer(AgentOptions options, Instrumentation instrumentation, ClassRegistry classRegistry) {
         this.options = options;
         this.inspector = new TargetInspector(instrumentation, classRegistry);
+        this.commands = buildCommands();
+    }
+
+    private Map<Operation, AgentCommand> buildCommands() {
+        Map<Operation, AgentCommand> map = new EnumMap<Operation, AgentCommand>(Operation.class);
+
+        map.put(Operation.PING,                  new AgentCommand() { public byte[] execute(String p) { return WireProtocol.utf8("pong"); } });
+        map.put(Operation.METRICS,               new AgentCommand() { public byte[] execute(String p) throws Exception { return WireProtocol.utf8(inspector.metrics()); } });
+        map.put(Operation.CLASSES,               new AgentCommand() { public byte[] execute(String p) throws Exception { return WireProtocol.utf8(inspector.loadedClasses()); } });
+        map.put(Operation.CLASS_BYTES,           new AgentCommand() { public byte[] execute(String p) throws Exception { return inspector.classBytes(p); } });
+        map.put(Operation.EXECUTE,               new AgentCommand() { public byte[] execute(String p) throws Exception { return WireProtocol.utf8(SourceExecutor.execute(p)); } });
+        map.put(Operation.FIELDS,                new AgentCommand() { public byte[] execute(String p) throws Exception { return WireProtocol.utf8(inspector.staticFields(p)); } });
+        map.put(Operation.THREAD_DUMP,           new AgentCommand() { public byte[] execute(String p) throws Exception { return WireProtocol.utf8(inspector.threadDump()); } });
+        map.put(Operation.CLASS_EVENTS,          new AgentCommand() { public byte[] execute(String p) throws Exception { return WireProtocol.utf8(inspector.classEvents()); } });
+        map.put(Operation.ENVIRONMENT,           new AgentCommand() { public byte[] execute(String p) throws Exception { return WireProtocol.utf8(inspector.environment()); } });
+        map.put(Operation.CONSTANT_SEARCH,       new AgentCommand() { public byte[] execute(String p) throws Exception { return WireProtocol.utf8(inspector.constantSearch(p)); } });
+        map.put(Operation.REDEFINE_SOURCE,       new AgentCommand() { public byte[] execute(String p) throws Exception { return WireProtocol.utf8(inspector.redefineSource(p)); } });
+        map.put(Operation.ROLLBACK_CLASS,        new AgentCommand() { public byte[] execute(String p) throws Exception { return WireProtocol.utf8(inspector.rollbackClass(p)); } });
+        map.put(Operation.CLASS_METHODS,         new AgentCommand() { public byte[] execute(String p) throws Exception { return WireProtocol.utf8(inspector.classMethods(p)); } });
+        map.put(Operation.PATCH_METHOD,          new AgentCommand() { public byte[] execute(String p) throws Exception { return WireProtocol.utf8(inspector.patchMethod(p)); } });
+        map.put(Operation.APPLY_CLASS_BYTES,     new AgentCommand() { public byte[] execute(String p) throws Exception { return WireProtocol.utf8(inspector.applyClassBytes(p)); } });
+        map.put(Operation.TRACE_START,           new AgentCommand() { public byte[] execute(String p) throws Exception { return WireProtocol.utf8(inspector.startTrace(p)); } });
+        map.put(Operation.TRACE_STOP,            new AgentCommand() { public byte[] execute(String p) throws Exception { return WireProtocol.utf8(inspector.stopTrace(p)); } });
+        map.put(Operation.TRACE_EVENTS,          new AgentCommand() { public byte[] execute(String p) throws Exception { return WireProtocol.utf8(inspector.traceEvents()); } });
+        map.put(Operation.TRACE_GRAPH,           new AgentCommand() { public byte[] execute(String p) throws Exception { return WireProtocol.utf8(inspector.traceGraph()); } });
+        map.put(Operation.TRACE_GRAPH_CLEAR,     new AgentCommand() { public byte[] execute(String p) throws Exception { return WireProtocol.utf8(inspector.clearTraceGraph()); } });
+        map.put(Operation.METHOD_XREFS,          new AgentCommand() { public byte[] execute(String p) throws Exception { return WireProtocol.utf8(inspector.methodXrefs(p)); } });
+        map.put(Operation.XREF_SEARCH,           new AgentCommand() { public byte[] execute(String p) throws Exception { return WireProtocol.utf8(inspector.xrefSearch(p)); } });
+        map.put(Operation.DEOBFUSCATION_INVENTORY, new AgentCommand() { public byte[] execute(String p) throws Exception { return WireProtocol.utf8(inspector.deobfuscationInventory(p)); } });
+        map.put(Operation.API_HOOK_START,        new AgentCommand() { public byte[] execute(String p) throws Exception { return WireProtocol.utf8(inspector.startApiHooks(p)); } });
+        map.put(Operation.API_HOOK_STOP,         new AgentCommand() { public byte[] execute(String p) throws Exception { return WireProtocol.utf8(inspector.stopApiHooks()); } });
+        map.put(Operation.API_HOOK_EVENTS,       new AgentCommand() { public byte[] execute(String p) throws Exception { return WireProtocol.utf8(inspector.apiHookEvents()); } });
+        map.put(Operation.HEAP_SCAN,             new AgentCommand() { public byte[] execute(String p) throws Exception { return WireProtocol.utf8(inspector.heapScan(p)); } });
+        map.put(Operation.HEAP_OBJECT,           new AgentCommand() { public byte[] execute(String p) throws Exception { return WireProtocol.utf8(inspector.heapObject(p)); } });
+        map.put(Operation.HEAP_DUMP,             new AgentCommand() { public byte[] execute(String p) throws Exception { return WireProtocol.utf8(inspector.heapDump(p)); } });
+        map.put(Operation.CFG_ANALYZE,           new AgentCommand() { public byte[] execute(String p) throws Exception { return WireProtocol.utf8(inspector.bytecodeCfg(p)); } });
+        map.put(Operation.CFG_TRACE_START,       new AgentCommand() { public byte[] execute(String p) throws Exception { return WireProtocol.utf8(inspector.startCfgTrace(p)); } });
+        map.put(Operation.CFG_TRACE_STOP,        new AgentCommand() { public byte[] execute(String p) throws Exception { return WireProtocol.utf8(inspector.stopCfgTrace(p)); } });
+        map.put(Operation.CFG_SNAPSHOT,          new AgentCommand() { public byte[] execute(String p) throws Exception { return WireProtocol.utf8(inspector.cfgSnapshot(p)); } });
+        map.put(Operation.FIELD_WRITE_SITES,     new AgentCommand() { public byte[] execute(String p) throws Exception { return WireProtocol.utf8(inspector.fieldWriteSites(p)); } });
+        map.put(Operation.FIELD_TRACE_START,     new AgentCommand() { public byte[] execute(String p) throws Exception { return WireProtocol.utf8(inspector.startFieldTrace(p)); } });
+        map.put(Operation.FIELD_TRACE_STOP,      new AgentCommand() { public byte[] execute(String p) throws Exception { return WireProtocol.utf8(inspector.stopFieldTrace()); } });
+        map.put(Operation.FIELD_TRACE_EVENTS,    new AgentCommand() { public byte[] execute(String p) throws Exception { return WireProtocol.utf8(inspector.fieldTraceEvents()); } });
+        map.put(Operation.FILE_MONITOR_START,    new AgentCommand() { public byte[] execute(String p) throws Exception { return WireProtocol.utf8(inspector.startFileMonitor(p)); } });
+        map.put(Operation.FILE_MONITOR_STOP,     new AgentCommand() { public byte[] execute(String p) throws Exception { return WireProtocol.utf8(inspector.stopFileMonitor()); } });
+        map.put(Operation.FILE_EVENT_BATCH,      new AgentCommand() { public byte[] execute(String p) throws Exception { return WireProtocol.utf8(inspector.fileEvents()); } });
+        map.put(Operation.FILE_EVENTS_CLEAR,     new AgentCommand() { public byte[] execute(String p) throws Exception { return WireProtocol.utf8(inspector.clearFileEvents()); } });
+        AgentCommand putFileRule = new AgentCommand() { public byte[] execute(String p) throws Exception { return WireProtocol.utf8(inspector.putFileRule(p)); } };
+        map.put(Operation.FILE_RULE_ADD,         putFileRule);
+        map.put(Operation.FILE_RULE_UPDATE,      putFileRule);
+        map.put(Operation.FILE_RULE_REMOVE,      new AgentCommand() { public byte[] execute(String p) throws Exception { return WireProtocol.utf8(inspector.removeFileRule(p)); } });
+        map.put(Operation.FILE_RULE_LIST,        new AgentCommand() { public byte[] execute(String p) throws Exception { return WireProtocol.utf8(inspector.fileRules()); } });
+        map.put(Operation.FILE_POLICY_SET,       new AgentCommand() { public byte[] execute(String p) throws Exception { return WireProtocol.utf8(inspector.setFilePolicy(p)); } });
+        map.put(Operation.FILE_POLICY_GET,       new AgentCommand() { public byte[] execute(String p) throws Exception { return WireProtocol.utf8(inspector.filePolicy()); } });
+        map.put(Operation.DISCONNECT,            new AgentCommand() { public byte[] execute(String p) { return WireProtocol.utf8("disconnected"); } });
+
+        return map;
     }
 
     void prepare() throws IOException {
@@ -93,58 +153,9 @@ final class AgentServer implements Runnable {
     }
 
     private byte[] dispatch(WireProtocol.Request request) throws Exception {
-        String payload = WireProtocol.text(request.payload());
-        switch (request.operation()) {
-            case PING: return WireProtocol.utf8("pong");
-            case METRICS: return WireProtocol.utf8(inspector.metrics());
-            case CLASSES: return WireProtocol.utf8(inspector.loadedClasses());
-            case CLASS_BYTES: return inspector.classBytes(payload);
-            case EXECUTE: return WireProtocol.utf8(SourceExecutor.execute(payload));
-            case FIELDS: return WireProtocol.utf8(inspector.staticFields(payload));
-            case THREAD_DUMP: return WireProtocol.utf8(inspector.threadDump());
-            case CLASS_EVENTS: return WireProtocol.utf8(inspector.classEvents());
-            case ENVIRONMENT: return WireProtocol.utf8(inspector.environment());
-            case CONSTANT_SEARCH: return WireProtocol.utf8(inspector.constantSearch(payload));
-            case REDEFINE_SOURCE: return WireProtocol.utf8(inspector.redefineSource(payload));
-            case ROLLBACK_CLASS: return WireProtocol.utf8(inspector.rollbackClass(payload));
-            case CLASS_METHODS: return WireProtocol.utf8(inspector.classMethods(payload));
-            case PATCH_METHOD: return WireProtocol.utf8(inspector.patchMethod(payload));
-            case APPLY_CLASS_BYTES: return WireProtocol.utf8(inspector.applyClassBytes(payload));
-            case TRACE_START: return WireProtocol.utf8(inspector.startTrace(payload));
-            case TRACE_STOP: return WireProtocol.utf8(inspector.stopTrace(payload));
-            case TRACE_EVENTS: return WireProtocol.utf8(inspector.traceEvents());
-            case TRACE_GRAPH: return WireProtocol.utf8(inspector.traceGraph());
-            case TRACE_GRAPH_CLEAR: return WireProtocol.utf8(inspector.clearTraceGraph());
-            case METHOD_XREFS: return WireProtocol.utf8(inspector.methodXrefs(payload));
-            case XREF_SEARCH: return WireProtocol.utf8(inspector.xrefSearch(payload));
-            case DEOBFUSCATION_INVENTORY: return WireProtocol.utf8(inspector.deobfuscationInventory(payload));
-            case API_HOOK_START: return WireProtocol.utf8(inspector.startApiHooks(payload));
-            case API_HOOK_STOP: return WireProtocol.utf8(inspector.stopApiHooks());
-            case API_HOOK_EVENTS: return WireProtocol.utf8(inspector.apiHookEvents());
-            case HEAP_SCAN: return WireProtocol.utf8(inspector.heapScan(payload));
-            case HEAP_OBJECT: return WireProtocol.utf8(inspector.heapObject(payload));
-            case HEAP_DUMP: return WireProtocol.utf8(inspector.heapDump(payload));
-            case CFG_ANALYZE: return WireProtocol.utf8(inspector.bytecodeCfg(payload));
-            case CFG_TRACE_START: return WireProtocol.utf8(inspector.startCfgTrace(payload));
-            case CFG_TRACE_STOP: return WireProtocol.utf8(inspector.stopCfgTrace(payload));
-            case CFG_SNAPSHOT: return WireProtocol.utf8(inspector.cfgSnapshot(payload));
-            case FIELD_WRITE_SITES: return WireProtocol.utf8(inspector.fieldWriteSites(payload));
-            case FIELD_TRACE_START: return WireProtocol.utf8(inspector.startFieldTrace(payload));
-            case FIELD_TRACE_STOP: return WireProtocol.utf8(inspector.stopFieldTrace());
-            case FIELD_TRACE_EVENTS: return WireProtocol.utf8(inspector.fieldTraceEvents());
-            case FILE_MONITOR_START: return WireProtocol.utf8(inspector.startFileMonitor(payload));
-            case FILE_MONITOR_STOP: return WireProtocol.utf8(inspector.stopFileMonitor());
-            case FILE_EVENT_BATCH: return WireProtocol.utf8(inspector.fileEvents());
-            case FILE_EVENTS_CLEAR: return WireProtocol.utf8(inspector.clearFileEvents());
-            case FILE_RULE_ADD:
-            case FILE_RULE_UPDATE: return WireProtocol.utf8(inspector.putFileRule(payload));
-            case FILE_RULE_REMOVE: return WireProtocol.utf8(inspector.removeFileRule(payload));
-            case FILE_RULE_LIST: return WireProtocol.utf8(inspector.fileRules());
-            case FILE_POLICY_SET: return WireProtocol.utf8(inspector.setFilePolicy(payload));
-            case FILE_POLICY_GET: return WireProtocol.utf8(inspector.filePolicy());
-            case DISCONNECT: return WireProtocol.utf8("disconnected");
-            default: throw new IllegalArgumentException("Unsupported operation: " + request.operation());
-        }
+        AgentCommand command = commands.get(request.operation());
+        if (command == null) throw new IllegalArgumentException("Unsupported operation: " + request.operation());
+        return command.execute(WireProtocol.text(request.payload()));
     }
 
     private String errorMessage(Throwable throwable) {
