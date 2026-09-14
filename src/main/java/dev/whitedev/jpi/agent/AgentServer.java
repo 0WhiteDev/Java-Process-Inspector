@@ -14,10 +14,13 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.EnumMap;
+import java.util.Map;
 
 final class AgentServer implements Runnable {
     private final AgentOptions options;
     private final TargetInspector inspector;
+    private final Map<Operation, AgentCommand> commands;
     private volatile Socket socket;
     private volatile ServerSocket listener;
     private volatile boolean closed;
@@ -25,6 +28,7 @@ final class AgentServer implements Runnable {
     AgentServer(AgentOptions options, Instrumentation instrumentation, ClassRegistry classRegistry) {
         this.options = options;
         this.inspector = new TargetInspector(instrumentation, classRegistry);
+        this.commands = buildCommands();
     }
 
     void prepare() throws IOException {
@@ -94,61 +98,67 @@ final class AgentServer implements Runnable {
 
     private byte[] dispatch(WireProtocol.Request request) throws Exception {
         String payload = WireProtocol.text(request.payload());
-        switch (request.operation()) {
-            case PING: return WireProtocol.utf8("pong");
-            case METRICS: return WireProtocol.utf8(inspector.metrics());
-            case CLASSES: return WireProtocol.utf8(inspector.loadedClasses());
-            case CLASS_BYTES: return inspector.classBytes(payload);
-            case EXECUTE: return WireProtocol.utf8(SourceExecutor.execute(payload));
-            case FIELDS: return WireProtocol.utf8(inspector.staticFields(payload));
-            case THREAD_DUMP: return WireProtocol.utf8(inspector.threadDump());
-            case CLASS_EVENTS: return WireProtocol.utf8(inspector.classEvents());
-            case ENVIRONMENT: return WireProtocol.utf8(inspector.environment());
-            case CONSTANT_SEARCH: return WireProtocol.utf8(inspector.constantSearch(payload));
-            case REDEFINE_SOURCE: return WireProtocol.utf8(inspector.redefineSource(payload));
-            case ROLLBACK_CLASS: return WireProtocol.utf8(inspector.rollbackClass(payload));
-            case CLASS_METHODS: return WireProtocol.utf8(inspector.classMethods(payload));
-            case PATCH_METHOD: return WireProtocol.utf8(inspector.patchMethod(payload));
-            case APPLY_CLASS_BYTES: return WireProtocol.utf8(inspector.applyClassBytes(payload));
-            case TRACE_START: return WireProtocol.utf8(inspector.startTrace(payload));
-            case TRACE_STOP: return WireProtocol.utf8(inspector.stopTrace(payload));
-            case TRACE_EVENTS: return WireProtocol.utf8(inspector.traceEvents());
-            case TRACE_GRAPH: return WireProtocol.utf8(inspector.traceGraph());
-            case TRACE_GRAPH_CLEAR: return WireProtocol.utf8(inspector.clearTraceGraph());
-            case METHOD_XREFS: return WireProtocol.utf8(inspector.methodXrefs(payload));
-            case XREF_SEARCH: return WireProtocol.utf8(inspector.xrefSearch(payload));
-            case DEOBFUSCATION_INVENTORY: return WireProtocol.utf8(inspector.deobfuscationInventory(payload));
-            case API_HOOK_START: return WireProtocol.utf8(inspector.startApiHooks(payload));
-            case API_HOOK_STOP: return WireProtocol.utf8(inspector.stopApiHooks());
-            case API_HOOK_EVENTS: return WireProtocol.utf8(inspector.apiHookEvents());
-            case HEAP_SCAN: return WireProtocol.utf8(inspector.heapScan(payload));
-            case HEAP_OBJECT: return WireProtocol.utf8(inspector.heapObject(payload));
-            case HEAP_DUMP: return WireProtocol.utf8(inspector.heapDump(payload));
-            case CFG_ANALYZE: return WireProtocol.utf8(inspector.bytecodeCfg(payload));
-            case CFG_TRACE_START: return WireProtocol.utf8(inspector.startCfgTrace(payload));
-            case CFG_TRACE_STOP: return WireProtocol.utf8(inspector.stopCfgTrace(payload));
-            case CFG_SNAPSHOT: return WireProtocol.utf8(inspector.cfgSnapshot(payload));
-            case FIELD_WRITE_SITES: return WireProtocol.utf8(inspector.fieldWriteSites(payload));
-            case FIELD_TRACE_START: return WireProtocol.utf8(inspector.startFieldTrace(payload));
-            case FIELD_TRACE_STOP: return WireProtocol.utf8(inspector.stopFieldTrace());
-            case FIELD_TRACE_EVENTS: return WireProtocol.utf8(inspector.fieldTraceEvents());
-            case FILE_MONITOR_START: return WireProtocol.utf8(inspector.startFileMonitor(payload));
-            case FILE_MONITOR_STOP: return WireProtocol.utf8(inspector.stopFileMonitor());
-            case FILE_EVENT_BATCH: return WireProtocol.utf8(inspector.fileEvents());
-            case FILE_EVENTS_CLEAR: return WireProtocol.utf8(inspector.clearFileEvents());
-            case FILE_RULE_ADD:
-            case FILE_RULE_UPDATE: return WireProtocol.utf8(inspector.putFileRule(payload));
-            case FILE_RULE_REMOVE: return WireProtocol.utf8(inspector.removeFileRule(payload));
-            case FILE_RULE_LIST: return WireProtocol.utf8(inspector.fileRules());
-            case FILE_POLICY_SET: return WireProtocol.utf8(inspector.setFilePolicy(payload));
-            case FILE_POLICY_GET: return WireProtocol.utf8(inspector.filePolicy());
-            case JFR_PROFILE_START: return WireProtocol.utf8(inspector.startJfrProfile(payload));
-            case JFR_PROFILE_STATUS: return WireProtocol.utf8(inspector.jfrProfileStatus());
-            case JFR_PROFILE_STOP: return WireProtocol.utf8(inspector.stopJfrProfile());
-            case JFR_PROFILE_REPORT: return WireProtocol.utf8(inspector.jfrProfileReport());
-            case DISCONNECT: return WireProtocol.utf8("disconnected");
-            default: throw new IllegalArgumentException("Unsupported operation: " + request.operation());
-        }
+        AgentCommand command = commands.get(request.operation());
+        if (command == null) throw new IllegalArgumentException("Unsupported operation: " + request.operation());
+        return command.execute(payload);
+    }
+
+    private Map<Operation, AgentCommand> buildCommands() {
+        Map<Operation, AgentCommand> registry = new EnumMap<>(Operation.class);
+        registry.put(Operation.PING, payload -> WireProtocol.utf8("pong"));
+        registry.put(Operation.METRICS, payload -> WireProtocol.utf8(inspector.metrics()));
+        registry.put(Operation.CLASSES, payload -> WireProtocol.utf8(inspector.loadedClasses()));
+        registry.put(Operation.CLASS_BYTES, inspector::classBytes);
+        registry.put(Operation.EXECUTE, payload -> WireProtocol.utf8(SourceExecutor.execute(payload)));
+        registry.put(Operation.FIELDS, payload -> WireProtocol.utf8(inspector.staticFields(payload)));
+        registry.put(Operation.THREAD_DUMP, payload -> WireProtocol.utf8(inspector.threadDump()));
+        registry.put(Operation.CLASS_EVENTS, payload -> WireProtocol.utf8(inspector.classEvents()));
+        registry.put(Operation.ENVIRONMENT, payload -> WireProtocol.utf8(inspector.environment()));
+        registry.put(Operation.CONSTANT_SEARCH, payload -> WireProtocol.utf8(inspector.constantSearch(payload)));
+        registry.put(Operation.REDEFINE_SOURCE, payload -> WireProtocol.utf8(inspector.redefineSource(payload)));
+        registry.put(Operation.ROLLBACK_CLASS, payload -> WireProtocol.utf8(inspector.rollbackClass(payload)));
+        registry.put(Operation.CLASS_METHODS, payload -> WireProtocol.utf8(inspector.classMethods(payload)));
+        registry.put(Operation.PATCH_METHOD, payload -> WireProtocol.utf8(inspector.patchMethod(payload)));
+        registry.put(Operation.APPLY_CLASS_BYTES, payload -> WireProtocol.utf8(inspector.applyClassBytes(payload)));
+        registry.put(Operation.TRACE_START, payload -> WireProtocol.utf8(inspector.startTrace(payload)));
+        registry.put(Operation.TRACE_STOP, payload -> WireProtocol.utf8(inspector.stopTrace(payload)));
+        registry.put(Operation.TRACE_EVENTS, payload -> WireProtocol.utf8(inspector.traceEvents()));
+        registry.put(Operation.TRACE_GRAPH, payload -> WireProtocol.utf8(inspector.traceGraph()));
+        registry.put(Operation.TRACE_GRAPH_CLEAR, payload -> WireProtocol.utf8(inspector.clearTraceGraph()));
+        registry.put(Operation.METHOD_XREFS, payload -> WireProtocol.utf8(inspector.methodXrefs(payload)));
+        registry.put(Operation.XREF_SEARCH, payload -> WireProtocol.utf8(inspector.xrefSearch(payload)));
+        registry.put(Operation.DEOBFUSCATION_INVENTORY, payload -> WireProtocol.utf8(inspector.deobfuscationInventory(payload)));
+        registry.put(Operation.API_HOOK_START, payload -> WireProtocol.utf8(inspector.startApiHooks(payload)));
+        registry.put(Operation.API_HOOK_STOP, payload -> WireProtocol.utf8(inspector.stopApiHooks()));
+        registry.put(Operation.API_HOOK_EVENTS, payload -> WireProtocol.utf8(inspector.apiHookEvents()));
+        registry.put(Operation.HEAP_SCAN, payload -> WireProtocol.utf8(inspector.heapScan(payload)));
+        registry.put(Operation.HEAP_OBJECT, payload -> WireProtocol.utf8(inspector.heapObject(payload)));
+        registry.put(Operation.HEAP_DUMP, payload -> WireProtocol.utf8(inspector.heapDump(payload)));
+        registry.put(Operation.CFG_ANALYZE, payload -> WireProtocol.utf8(inspector.bytecodeCfg(payload)));
+        registry.put(Operation.CFG_TRACE_START, payload -> WireProtocol.utf8(inspector.startCfgTrace(payload)));
+        registry.put(Operation.CFG_TRACE_STOP, payload -> WireProtocol.utf8(inspector.stopCfgTrace(payload)));
+        registry.put(Operation.CFG_SNAPSHOT, payload -> WireProtocol.utf8(inspector.cfgSnapshot(payload)));
+        registry.put(Operation.FIELD_WRITE_SITES, payload -> WireProtocol.utf8(inspector.fieldWriteSites(payload)));
+        registry.put(Operation.FIELD_TRACE_START, payload -> WireProtocol.utf8(inspector.startFieldTrace(payload)));
+        registry.put(Operation.FIELD_TRACE_STOP, payload -> WireProtocol.utf8(inspector.stopFieldTrace()));
+        registry.put(Operation.FIELD_TRACE_EVENTS, payload -> WireProtocol.utf8(inspector.fieldTraceEvents()));
+        registry.put(Operation.FILE_MONITOR_START, payload -> WireProtocol.utf8(inspector.startFileMonitor(payload)));
+        registry.put(Operation.FILE_MONITOR_STOP, payload -> WireProtocol.utf8(inspector.stopFileMonitor()));
+        registry.put(Operation.FILE_EVENT_BATCH, payload -> WireProtocol.utf8(inspector.fileEvents()));
+        registry.put(Operation.FILE_EVENTS_CLEAR, payload -> WireProtocol.utf8(inspector.clearFileEvents()));
+        AgentCommand putFileRule = payload -> WireProtocol.utf8(inspector.putFileRule(payload));
+        registry.put(Operation.FILE_RULE_ADD, putFileRule);
+        registry.put(Operation.FILE_RULE_UPDATE, putFileRule);
+        registry.put(Operation.FILE_RULE_REMOVE, payload -> WireProtocol.utf8(inspector.removeFileRule(payload)));
+        registry.put(Operation.FILE_RULE_LIST, payload -> WireProtocol.utf8(inspector.fileRules()));
+        registry.put(Operation.FILE_POLICY_SET, payload -> WireProtocol.utf8(inspector.setFilePolicy(payload)));
+        registry.put(Operation.FILE_POLICY_GET, payload -> WireProtocol.utf8(inspector.filePolicy()));
+        registry.put(Operation.JFR_PROFILE_START, payload -> WireProtocol.utf8(inspector.startJfrProfile(payload)));
+        registry.put(Operation.JFR_PROFILE_STATUS, payload -> WireProtocol.utf8(inspector.jfrProfileStatus()));
+        registry.put(Operation.JFR_PROFILE_STOP, payload -> WireProtocol.utf8(inspector.stopJfrProfile()));
+        registry.put(Operation.JFR_PROFILE_REPORT, payload -> WireProtocol.utf8(inspector.jfrProfileReport()));
+        registry.put(Operation.DISCONNECT, payload -> WireProtocol.utf8("disconnected"));
+        return registry;
     }
 
     private String errorMessage(Throwable throwable) {
