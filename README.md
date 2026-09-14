@@ -120,7 +120,8 @@ This message commonly appears when a Java 21 agent is loaded into a target runni
 | Tab | Purpose |
 |---|---|
 | Overview | Live heap, non-heap, class, thread, GC, uptime, and full thread-dump data |
-| Runtime timeline | Unified trace, API hook, network, class-load, field-write, snapshot, and action-marker events correlated by call ID, parent call, thread, and time |
+| Runtime timeline | Unified trace, API hook, profiler, network, class-load, field-write, snapshot, and action-marker events correlated by call ID, parent call, thread, and time |
+| Profiler | Timed JFR recordings with CPU and allocation flame graphs plus locks, exceptions, GC, threads, and I/O analysis |
 | Debugger | JDWP launch or remote attach, method/source/BCI/exception breakpoints, pause, continue, Resume All, stepping, call stacks, grouped lazy variables, value editing, evaluation, decompiled source, and force return |
 | Classes | Paged live definitions, original editable or mapped read-only decompilation, full-source HotSwap, modern method patches, raw bytecode editing, rollback, dumps, and selectable CFR, Vineflower, or Procyon engines |
 | Live tracer | Bounded runtime probes with arguments, results, exceptions, duration, threads, object identity, caller stacks, Time Tunnel, and an interactive call tree |
@@ -160,6 +161,26 @@ The interface uses FlatLaf with a focused sidebar workspace instead of nested ut
 - Loopback-only socket, random session token, protocol magic, version, and payload limits
 - Minimal agent thread, the GUI never runs inside the target process
 - Re-attach support and deterministic disconnect handling
+
+</details>
+
+<details>
+<summary><strong>Java Flight Recorder profiler</strong></summary>
+
+- Start a 15, 30, 60-second, or custom recording against the attached JVM
+- Capture any combination of CPU samples, sampled allocations, locks, exceptions, GC, thread lifecycle, and file or socket I/O
+- Build interactive flame graphs from recorded stack traces without instrumenting application methods
+- Rank allocation classes, lock types, thrown exception classes, GC causes, threads, files, and socket endpoints
+- Show event totals, sampled bytes, blocked time, GC time, and I/O bytes with category-specific formatting
+- Stop a recording early and analyze the captured interval immediately
+- Keep JFR storage capped at 128 MiB, analysis capped at 250,000 events, stack paths capped at 64 frames, and displayed results capped at 300 per category
+- Parse the recording inside the target and send only bounded aggregate data through the authenticated JPI protocol
+- Publish recording start and completion markers to Runtime Timeline
+- Detect targets without JFR and report the unsupported state without affecting other JPI features
+
+Attach to a JVM, open <strong>Profiler</strong>, select the categories and duration, then click <strong>Start recording</strong>. Exercise the target application during the recording. JPI automatically loads the report when the timer finishes. Open CPU to find hot execution paths, Allocations to find high-volume types and allocation callers, Locks for contention, Exceptions for frequently thrown types, GC for pause causes, Threads for lifecycle and sleep activity, or I/O for file and socket traffic. Click a flame block to inspect its exact contribution.
+
+The profiler runs independently from Live Tracer, API Hooks, File Monitor, field tracing, and runtime patching because it uses JVM-native JFR events instead of class transformation. This makes it suitable for longer diagnostic sessions and for finding methods that are worth investigating with the more precise JPI instrumentation tools.
 
 </details>
 
@@ -603,6 +624,7 @@ flowchart LR
     SYMBOLS[Offline native symbol analysis]
     PLUGINS[Plugin manager and extension registry]
     DEBUGGER[Interactive debugger]
+    PROFILER[JFR profiler and flame graphs]
   end
   subgraph target [Target JVM]
     AGENT[Embedded Instrumentation agent]
@@ -614,9 +636,11 @@ flowchart LR
     MAP[Persistent deobfuscation overlay]
     EXEC[Isolated source executor]
     JDWP[JDI debug endpoint]
+    JFR[JVM Flight Recorder]
   end
   GUI --> ATTACH
   GUI --> DEBUGGER
+  GUI --> PROFILER
   DEBUGGER <-->|JDWP debug events and suspended state| JDWP
   ATTACH -->|load the same jpi.jar| AGENT
   GUI --> CLIENT
@@ -625,6 +649,8 @@ flowchart LR
   AGENT --> TRACE
   AGENT --> FIELD
   AGENT --> FILEIO
+  AGENT <-->|bounded JFR aggregates| JFR
+  PROFILER --> CLIENT
   TRACE --> XREF
   INSPECT --> XREF
   XREF --> MAP
@@ -654,7 +680,9 @@ flowchart LR
 | `dev.whitedev.jpi.agent.heap` | Reachable-object inspection and optional heap dumps |
 | `dev.whitedev.jpi.agent.hook` | Automatic API hook profiles and call-site instrumentation |
 | `dev.whitedev.jpi.agent.patch` | Runtime compilation, schema validation, method patching, and source execution |
+| `dev.whitedev.jpi.agent.profiler` | Reflective JFR recording, event aggregation, safety bounds, and lifecycle |
 | `dev.whitedev.jpi.agent.trace` | Method probes, conditions, events, exact runtime metrics, and dynamic call graphs |
+| `dev.whitedev.jpi.profiler` | JFR status, category, report, flame, and ranking models |
 | `dev.whitedev.jpi.protocol` | Binary protocol with stable operations and bounds |
 | `dev.whitedev.jpi.nativeaccess` | Typed JNA boundary for process, memory, network, and DLL operations |
 | `dev.whitedev.jpi.symbols` | Native symbol-source discovery, merging, C++ demangling, and report assembly |
@@ -673,6 +701,7 @@ flowchart LR
 | `dev.whitedev.jpi.ui.debug` | Interactive debugger controls, breakpoint management, frames, and lazy variable tree |
 | `dev.whitedev.jpi.file` | File Monitor protocol models and codecs |
 | `dev.whitedev.jpi.ui.file` | File events, filters, details, rules, redirection, and analysis navigation |
+| `dev.whitedev.jpi.ui.profiler` | Recording controls, summaries, category rankings, and interactive flame graphs |
 | `dev.whitedev.jpi.ui.browser` | Loaded-class navigation, decompilation, bytecode, and live editing |
 | `dev.whitedev.jpi.ui.callgraph` | Runtime graph parsing, heat filtering, hierarchical layout, and weighted rendering |
 | `dev.whitedev.jpi.ui.tracing` | Live tracer, automatic hooks, and Xref views |
@@ -712,7 +741,7 @@ java -jar target/jpi.jar
 
 Integration tests cover late attach, an executable JAR launched with the early agent, and the reversed agent-server transport used through tunnels. The tunnel test authenticates a desktop client and dumps a real class from a child JVM. The early-agent test verifies that the application class is captured before `main()` and appears in the dynamic load timeline. A Windows-only test allocates a native buffer, writes through the production `WriteProcessMemory` path, and reads the replacement value back from the same address.
 
-The late-attach integration test scans a known static heap root, inspects a sampled object through a weak handle, discovers and instruments a real static field write, verifies its before and after values, reads a scoped deobfuscation inventory, installs a Crypto API profile, captures a real MessageDigest call and restores its call-site class, installs a File Monitor redirect and block policy against real target calls, verifies emitted file events and exact class restoration, installs a live trace probe, captures a real invocation, verifies static and dynamic Xrefs plus method-level string search, restores the traced definition, compiles replacement Java source inside the running target, patches ordinary and lambda-based methods, reapplies raw class bytes, and verifies rollback after every mode. A separate debugger integration test launches a real suspended JVM, installs a pending method breakpoint before class preparation, steps by source line, reads and changes a local argument, evaluates an array item, changes breakpoint suspend policy, performs Force Early Return when supported, resumes every suspended thread, and verifies deterministic cleanup.
+The late-attach integration test starts and aggregates a real JFR CPU and allocation recording, scans a known static heap root, inspects a sampled object through a weak handle, discovers and instruments a real static field write, verifies its before and after values, reads a scoped deobfuscation inventory, installs a Crypto API profile, captures a real MessageDigest call and restores its call-site class, installs a File Monitor redirect and block policy against real target calls, verifies emitted file events and exact class restoration, installs a live trace probe, captures a real invocation, verifies static and dynamic Xrefs plus method-level string search, restores the traced definition, compiles replacement Java source inside the running target, patches ordinary and lambda-based methods, reapplies raw class bytes, and verifies rollback after every mode. A separate debugger integration test launches a real suspended JVM, installs a pending method breakpoint before class preparation, steps by source line, reads and changes a local argument, evaluates an array item, changes breakpoint suspend policy, performs Force Early Return when supported, resumes every suspended thread, and verifies deterministic cleanup.
 
 ### Build output
 
@@ -755,6 +784,7 @@ A manual run of the Release workflow builds downloadable workflow artifacts with
 - A JVM that already attempted to load an incompatible older JPI agent must be restarted before retrying with a rebuilt JAR.
 - Early-agent mode requires control over the target launch command and is not a security-boundary bypass.
 - Tunneled mode requires the same JPI build on the remote side, a reachable port-forwarding mechanism, and permission to attach to or start the target JVM. The listener accepts one authenticated session and closes when its timeout expires or the session ends.
+- JFR profiling requires a target JVM that provides <code>jdk.jfr</code> and <code>jdk.jfr.consumer</code>, normally Java 11 or newer. Results are sampled or event-based estimates, not exact per-method accounting, and enabling high-volume exception or allocation categories can add target overhead.
 - The executor requires `JavaCompiler` in the target and compiles against its visible compiler class path.
 - Hidden classes are listed when the JVM exposes them, definitions that never pass through Java Instrumentation may remain unavailable.
 - Runtime source editing uses the target JDK compiler when present and an embedded Java 8-compatible ECJ fallback otherwise. JPI exposes loaded class definitions and bundled javax.annotation types to the compiler, but invalid source emitted by a decompiler can still require manual correction or a different decompiler.

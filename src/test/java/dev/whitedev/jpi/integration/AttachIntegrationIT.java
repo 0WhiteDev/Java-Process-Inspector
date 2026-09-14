@@ -43,6 +43,21 @@ class AttachIntegrationIT {
             InspectorSession session = new AttachService(AGENT_JAR).attach(new JvmDescriptor(pid, "attach-smoke-target"));
             try {
                 assertTrue(session.requestText(Operation.METRICS, "").contains("pid=" + pid));
+                String profilerStart = session.requestText(Operation.JFR_PROFILE_START,
+                        "durationSeconds=1;categories=CPU,ALLOCATIONS,EXCEPTIONS,GC,THREADS,IO");
+                assertTrue(profilerStart.startsWith("RECORDING\ttrue"), profilerStart);
+                String profilerWork = "public class ProfilerWork { public static void execute(java.io.PrintStream out) { long end = System.nanoTime() + 800000000L; long value = 0; while (System.nanoTime() < end) { byte[] bytes = new byte[4096]; bytes[0] = 1; value += bytes[0]; } out.print(value > 0); } }";
+                assertEquals("true", session.requestText(Operation.EXECUTE, profilerWork));
+                String profilerStatus = "";
+                for (int attempt = 0; attempt < 100; attempt++) {
+                    profilerStatus = session.requestText(Operation.JFR_PROFILE_STATUS, "");
+                    if (profilerStatus.startsWith("COMPLETE\t")) break;
+                    Thread.sleep(50L);
+                }
+                assertTrue(profilerStatus.startsWith("COMPLETE\t"), profilerStatus);
+                String profilerReport = session.requestText(Operation.JFR_PROFILE_REPORT, "");
+                assertTrue(profilerReport.startsWith("R\t"));
+                assertTrue(profilerReport.contains("\nF\tCPU\t"));
                 String loadedClasses = session.requestText(Operation.CLASSES, "");
                 assertTrue(loadedClasses.contains(AttachTarget.class.getName()));
                 assertTrue(session.requestText(Operation.FIELDS, "AttachTarget").contains("marker"));

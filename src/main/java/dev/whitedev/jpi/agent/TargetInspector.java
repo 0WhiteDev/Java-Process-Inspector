@@ -12,6 +12,7 @@ import dev.whitedev.jpi.agent.field.FieldWriteManager;
 import dev.whitedev.jpi.agent.file.FileInterceptorManager;
 import dev.whitedev.jpi.agent.hook.ApiHookManager;
 import dev.whitedev.jpi.agent.patch.ClassSchema;
+import dev.whitedev.jpi.agent.profiler.JfrProfilerManager;
 import dev.whitedev.jpi.agent.patch.MethodBodyPatcher;
 import dev.whitedev.jpi.agent.patch.ModernMethodPatcher;
 import dev.whitedev.jpi.agent.patch.RuntimeJavaCompiler;
@@ -57,6 +58,7 @@ final class TargetInspector {
     private final CfgManager cfgManager;
     private final FieldWriteManager fieldWriteManager;
     private final FileInterceptorManager fileInterceptorManager;
+    private final JfrProfilerManager jfrProfilerManager;
     private final HeapObjectInspector heapInspector;
     private final Map<String, WeakReference<Class<?>>> classIndex = new ConcurrentHashMap<>();
 
@@ -68,6 +70,7 @@ final class TargetInspector {
         this.cfgManager = new CfgManager(instrumentation);
         this.fieldWriteManager = new FieldWriteManager(instrumentation);
         this.fileInterceptorManager = new FileInterceptorManager(instrumentation, registry);
+        this.jfrProfilerManager = new JfrProfilerManager();
         this.heapInspector = new HeapObjectInspector(instrumentation);
     }
 
@@ -389,6 +392,22 @@ final class TargetInspector {
         return fileInterceptorManager.policy();
     }
 
+    String startJfrProfile(String settings) throws Exception {
+        return jfrProfilerManager.start(settings);
+    }
+
+    String jfrProfileStatus() {
+        return jfrProfilerManager.status();
+    }
+
+    String stopJfrProfile() {
+        return jfrProfilerManager.stop();
+    }
+
+    String jfrProfileReport() throws IOException {
+        return jfrProfilerManager.report();
+    }
+
     String heapScan(String payload) throws Exception {
         return heapInspector.scan(payload);
     }
@@ -506,6 +525,7 @@ final class TargetInspector {
         apiHookManager.close();
         fieldWriteManager.close();
         fileInterceptorManager.close();
+        jfrProfilerManager.close();
         heapInspector.clear();
     }
 

@@ -21,6 +21,7 @@ import dev.whitedev.jpi.ui.callgraph.CallGraphHeatmapPanel;
 import dev.whitedev.jpi.ui.connection.TunnelAgentDialog;
 import dev.whitedev.jpi.ui.debug.DebuggerPanel;
 import dev.whitedev.jpi.ui.file.FileMonitorPanel;
+import dev.whitedev.jpi.ui.profiler.ProfilerPanel;
 import dev.whitedev.jpi.ui.nativeview.DllPanel;
 import dev.whitedev.jpi.ui.nativeview.MemoryPanel;
 import dev.whitedev.jpi.ui.nativeview.NativeSymbolsPanel;
@@ -121,6 +122,7 @@ public final class MainFrame extends JFrame {
                 () -> selectView("Live tracer"), () -> selectView("Xrefs"), () -> selectView("Bytecode CFG"),
                 () -> selectView("Difference tracing"), pluginManager.extensions(), timelineStore);
         FileMonitorPanel fileMonitor = new FileMonitorPanel(timelineStore);
+        ProfilerPanel profiler = new ProfilerPanel(timelineStore);
         fileMonitor.setNavigation((target, event) -> {
             switch (target) {
                 case CALLER -> {
@@ -168,7 +170,7 @@ public final class MainFrame extends JFrame {
         DllPanel dll = new DllPanel(windows);
         NativeSymbolsPanel nativeSymbols = new NativeSymbolsPanel();
         PluginsPanel plugins = new PluginsPanel(pluginManager);
-        views = new ArrayList<>(Arrays.asList(overview, timeline, debugger, classes, tracer, callGraph, apiHooks, fileMonitor, xrefs,
+        views = new ArrayList<>(Arrays.asList(overview, timeline, profiler, debugger, classes, tracer, callGraph, apiHooks, fileMonitor, xrefs,
                 cfg, differences,
                 investigation, deobfuscation,
                 constantSearch, executor, fields, fieldWrites, environment, network, heapObjects, nativeSymbols,
@@ -176,6 +178,7 @@ public final class MainFrame extends JFrame {
 
         addCard("Overview", overview);
         addCard("Runtime timeline", timeline);
+        addCard("Profiler", profiler);
         addCard("Debugger", debugger);
         addCard("Loaded classes", classes);
         addCard("Live tracer", tracer);
@@ -268,6 +271,7 @@ public final class MainFrame extends JFrame {
         sidebar.add(workspace);
         addNavigation(sidebar, "Overview");
         addNavigation(sidebar, "Runtime timeline");
+        addNavigation(sidebar, "Profiler");
         addNavigation(sidebar, "Debugger");
         addNavigation(sidebar, "Loaded classes");
         addNavigation(sidebar, "Live tracer");
