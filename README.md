@@ -120,8 +120,9 @@ This message commonly appears when a Java 21 agent is loaded into a target runni
 | Tab | Purpose |
 |---|---|
 | Overview | Live heap, non-heap, class, thread, GC, uptime, and full thread-dump data |
-| Runtime timeline | Unified trace, API hook, profiler, network, class-load, field-write, snapshot, and action-marker events correlated by call ID, parent call, thread, and time |
+| Runtime timeline | Unified trace, API hook, profiler, thread lifecycle, network, class-load, field-write, snapshot, and action-marker events correlated by call ID, parent call, thread, and time |
 | Profiler | Timed JFR recordings with CPU and allocation flame graphs plus locks, exceptions, GC, threads, and I/O analysis |
+| Thread Analyzer | Live deadlock detection, lock ownership graph, CPU hot threads, contention metrics, parking, thread state history, and creation timeline |
 | Debugger | JDWP launch or remote attach, method/source/BCI/exception breakpoints, pause, continue, Resume All, stepping, call stacks, grouped lazy variables, value editing, evaluation, decompiled source, and force return |
 | Classes | Paged live definitions, original editable or mapped read-only decompilation, full-source HotSwap, modern method patches, raw bytecode editing, rollback, dumps, and selectable CFR, Vineflower, or Procyon engines |
 | Live tracer | Bounded runtime probes with arguments, results, exceptions, duration, threads, object identity, caller stacks, Time Tunnel, and an interactive call tree |
@@ -161,6 +162,25 @@ The interface uses FlatLaf with a focused sidebar workspace instead of nested ut
 - Loopback-only socket, random session token, protocol magic, version, and payload limits
 - Minimal agent thread, the GUI never runs inside the target process
 - Re-attach support and deterministic disconnect handling
+
+</details>
+
+<details>
+<summary><strong>Thread Analyzer and Deadlock Inspector</strong></summary>
+
+Thread Analyzer turns the basic thread dump into a continuously updated diagnostic workspace:
+
+- Detect JVM monitor and ownable synchronizer deadlocks and identify every thread in the cycle
+- Connect waiting threads, lock identities, and lock owners in a dedicated dependency graph
+- Rank hot threads using CPU time consumed between snapshots
+- Track cumulative blocked and waiting counts and time when JVM contention monitoring is available
+- Distinguish parked, blocked, waiting, native, suspended, daemon, and non-daemon threads
+- Preserve bounded state transitions plus first-observed and disappearance times for thread lifecycles
+- Inspect stack frames, held monitors, held synchronizers, and the exact lock owner for any selected thread
+- Publish new thread, ended thread, and deadlock events to Runtime Timeline
+- Export the current structured analysis as `thread-analysis.tsv` in a session snapshot
+
+Attach to a JVM, open <strong>Thread Analyzer</strong>, and exercise the target application. Auto refresh captures a snapshot every 1.5 seconds. Sort by CPU to find hot threads, select a row for its stack and held locks, open <strong>State history</strong> to follow transitions, or open <strong>Lock graph</strong> to inspect contention and deadlock cycles. Use <strong>Clear history</strong> to begin a clean observation window.
 
 </details>
 

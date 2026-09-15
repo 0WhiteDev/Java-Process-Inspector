@@ -33,6 +33,7 @@ import dev.whitedev.jpi.ui.tracing.LiveTracerPanel;
 import dev.whitedev.jpi.ui.tracing.XrefsPanel;
 import dev.whitedev.jpi.ui.timeline.RuntimeTimelinePanel;
 import dev.whitedev.jpi.ui.timeline.RuntimeTimelineStore;
+import dev.whitedev.jpi.ui.threads.ThreadAnalyzerPanel;
 import dev.whitedev.jpi.ui.workspace.DeobfuscationWorkspacePanel;
 import dev.whitedev.jpi.ui.workspace.ExecutorPanel;
 import dev.whitedev.jpi.ui.inspection.ConstantSearchPanel;
@@ -123,6 +124,7 @@ public final class MainFrame extends JFrame {
                 () -> selectView("Difference tracing"), pluginManager.extensions(), timelineStore);
         FileMonitorPanel fileMonitor = new FileMonitorPanel(timelineStore);
         ProfilerPanel profiler = new ProfilerPanel(timelineStore);
+        ThreadAnalyzerPanel threadAnalyzer = new ThreadAnalyzerPanel(timelineStore);
         fileMonitor.setNavigation((target, event) -> {
             switch (target) {
                 case CALLER -> {
@@ -170,7 +172,7 @@ public final class MainFrame extends JFrame {
         DllPanel dll = new DllPanel(windows);
         NativeSymbolsPanel nativeSymbols = new NativeSymbolsPanel();
         PluginsPanel plugins = new PluginsPanel(pluginManager);
-        views = new ArrayList<>(Arrays.asList(overview, timeline, profiler, debugger, classes, tracer, callGraph, apiHooks, fileMonitor, xrefs,
+        views = new ArrayList<>(Arrays.asList(overview, timeline, profiler, threadAnalyzer, debugger, classes, tracer, callGraph, apiHooks, fileMonitor, xrefs,
                 cfg, differences,
                 investigation, deobfuscation,
                 constantSearch, executor, fields, fieldWrites, environment, network, heapObjects, nativeSymbols,
@@ -179,6 +181,7 @@ public final class MainFrame extends JFrame {
         addCard("Overview", overview);
         addCard("Runtime timeline", timeline);
         addCard("Profiler", profiler);
+        addCard("Thread Analyzer", threadAnalyzer);
         addCard("Debugger", debugger);
         addCard("Loaded classes", classes);
         addCard("Live tracer", tracer);
@@ -272,6 +275,7 @@ public final class MainFrame extends JFrame {
         addNavigation(sidebar, "Overview");
         addNavigation(sidebar, "Runtime timeline");
         addNavigation(sidebar, "Profiler");
+        addNavigation(sidebar, "Thread Analyzer");
         addNavigation(sidebar, "Debugger");
         addNavigation(sidebar, "Loaded classes");
         addNavigation(sidebar, "Live tracer");

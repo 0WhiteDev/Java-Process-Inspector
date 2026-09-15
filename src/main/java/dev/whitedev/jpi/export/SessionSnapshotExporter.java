@@ -32,6 +32,7 @@ public final class SessionSnapshotExporter {
         reports.put("loaded-classes.tsv", session.requestText(Operation.CLASSES, ""));
         reports.put("class-events.tsv", session.requestText(Operation.CLASS_EVENTS, ""));
         reports.put("thread-dump.txt", session.requestText(Operation.THREAD_DUMP, ""));
+        reports.put("thread-analysis.tsv", session.requestText(Operation.THREAD_ANALYZE, ""));
 
         try (ZipOutputStream zip = new ZipOutputStream(Files.newOutputStream(destination), StandardCharsets.UTF_8)) {
             for (Map.Entry<String, String> report : reports.entrySet()) {

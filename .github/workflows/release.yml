@@ -71,6 +71,7 @@ jobs:
             "dev/whitedev/jpi/agent/patch/RuntimeJavaCompiler.class",
             "dev/whitedev/jpi/agent/patch/MethodBodyPatcher.class",
             "dev/whitedev/jpi/agent/profiler/JfrProfilerManager.class",
+            "dev/whitedev/jpi/agent/thread/ThreadAnalyzer.class",
             "dev/whitedev/jpi/agent/trace/TraceRuntime.class",
             "dev/whitedev/jpi/agent/cfg/BytecodeCfgAnalyzer.class",
             "dev/whitedev/jpi/agent/cfg/CfgManager.class",

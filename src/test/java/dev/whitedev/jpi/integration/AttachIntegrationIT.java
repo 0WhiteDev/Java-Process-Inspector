@@ -43,6 +43,9 @@ class AttachIntegrationIT {
             InspectorSession session = new AttachService(AGENT_JAR).attach(new JvmDescriptor(pid, "attach-smoke-target"));
             try {
                 assertTrue(session.requestText(Operation.METRICS, "").contains("pid=" + pid));
+                String threadAnalysis = session.requestText(Operation.THREAD_ANALYZE, "");
+                assertTrue(threadAnalysis.startsWith("M\t"), threadAnalysis);
+                assertTrue(threadAnalysis.contains("\nT\t"), threadAnalysis);
                 String profilerStart = session.requestText(Operation.JFR_PROFILE_START,
                         "durationSeconds=1;categories=CPU,ALLOCATIONS,EXCEPTIONS,GC,THREADS,IO");
                 assertTrue(profilerStart.startsWith("RECORDING\ttrue"), profilerStart);
@@ -226,6 +229,7 @@ class AttachIntegrationIT {
                     assertNotNull(zip.getEntry("manifest.txt"));
                     assertNotNull(zip.getEntry("loaded-classes.tsv"));
                     assertNotNull(zip.getEntry("thread-dump.txt"));
+                    assertNotNull(zip.getEntry("thread-analysis.tsv"));
                 }
             } finally { session.close(); }
         } finally {

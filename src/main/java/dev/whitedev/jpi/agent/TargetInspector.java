@@ -13,6 +13,7 @@ import dev.whitedev.jpi.agent.file.FileInterceptorManager;
 import dev.whitedev.jpi.agent.hook.ApiHookManager;
 import dev.whitedev.jpi.agent.patch.ClassSchema;
 import dev.whitedev.jpi.agent.profiler.JfrProfilerManager;
+import dev.whitedev.jpi.agent.thread.ThreadAnalyzer;
 import dev.whitedev.jpi.agent.patch.MethodBodyPatcher;
 import dev.whitedev.jpi.agent.patch.ModernMethodPatcher;
 import dev.whitedev.jpi.agent.patch.RuntimeJavaCompiler;
@@ -59,6 +60,7 @@ final class TargetInspector {
     private final FieldWriteManager fieldWriteManager;
     private final FileInterceptorManager fileInterceptorManager;
     private final JfrProfilerManager jfrProfilerManager;
+    private final ThreadAnalyzer threadAnalyzer;
     private final HeapObjectInspector heapInspector;
     private final Map<String, WeakReference<Class<?>>> classIndex = new ConcurrentHashMap<>();
 
@@ -71,6 +73,7 @@ final class TargetInspector {
         this.fieldWriteManager = new FieldWriteManager(instrumentation);
         this.fileInterceptorManager = new FileInterceptorManager(instrumentation, registry);
         this.jfrProfilerManager = new JfrProfilerManager();
+        this.threadAnalyzer = new ThreadAnalyzer();
         this.heapInspector = new HeapObjectInspector(instrumentation);
     }
 
@@ -526,6 +529,7 @@ final class TargetInspector {
         fieldWriteManager.close();
         fileInterceptorManager.close();
         jfrProfilerManager.close();
+        threadAnalyzer.close();
         heapInspector.clear();
     }
 
@@ -696,6 +700,14 @@ final class TargetInspector {
             out.append('\n');
         }
         return out.toString();
+    }
+
+    String analyzeThreads() {
+        return threadAnalyzer.snapshot();
+    }
+
+    String clearThreadAnalysis() {
+        return threadAnalyzer.clear();
     }
 
     private RuntimeJavaCompiler.ClassPath runtimeClassPath(final Class<?> target) {
