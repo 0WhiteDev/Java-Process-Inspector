@@ -14,8 +14,10 @@ import java.util.concurrent.atomic.AtomicLong;
 
 public final class FieldWriteRuntime {
     private static final int MAX_QUEUED_EVENTS = 10_000;
+    private static final int MAX_HISTORY_EVENTS = 10_000;
     private static final ConcurrentMap<String, ProbeState> STATES = new ConcurrentHashMap<String, ProbeState>();
     private static final ArrayDeque<WriteEvent> EVENTS = new ArrayDeque<WriteEvent>();
+    private static final ArrayDeque<WriteEvent> HISTORY = new ArrayDeque<WriteEvent>();
     private static final AtomicLong SEQUENCE = new AtomicLong();
 
     private FieldWriteRuntime() { }
@@ -39,6 +41,8 @@ public final class FieldWriteRuntime {
             synchronized (EVENTS) {
                 EVENTS.addLast(event);
                 while (EVENTS.size() > MAX_QUEUED_EVENTS) EVENTS.removeFirst();
+                HISTORY.addLast(event);
+                while (HISTORY.size() > MAX_HISTORY_EVENTS) HISTORY.removeFirst();
             }
         } catch (Throwable ignored) {
         }
@@ -78,7 +82,16 @@ public final class FieldWriteRuntime {
         STATES.clear();
         synchronized (EVENTS) {
             EVENTS.clear();
+            HISTORY.clear();
         }
+    }
+
+    static String history() {
+        StringBuilder output = new StringBuilder();
+        synchronized (EVENTS) {
+            for (WriteEvent event : HISTORY) output.append(event.line()).append('\n');
+        }
+        return output.toString();
     }
 
     private static String value(Object value, FieldWriteConfig config, int depth) {

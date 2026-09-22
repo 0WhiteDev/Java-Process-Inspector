@@ -104,6 +104,10 @@ public final class FieldWriteManager {
         return FieldWriteRuntime.statusAndDrain();
     }
 
+    public String history() {
+        return FieldWriteRuntime.history();
+    }
+
     public synchronized void close() {
         stopAll();
         scheduler.shutdownNow();

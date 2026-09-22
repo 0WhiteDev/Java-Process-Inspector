@@ -144,6 +144,8 @@ final class AgentServer implements Runnable {
         registry.put(Operation.FIELD_TRACE_START, payload -> WireProtocol.utf8(inspector.startFieldTrace(payload)));
         registry.put(Operation.FIELD_TRACE_STOP, payload -> WireProtocol.utf8(inspector.stopFieldTrace()));
         registry.put(Operation.FIELD_TRACE_EVENTS, payload -> WireProtocol.utf8(inspector.fieldTraceEvents()));
+        registry.put(Operation.FIELD_TRACE_HISTORY, payload -> WireProtocol.utf8(inspector.fieldTraceHistory()));
+        registry.put(Operation.TRACE_HISTORY, payload -> WireProtocol.utf8(inspector.traceHistory()));
         registry.put(Operation.FILE_MONITOR_START, payload -> WireProtocol.utf8(inspector.startFileMonitor(payload)));
         registry.put(Operation.FILE_MONITOR_STOP, payload -> WireProtocol.utf8(inspector.stopFileMonitor()));
         registry.put(Operation.FILE_EVENT_BATCH, payload -> WireProtocol.utf8(inspector.fileEvents()));

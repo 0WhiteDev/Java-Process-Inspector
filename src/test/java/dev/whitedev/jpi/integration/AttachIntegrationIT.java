@@ -99,6 +99,7 @@ class AttachIntegrationIT {
                 assertEquals("changed", session.requestText(Operation.EXECUTE, fieldProbe));
                 String fieldEvents = session.requestText(Operation.FIELD_TRACE_EVENTS, "");
                 assertTrue(fieldEvents.contains("E\t"));
+                assertTrue(session.requestText(Operation.FIELD_TRACE_HISTORY, "").contains("E\t"));
                 assertTrue(fieldEvents.contains(Base64.getEncoder().encodeToString("\"jpi-smoke-target\"".getBytes("UTF-8"))));
                 assertTrue(fieldEvents.contains(Base64.getEncoder().encodeToString("\"changed\"".getBytes("UTF-8"))));
                 assertTrue(session.requestText(Operation.FIELD_TRACE_STOP, "").contains("restored"));
@@ -179,6 +180,7 @@ class AttachIntegrationIT {
                 String traceEvents = session.requestText(Operation.TRACE_EVENTS, "");
                 assertTrue(traceEvents.contains("S\t" + traceId + "\t"));
                 assertTrue(traceEvents.contains("E\t"));
+                assertTrue(session.requestText(Operation.TRACE_HISTORY, "").contains("E\t"));
                 assertTrue(traceEvents.contains("\treturn\t"));
                 String xrefs = session.requestText(Operation.METHOD_XREFS,
                         classId + "\nruntimeValue\n()Ljava/lang/String;");

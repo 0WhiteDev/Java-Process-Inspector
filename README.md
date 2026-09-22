@@ -138,6 +138,7 @@ This message commonly appears when a Java 21 agent is loaded into a target runni
 | Executor | Java editor with syntax highlighting, line numbers, folding, bracket matching, and Ctrl+Enter execution |
 | Fields | Inspect existing static fields without constructing arbitrary target classes |
 | Field writes | Find every bytecode write to a field and capture the exact runtime value transition, writer, thread, source line, call ID, object, and caller stack |
+| Trace value | Runtime value provenance from bounded field-write and tracer histories, call-ID and thread correlation, and static value Xrefs |
 | Heap objects | Bounded traversal from explicit static roots, reachable instance counts, samples, fields, outgoing references, known-root paths, value search, and confirmed HPROF export |
 | VM environment | VM arguments, redacted system properties, command line, and classloader inventory |
 | Session snapshot | One ZIP containing metrics, environment, class inventory, load events, and a thread dump |
@@ -424,6 +425,23 @@ For instance fields that are not present in Static fields, open <strong>Field wr
 </details>
 
 <details>
+<summary><strong>Trace this value</strong></summary>
+
+Trace value correlates existing bounded evidence instead of applying a JVM-wide taint transform:
+
+- Keep field-write and Live Tracer histories after their event queues are consumed by the regular panels
+- Match a selected value in field assignments, trace arguments, return values, and exceptions
+- Connect writer methods to fields and nested calls through captured call IDs
+- Use thread and timestamp data as a fallback when a call ID is unavailable
+- Search static bytecode Xrefs for the same string or endpoint
+- Present the result as a provenance chain with runtime evidence and a separate static-users table
+- Publish each investigation to Runtime Timeline
+
+Start a field-write or Live Tracer probe, exercise the target application, then open <strong>Trace value</strong> and enter a value such as <code>"abc123"</code>, <code>abc123</code>, or an object identity. You can also select a captured row in <strong>Field writes</strong> and click <strong>Trace value</strong>. The analysis uses the existing bounded history limits, so it remains suitable for long-running targets.
+
+</details>
+
+<details>
 <summary><strong>Automatic API Hooks</strong></summary>
 
 - Enable Network, Crypto, Files, Reflection, and Class loading observation without locating methods manually
@@ -696,6 +714,7 @@ flowchart LR
 | `dev.whitedev.jpi.agent.cfg` | Static control-flow analysis, bounded runtime block coverage, and ordered transitions |
 | `dev.whitedev.jpi.analysis.difference` | Immutable run captures, CFG transition parsing, and behavioral comparison |
 | `dev.whitedev.jpi.agent.field` | Exact PUTFIELD and PUTSTATIC instrumentation, bounded value transitions, stacks, and restoration |
+| `dev.whitedev.jpi.provenance` | Value matching and runtime-to-static provenance correlation |
 | `dev.whitedev.jpi.agent.file` | Java file call-site transformation, local rules, path redirection, bounded events, and restoration |
 | `dev.whitedev.jpi.agent.heap` | Reachable-object inspection and optional heap dumps |
 | `dev.whitedev.jpi.agent.hook` | Automatic API hook profiles and call-site instrumentation |
@@ -820,6 +839,7 @@ A manual run of the Release workflow builds downloadable workflow artifacts with
 - Automatic API Hooks observe direct bytecode call sites available in loaded non-bootstrap classes. Calls made entirely inside JDK internals, native code, unavailable definitions, or classes loaded after a profile starts are not included in that run. Restart the selected profiles to scan newly loaded classes.
 - File Monitor observes covered Java call sites in available loaded application classes. Native file access, JNI, unavailable definitions, and classes loaded after the scan are not captured until the monitor is restarted. Events are emitted before the underlying call, so successful completion and exact read results are not claimed.
 - Dynamic Xrefs cover traced methods and aggregate observed call sites for the active session. Static reverse scans are bounded and can omit definitions whose bytecode is unavailable.
+- Trace value is runtime provenance evidence, not a complete JVM taint proof. It can only connect values captured by active field-write or Live Tracer probes, and static Xrefs show potential users rather than confirmed runtime propagation.
 - Deobfuscation mappings are a controller-side overlay keyed by JVM names and descriptors. Mapped decompilation is read-only and never redefines the target, local variables are not reconstructed, and duplicate binary names from different classloaders currently share one exported name.
 - Raw `.class` replacements must preserve the exact class name and HotSwap-compatible schema.
 - Strong module boundaries can prevent reading selected fields, those fields are skipped.

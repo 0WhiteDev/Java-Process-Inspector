@@ -18,6 +18,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 public final class TraceRuntime {
     private static final int MAX_QUEUED_EVENTS = 5000;
+    private static final int MAX_HISTORY_EVENTS = 5000;
     private static final int MAX_GRAPH_EDGES = 20000;
     private static final int MAX_GRAPH_NODES = 20000;
     private static final AtomicLong SEQUENCE = new AtomicLong();
@@ -26,6 +27,7 @@ public final class TraceRuntime {
     private static final Map<EdgeKey, DynamicEdge> GRAPH = new ConcurrentHashMap<EdgeKey, DynamicEdge>();
     private static final Map<MethodKey, NodeStats> NODES = new ConcurrentHashMap<MethodKey, NodeStats>();
     private static final ArrayDeque<TraceEvent> EVENTS = new ArrayDeque<TraceEvent>();
+    private static final ArrayDeque<TraceEvent> HISTORY = new ArrayDeque<TraceEvent>();
     private static final ThreadLocal<ArrayDeque<Long>> CALL_STACK = new ThreadLocal<ArrayDeque<Long>>() {
         @Override protected ArrayDeque<Long> initialValue() {
             return new ArrayDeque<Long>();
@@ -146,6 +148,14 @@ public final class TraceRuntime {
         return output.toString();
     }
 
+    static String historySnapshot() {
+        StringBuilder output = new StringBuilder();
+        synchronized (EVENTS) {
+            for (TraceEvent event : HISTORY) output.append(event.line()).append('\n');
+        }
+        return output.toString();
+    }
+
     public static String graphSnapshot() {
         List<DynamicEdge> edges = new ArrayList<DynamicEdge>(GRAPH.values());
         Collections.sort(edges, new Comparator<DynamicEdge>() {
@@ -212,6 +222,7 @@ public final class TraceRuntime {
         NODES.clear();
         synchronized (EVENTS) {
             EVENTS.clear();
+            HISTORY.clear();
         }
         CALL_STACK.remove();
     }
@@ -252,6 +263,8 @@ public final class TraceRuntime {
             synchronized (EVENTS) {
                 EVENTS.addLast(event);
                 while (EVENTS.size() > MAX_QUEUED_EVENTS) EVENTS.removeFirst();
+                HISTORY.addLast(event);
+                while (HISTORY.size() > MAX_HISTORY_EVENTS) HISTORY.removeFirst();
             }
         } catch (Throwable ignored) {
         }

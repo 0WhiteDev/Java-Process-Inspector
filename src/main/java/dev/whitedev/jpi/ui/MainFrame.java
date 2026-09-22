@@ -31,6 +31,7 @@ import dev.whitedev.jpi.ui.system.OverviewPanel;
 import dev.whitedev.jpi.ui.tracing.ApiHooksPanel;
 import dev.whitedev.jpi.ui.tracing.LiveTracerPanel;
 import dev.whitedev.jpi.ui.tracing.XrefsPanel;
+import dev.whitedev.jpi.ui.provenance.ValueTracePanel;
 import dev.whitedev.jpi.ui.timeline.RuntimeTimelinePanel;
 import dev.whitedev.jpi.ui.timeline.RuntimeTimelineStore;
 import dev.whitedev.jpi.ui.threads.ThreadAnalyzerPanel;
@@ -158,6 +159,11 @@ public final class MainFrame extends JFrame {
         DeobfuscationWorkspacePanel deobfuscation = new DeobfuscationWorkspacePanel(mappingWorkspace);
         ExecutorPanel executor = new ExecutorPanel(mappingWorkspace);
         FieldWritesPanel fieldWrites = new FieldWritesPanel(mappingWorkspace, timelineStore);
+        ValueTracePanel valueTrace = new ValueTracePanel(mappingWorkspace, timelineStore);
+        fieldWrites.setTraceValueAction(selected -> {
+            valueTrace.selectValue(selected);
+            selectView("Trace value");
+        });
         FieldsPanel fields = new FieldsPanel(mappingWorkspace, timelineStore, fieldWrites,
                 () -> selectView("Field writes"));
         HeapObjectPanel heapObjects = new HeapObjectPanel(mappingWorkspace);
@@ -175,7 +181,7 @@ public final class MainFrame extends JFrame {
         views = new ArrayList<>(Arrays.asList(overview, timeline, profiler, threadAnalyzer, debugger, classes, tracer, callGraph, apiHooks, fileMonitor, xrefs,
                 cfg, differences,
                 investigation, deobfuscation,
-                constantSearch, executor, fields, fieldWrites, environment, network, heapObjects, nativeSymbols,
+                constantSearch, executor, fields, fieldWrites, valueTrace, environment, network, heapObjects, nativeSymbols,
                 memory, dll, plugins));
 
         addCard("Overview", overview);
@@ -197,6 +203,7 @@ public final class MainFrame extends JFrame {
         addCard("Code executor", executor);
         addCard("Static fields", fields);
         addCard("Field writes", fieldWrites);
+        addCard("Trace value", valueTrace);
         addCard("Heap objects", heapObjects);
         addCard("Native symbols", nativeSymbols);
         addCard("VM environment", environment);
@@ -291,6 +298,7 @@ public final class MainFrame extends JFrame {
         addNavigation(sidebar, "Code executor");
         addNavigation(sidebar, "Static fields");
         addNavigation(sidebar, "Field writes");
+        addNavigation(sidebar, "Trace value");
         addNavigation(sidebar, "VM environment");
         addNavigation(sidebar, "Network activity");
         configurePluginNavigation(workspacePluginNavigation);

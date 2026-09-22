@@ -124,6 +124,10 @@ public final class TraceManager {
         return TraceRuntime.statusAndDrain();
     }
 
+    public String history() {
+        return TraceRuntime.historySnapshot();
+    }
+
     public String graph() {
         return TraceRuntime.graphSnapshot();
     }

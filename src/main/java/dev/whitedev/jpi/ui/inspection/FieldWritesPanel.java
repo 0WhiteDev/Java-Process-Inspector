@@ -20,6 +20,7 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Base64;
+import java.util.function.Consumer;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -41,6 +42,7 @@ public final class FieldWritesPanel extends JPanel implements SessionAware {
     private final JButton scan = Ui.secondaryButton("Find write sites");
     private final JButton start = Ui.primaryButton("Trace writes");
     private final JButton stop = Ui.secondaryButton("Stop trace");
+    private final JButton traceValue = Ui.secondaryButton("Trace value");
     private final JLabel status = new JLabel("Select a field from Static fields or enter its owner and name");
     private final DefaultTableModel sitesModel = model("Class", "Method", "Descriptor", "Line", "Opcode", "Sites");
     private final DefaultTableModel eventsModel = model("#", "Time", "Thread", "Value change", "Written by", "Line", "Call");
@@ -52,6 +54,7 @@ public final class FieldWritesPanel extends JPanel implements SessionAware {
     private InspectorSession session;
     private boolean polling;
     private boolean loading;
+    private Consumer<String> traceValueAction;
 
     public FieldWritesPanel(DeobfuscationWorkspace workspace, RuntimeTimelineStore timeline) {
         super(new BorderLayout(0, 16));
@@ -66,11 +69,13 @@ public final class FieldWritesPanel extends JPanel implements SessionAware {
         JButton clear = Ui.secondaryButton("Clear events");
         copy.addActionListener(event -> copyEvent());
         clear.addActionListener(event -> clearEvents());
+        traceValue.addActionListener(event -> traceSelectedValue());
         stop.addActionListener(event -> stop());
         scan.addActionListener(event -> scan());
         start.addActionListener(event -> start());
         actions.add(copy);
         actions.add(clear);
+        actions.add(traceValue);
         actions.add(stop);
         actions.add(scan);
         actions.add(start);
@@ -135,6 +140,11 @@ public final class FieldWritesPanel extends JPanel implements SessionAware {
         setSession(null);
     }
 
+    public void setTraceValueAction(Consumer<String> action) {
+        traceValueAction = action;
+        traceValue.setEnabled(action != null && events.getSelectedRow() >= 0);
+    }
+
     public void selectField(String owner, String fieldName) {
         this.owner.setText(owner);
         field.setText(fieldName);
@@ -151,6 +161,7 @@ public final class FieldWritesPanel extends JPanel implements SessionAware {
         scan.setEnabled(attached);
         start.setEnabled(attached);
         stop.setEnabled(attached);
+        traceValue.setEnabled(attached && traceValueAction != null && events.getSelectedRow() >= 0);
         if (!attached) {
             sitesModel.setRowCount(0);
             clearEvents();
@@ -288,8 +299,9 @@ public final class FieldWritesPanel extends JPanel implements SessionAware {
 
     private void showSelected() {
         int row = events.getSelectedRow();
+        traceValue.setEnabled(session != null && traceValueAction != null && row >= 0);
         if (row < 0) return;
-        Object sequence = eventsModel.getValueAt(row, 0);
+        Object sequence = eventsModel.getValueAt(events.convertRowIndexToModel(row), 0);
         if (sequence instanceof Number) {
             WriteEvent event = captured.get(((Number) sequence).longValue());
             if (event != null) {
@@ -297,6 +309,15 @@ public final class FieldWritesPanel extends JPanel implements SessionAware {
                 details.setCaretPosition(0);
             }
         }
+    }
+
+    private void traceSelectedValue() {
+        int row = events.getSelectedRow();
+        if (row < 0 || traceValueAction == null) return;
+        Object sequence = eventsModel.getValueAt(events.convertRowIndexToModel(row), 0);
+        if (!(sequence instanceof Number)) return;
+        WriteEvent event = captured.get(((Number) sequence).longValue());
+        if (event != null) traceValueAction.accept(event.current);
     }
 
     private void clearEvents() {

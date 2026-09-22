@@ -13,6 +13,7 @@ public enum TimelineSource {
     FILE("File I/O"),
     PROFILER("JFR profiler"),
     THREAD("Thread analyzer"),
+    VALUE_TRACE("Value trace"),
     MARKER("Marker");
 
     private final String label;

@@ -355,6 +355,14 @@ final class TargetInspector {
         return fieldWriteManager.events();
     }
 
+    String fieldTraceHistory() {
+        return fieldWriteManager.history();
+    }
+
+    String traceHistory() {
+        return traceManager.history();
+    }
+
     String startFileMonitor(String settings) throws Exception {
         cfgManager.stopAll();
         traceManager.stopAll();
