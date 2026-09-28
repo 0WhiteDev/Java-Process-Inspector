@@ -6,6 +6,7 @@ import dev.whitedev.jpi.protocol.Operation;
 import dev.whitedev.jpi.ui.Async;
 import dev.whitedev.jpi.ui.SessionAware;
 import dev.whitedev.jpi.ui.Ui;
+import dev.whitedev.jpi.ui.heap.HprofPanel;
 
 import javax.swing.JButton;
 import javax.swing.JFileChooser;
@@ -125,7 +126,10 @@ public final class HeapObjectPanel extends JPanel implements SessionAware {
         main.setResizeWeight(.34);
         main.setDividerLocation(250);
         main.setBorder(null);
-        add(main, BorderLayout.CENTER);
+        javax.swing.JTabbedPane modes = new javax.swing.JTabbedPane();
+        modes.addTab("Live reachable graph", main);
+        modes.addTab("HPROF / GC roots", new HprofPanel());
+        add(modes, BorderLayout.CENTER);
 
         rootFilter.addActionListener(event -> scan());
         classFilter.addActionListener(event -> scan());

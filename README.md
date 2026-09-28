@@ -139,7 +139,7 @@ This message commonly appears when a Java 21 agent is loaded into a target runni
 | Fields | Inspect existing static fields without constructing arbitrary target classes |
 | Field writes | Find every bytecode write to a field and capture the exact runtime value transition, writer, thread, source line, call ID, object, and caller stack |
 | Trace value | Runtime value provenance from bounded field-write and tracer histories, call-ID and thread correlation, and static value Xrefs |
-| Heap objects | Bounded traversal from explicit static roots, reachable instance counts, samples, fields, outgoing references, known-root paths, value search, and confirmed HPROF export |
+| Heap objects | Live bounded static-root traversal and offline HPROF analysis with incoming/outgoing references, GC-root paths, retained sizes, and largest retained objects |
 | VM environment | VM arguments, redacted system properties, command line, and classloader inventory |
 | Session snapshot | One ZIP containing metrics, environment, class inventory, load events, and a thread dump |
 | Network activity | Live process-owned TCP/UDP IPv4/IPv6 endpoints, states, filtering, and open/close timeline |
@@ -568,7 +568,28 @@ JSON is the lossless workspace format and retains notes, tags, colors, disabled 
 
 Open <strong>Heap objects</strong> and enter a static root class such as <code>com.example.SessionRegistry</code> or a narrow package prefix. Optionally filter the reachable graph by instance class, field name, or scalar value. The Sample instances tab shows shallow size and the known-root path, Reachable class counts provides a bounded histogram, and Object details lets you follow outgoing references by double-clicking an object-valued field.
 
-Reachable instance counts are not global heap histograms. They cover unique objects found from the selected static roots within the configured limits. Likewise, a displayed path is a path to a known static root selected for this scan, not proof that it is the shortest path among every JVM GC root. Use <strong>Export full HPROF...</strong> when a complete heap snapshot is required, then analyze that file outside the target with tools such as Eclipse MAT, VisualVM, or another HPROF analyzer.
+Live reachable instance counts cover objects found from the selected static roots within the configured limits. Their paths lead to known static roots selected for the live scan. Use <strong>Export full HPROF...</strong> for a full snapshot and open it in the <strong>HPROF / GC roots</strong> tab for offline analysis.
+
+</details>
+
+<details>
+<summary><strong>Who references me? / Memory leak inspection</strong></summary>
+
+- Open local HPROF files without an attached JVM
+- Search snapshot instances by class-name fragment or enter a hexadecimal object ID
+- Inspect incoming references, outgoing object fields, static references, and array items
+- Follow any reference by double-clicking its row
+- Find shortest representative paths to up to eight distinct GC roots with field names and root kinds
+- Exclude weak, soft, and phantom referent edges from root-path searches by default
+- Compute optional retained sizes and rank the 50 largest retained objects
+- Run the Apache NetBeans heap analyzer in a separate JVM with a configurable memory limit
+- Stop an analysis by closing the snapshot; the worker process releases mapped files on Windows
+
+Open <strong>Heap objects -> HPROF / GC roots -> Open HPROF...</strong>. Enter a class fragment such as <code>UserSession</code>, click <strong>Find objects</strong>, then double-click an object or click <strong>Who references me?</strong>. The <strong>Paths to GC roots</strong> tab shows which fields keep the selected object reachable. Incoming and outgoing reference tabs let you navigate both directions. Enable <strong>Compute retained size</strong> before inspection or choose <strong>Largest retained objects</strong> to investigate possible memory leaks.
+
+Retained size is the memory retained through an object under the analyzer's retention model. It is not the sum of all reachable objects, and retained sizes of different objects can overlap. A large retained size or a root path is evidence to investigate, not proof of a leak. Snapshot IDs are HPROF IDs, not live weak handles or <code>identityHashCode</code> values. For a remote target, copy the exported HPROF to the desktop before opening it.
+
+Reference counts use the snapshot index; reference tables display at most 1,000 edges. Root-path traversal visits at most 50,000 objects with depth 128 and reports truncation. It returns one representative shortest path per discovered root, not every alternative path. Large dumps can require substantial disk space for <code>.nbcache</code> indexes beside the HPROF and several minutes of analysis. Increase <strong>Analyzer MiB</strong> before reopening a dump if its worker exhausts memory; the default limit is 2,048 MiB. Retained-size calculation uses the backend model independently of the root-path referent filter.
 
 </details>
 
@@ -717,6 +738,7 @@ flowchart LR
 | `dev.whitedev.jpi.provenance` | Value matching and runtime-to-static provenance correlation |
 | `dev.whitedev.jpi.agent.file` | Java file call-site transformation, local rules, path redirection, bounded events, and restoration |
 | `dev.whitedev.jpi.agent.heap` | Reachable-object inspection and optional heap dumps |
+| `dev.whitedev.jpi.heap` | Offline HPROF reference indexes, GC-root paths, retained-size analysis, and isolated worker lifecycle |
 | `dev.whitedev.jpi.agent.hook` | Automatic API hook profiles and call-site instrumentation |
 | `dev.whitedev.jpi.agent.patch` | Runtime compilation, schema validation, method patching, and source execution |
 | `dev.whitedev.jpi.agent.profiler` | Reflective JFR recording, event aggregation, safety bounds, and lifecycle |
@@ -747,6 +769,7 @@ flowchart LR
 | `dev.whitedev.jpi.ui.timeline` | Bounded multi-source runtime events, call-tree correlation, filtering, and unified timeline presentation |
 | `dev.whitedev.jpi.ui.analysis` | Investigation sessions, interactive bytecode CFG, coverage, and two-run difference tracing |
 | `dev.whitedev.jpi.ui.inspection` | Static fields, field-write provenance, constants, and heap-object views |
+| `dev.whitedev.jpi.ui.heap` | Offline HPROF browsing and memory-leak investigation |
 | `dev.whitedev.jpi.ui.workspace` | Deobfuscation workspace and target-side code executor |
 | `dev.whitedev.jpi.ui.system` | Runtime overview and environment snapshot views |
 | `dev.whitedev.jpi.ui.nativeview` | Native symbols plus Windows network, memory, and DLL views |
@@ -835,7 +858,7 @@ A manual run of the Release workflow builds downloadable workflow artifacts with
 - Runtime Timeline gives exact call-tree correlation for trace events and bounded heuristic correlation for other sources. Matching by thread and time or time alone does not prove that one event caused another.
 - Difference tracing compares only events captured by active probes and profiles during each recording. Ordered branch comparison covers one explicitly selected method, is capped at 20,000 transitions per run, and can perturb timing in very hot methods.
 - Field-write tracing observes direct bytecode PUTFIELD and PUTSTATIC instructions in available loaded classes. Writes performed entirely by native code, Unsafe, VarHandle internals, reflection internals, hidden definitions, or classes loaded after the scan are not captured by that probe.
-- Heap / Object Inspector counts and paths cover only the bounded graph reachable from explicitly selected static roots. Reflective access can be denied by target modules, and weak sample handles can expire at any time. Full HPROF export is HotSpot-specific and can pause the target or consume substantial disk space.
+- Live Heap / Object Inspector counts and paths cover the bounded graph reachable from selected static roots. Offline HPROF analysis indexes the snapshot and separately limits displayed references and root-path searches. Reflective live access can be denied by modules, and weak sample handles can expire. Full HPROF export is HotSpot-specific and can pause the target or consume substantial disk space.
 - Automatic API Hooks observe direct bytecode call sites available in loaded non-bootstrap classes. Calls made entirely inside JDK internals, native code, unavailable definitions, or classes loaded after a profile starts are not included in that run. Restart the selected profiles to scan newly loaded classes.
 - File Monitor observes covered Java call sites in available loaded application classes. Native file access, JNI, unavailable definitions, and classes loaded after the scan are not captured until the monitor is restarted. Events are emitted before the underlying call, so successful completion and exact read results are not claimed.
 - Dynamic Xrefs cover traced methods and aggregate observed call sites for the active session. Static reverse scans are bounded and can omit definitions whose bytecode is unavailable.

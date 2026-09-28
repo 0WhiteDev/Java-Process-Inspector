@@ -28,49 +28,87 @@
     </properties>
     <dependencies>
         <dependency>
-            <groupId>com.formdev</groupId><artifactId>flatlaf</artifactId><version>${flatlaf.version}</version>
+            <groupId>org.netbeans.modules</groupId>
+            <artifactId>org-netbeans-lib-profiler</artifactId>
+            <version>RELEASE260</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>*</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
-            <groupId>com.formdev</groupId><artifactId>flatlaf-extras</artifactId><version>${flatlaf.version}</version>
+            <groupId>com.formdev</groupId>
+            <artifactId>flatlaf</artifactId>
+            <version>${flatlaf.version}</version>
         </dependency>
         <dependency>
-            <groupId>com.fifesoft</groupId><artifactId>rsyntaxtextarea</artifactId><version>${rsyntaxtextarea.version}</version>
+            <groupId>com.formdev</groupId>
+            <artifactId>flatlaf-extras</artifactId>
+            <version>${flatlaf.version}</version>
         </dependency>
         <dependency>
-            <groupId>net.java.dev.jna</groupId><artifactId>jna-platform</artifactId><version>${jna.version}</version>
+            <groupId>com.fifesoft</groupId>
+            <artifactId>rsyntaxtextarea</artifactId>
+            <version>${rsyntaxtextarea.version}</version>
         </dependency>
         <dependency>
-            <groupId>org.javassist</groupId><artifactId>javassist</artifactId><version>${javassist.version}</version>
+            <groupId>net.java.dev.jna</groupId>
+            <artifactId>jna-platform</artifactId>
+            <version>${jna.version}</version>
         </dependency>
         <dependency>
-            <groupId>org.ow2.asm</groupId><artifactId>asm-tree</artifactId><version>${asm.version}</version>
+            <groupId>org.javassist</groupId>
+            <artifactId>javassist</artifactId>
+            <version>${javassist.version}</version>
         </dependency>
         <dependency>
-            <groupId>org.ow2.asm</groupId><artifactId>asm-commons</artifactId><version>${asm.version}</version>
+            <groupId>org.ow2.asm</groupId>
+            <artifactId>asm-tree</artifactId>
+            <version>${asm.version}</version>
         </dependency>
         <dependency>
-            <groupId>com.google.code.findbugs</groupId><artifactId>jsr305</artifactId><version>3.0.2</version>
+            <groupId>org.ow2.asm</groupId>
+            <artifactId>asm-commons</artifactId>
+            <version>${asm.version}</version>
         </dependency>
         <dependency>
-            <groupId>org.eclipse.jdt</groupId><artifactId>ecj</artifactId><version>${ecj.version}</version>
+            <groupId>com.google.code.findbugs</groupId>
+            <artifactId>jsr305</artifactId>
+            <version>3.0.2</version>
         </dependency>
         <dependency>
-            <groupId>org.junit.jupiter</groupId><artifactId>junit-jupiter</artifactId><version>${junit.version}</version><scope>test</scope>
+            <groupId>org.eclipse.jdt</groupId>
+            <artifactId>ecj</artifactId>
+            <version>${ecj.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>${junit.version}</version>
+            <scope>test</scope>
         </dependency>
     </dependencies>
     <build>
         <finalName>${jpi.finalName}</finalName>
         <resources>
-            <resource><directory>src/main/resources</directory></resource>
+            <resource>
+                <directory>src/main/resources</directory>
+            </resource>
             <resource>
                 <directory>docs</directory>
-                <includes><include>logo.svg</include></includes>
+                <includes>
+                    <include>logo.svg</include>
+                </includes>
                 <targetPath>assets</targetPath>
             </resource>
         </resources>
         <plugins>
             <plugin>
-                <groupId>org.apache.maven.plugins</groupId><artifactId>maven-compiler-plugin</artifactId><version>3.15.0</version>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.15.0</version>
                 <configuration>
                     <encoding>UTF-8</encoding>
                     <release>${maven.compiler.release}</release>
@@ -79,7 +117,9 @@
                     <execution>
                         <id>compile-agent-java8</id>
                         <phase>process-classes</phase>
-                        <goals><goal>compile</goal></goals>
+                        <goals>
+                            <goal>compile</goal>
+                        </goals>
                         <configuration>
                             <release>8</release>
                             <useIncrementalCompilation>false</useIncrementalCompilation>
@@ -93,29 +133,48 @@
                 </executions>
             </plugin>
             <plugin>
-                <groupId>org.apache.maven.plugins</groupId><artifactId>maven-resources-plugin</artifactId><version>3.3.1</version>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-resources-plugin</artifactId>
+                <version>3.3.1</version>
                 <executions>
                     <execution>
                         <id>copy-agent-java8</id>
                         <phase>process-classes</phase>
-                        <goals><goal>copy-resources</goal></goals>
+                        <goals>
+                            <goal>copy-resources</goal>
+                        </goals>
                         <configuration>
                             <outputDirectory>${project.build.outputDirectory}</outputDirectory>
                             <overwrite>true</overwrite>
                             <resources>
-                                <resource><directory>${project.build.directory}/agent-classes</directory></resource>
+                                <resource>
+                                    <directory>${project.build.directory}/agent-classes</directory>
+                                </resource>
                             </resources>
                         </configuration>
                     </execution>
                 </executions>
             </plugin>
             <plugin>
-                <groupId>org.apache.maven.plugins</groupId><artifactId>maven-surefire-plugin</artifactId><version>3.5.6</version>
-                <configuration><useModulePath>false</useModulePath></configuration>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.5.6</version>
+                <configuration>
+                    <useModulePath>false</useModulePath>
+                </configuration>
             </plugin>
             <plugin>
-                <groupId>org.apache.maven.plugins</groupId><artifactId>maven-failsafe-plugin</artifactId><version>3.5.6</version>
-                <executions><execution><goals><goal>integration-test</goal><goal>verify</goal></goals></execution></executions>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <version>3.5.6</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>integration-test</goal>
+                            <goal>verify</goal>
+                        </goals>
+                    </execution>
+                </executions>
                 <configuration>
                     <useModulePath>false</useModulePath>
                     <systemPropertyVariables>
@@ -125,36 +184,53 @@
                 </configuration>
             </plugin>
             <plugin>
-                <groupId>org.apache.maven.plugins</groupId><artifactId>maven-jar-plugin</artifactId><version>3.4.1</version>
-                <configuration><forceCreation>true</forceCreation></configuration>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>3.4.1</version>
+                <configuration>
+                    <forceCreation>true</forceCreation>
+                </configuration>
             </plugin>
             <plugin>
-                <groupId>org.apache.maven.plugins</groupId><artifactId>maven-shade-plugin</artifactId><version>3.6.0</version>
-                <executions><execution><phase>package</phase><goals><goal>shade</goal></goals><configuration>
-                    <createDependencyReducedPom>false</createDependencyReducedPom>
-                    <filters>
-                        <filter>
-                            <artifact>*:*</artifact>
-                            <excludes>
-                                <exclude>module-info.class</exclude>
-                                <exclude>META-INF/versions/*/module-info.class</exclude>
-                                <exclude>META-INF/*.SF</exclude>
-                                <exclude>META-INF/*.RSA</exclude>
-                                <exclude>META-INF/*.DSA</exclude>
-                            </excludes>
-                        </filter>
-                    </filters>
-                    <transformers><transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                        <manifestEntries>
-                            <Main-Class>dev.whitedev.jpi.JpiApplication</Main-Class>
-                            <Agent-Class>dev.whitedev.jpi.agent.InspectorAgent</Agent-Class>
-                            <Premain-Class>dev.whitedev.jpi.agent.InspectorAgent</Premain-Class>
-                            <Can-Redefine-Classes>true</Can-Redefine-Classes>
-                            <Can-Retransform-Classes>true</Can-Retransform-Classes>
-                            <Enable-Native-Access>ALL-UNNAMED</Enable-Native-Access>
-                        </manifestEntries>
-                    </transformer></transformers>
-                </configuration></execution></executions>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>3.6.0</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                        <configuration>
+                            <createDependencyReducedPom>false</createDependencyReducedPom>
+                            <filters>
+                                <filter>
+                                    <artifact>*:*</artifact>
+                                    <excludes>
+                                        <exclude>module-info.class</exclude>
+                                        <exclude>META-INF/versions/*/module-info.class</exclude>
+                                        <exclude>META-INF/*.SF</exclude>
+                                        <exclude>META-INF/*.RSA</exclude>
+                                        <exclude>META-INF/*.DSA</exclude>
+                                    </excludes>
+                                </filter>
+                            </filters>
+                            <transformers>
+                                <transformer
+                                        implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                    <manifestEntries>
+                                        <Main-Class>dev.whitedev.jpi.JpiApplication</Main-Class>
+                                        <Agent-Class>dev.whitedev.jpi.agent.InspectorAgent</Agent-Class>
+                                        <Premain-Class>dev.whitedev.jpi.agent.InspectorAgent</Premain-Class>
+                                        <Can-Redefine-Classes>true</Can-Redefine-Classes>
+                                        <Can-Retransform-Classes>true</Can-Retransform-Classes>
+                                        <Enable-Native-Access>ALL-UNNAMED</Enable-Native-Access>
+                                    </manifestEntries>
+                                </transformer>
+                            </transformers>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>

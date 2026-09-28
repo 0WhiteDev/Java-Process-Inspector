@@ -11,6 +11,7 @@ Java Process Inspector embeds the following decompiler distributions as applicat
 | ASM Core, Tree, and Commons API | 9.10.1 | BSD-3-Clause | https://asm.ow2.io/ |
 | JSR-305 annotations | 3.0.2 | Apache License 2.0 | https://central.sonatype.com/artifact/com.google.code.findbugs/jsr305 |
 | Eclipse Compiler for Java | 3.26.0 | Eclipse Public License 2.0 | https://projects.eclipse.org/projects/eclipse.jdt |
+| Apache NetBeans Profiler heap library | RELEASE260 | Apache License 2.0 | https://github.com/apache/netbeans/tree/master/profiler/lib.profiler |
 
 The embedded Maven Central artifacts were verified against their published SHA-1 values:
 
