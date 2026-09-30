@@ -47,10 +47,11 @@ class AttachIntegrationIT {
                 assertTrue(threadAnalysis.startsWith("M\t"), threadAnalysis);
                 assertTrue(threadAnalysis.contains("\nT\t"), threadAnalysis);
                 String profilerStart = session.requestText(Operation.JFR_PROFILE_START,
-                        "durationSeconds=1;categories=CPU,ALLOCATIONS,EXCEPTIONS,GC,THREADS,IO");
+                        "durationSeconds=15;categories=CPU,ALLOCATIONS,EXCEPTIONS,GC,THREADS,IO");
                 assertTrue(profilerStart.startsWith("RECORDING\ttrue"), profilerStart);
                 String profilerWork = "public class ProfilerWork { public static void execute(java.io.PrintStream out) { long end = System.nanoTime() + 800000000L; long value = 0; while (System.nanoTime() < end) { byte[] bytes = new byte[4096]; bytes[0] = 1; value += bytes[0]; } out.print(value > 0); } }";
                 assertEquals("true", session.requestText(Operation.EXECUTE, profilerWork));
+                session.requestText(Operation.JFR_PROFILE_STOP, "");
                 String profilerStatus = "";
                 for (int attempt = 0; attempt < 100; attempt++) {
                     profilerStatus = session.requestText(Operation.JFR_PROFILE_STATUS, "");
@@ -63,6 +64,11 @@ class AttachIntegrationIT {
                 assertTrue(profilerReport.contains("\nF\tCPU\t"));
                 String loadedClasses = session.requestText(Operation.CLASSES, "");
                 assertTrue(loadedClasses.contains(AttachTarget.class.getName()));
+                var loaderSnapshot = dev.whitedev.jpi.loader.ClassLoaderSnapshot.parse(session.requestText(Operation.CLASSLOADER_SNAPSHOT, ""));
+                var targetDefinition = loaderSnapshot.definitions().stream()
+                        .filter(definition -> definition.name().equals(AttachTarget.class.getName())).findFirst().orElseThrow();
+                assertTrue(loaderSnapshot.loaders().stream().anyMatch(loader -> loader.id().equals(targetDefinition.loaderId())));
+                assertTrue(session.request(Operation.CLASS_BYTES, targetDefinition.id()).length > 0);
                 assertTrue(session.requestText(Operation.FIELDS, "AttachTarget").contains("marker"));
                 String heapScan = session.requestText(Operation.HEAP_SCAN,
                         "root=" + AttachTarget.class.getName() + "\nclass=java.lang.String\nvalue=jpi-smoke-target"
@@ -232,6 +238,7 @@ class AttachIntegrationIT {
                     assertNotNull(zip.getEntry("loaded-classes.tsv"));
                     assertNotNull(zip.getEntry("thread-dump.txt"));
                     assertNotNull(zip.getEntry("thread-analysis.tsv"));
+                    assertNotNull(zip.getEntry("classloaders.tsv"));
                 }
             } finally { session.close(); }
         } finally {

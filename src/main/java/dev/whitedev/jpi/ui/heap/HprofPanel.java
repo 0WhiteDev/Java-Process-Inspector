@@ -43,9 +43,11 @@ public final class HprofPanel extends JPanel {
     private final DefaultTableModel objectsModel = model("Object ID", "Object", "Shallow bytes", "Retained bytes");
     private final DefaultTableModel incomingModel = model("Object ID", "Referenced by", "Field / array index", "Weak / soft");
     private final DefaultTableModel outgoingModel = model("Object ID", "References", "Field / array index", "Weak / soft");
+    private final DefaultTableModel loaderModel = model("Class ID", "Defined class", "Instances", "Shallow bytes");
     private final JTable objects = new JTable(objectsModel);
     private final JTable incoming = new JTable(incomingModel);
     private final JTable outgoing = new JTable(outgoingModel);
+    private final JTable loaderClasses = new JTable(loaderModel);
     private final JTextArea paths = Ui.outputArea();
     private final JTextArea summary = Ui.outputArea();
     private HprofAnalysis snapshot;
@@ -78,6 +80,7 @@ public final class HprofPanel extends JPanel {
         configure(objects);
         configure(incoming);
         configure(outgoing);
+        configure(loaderClasses);
         objects.getSelectionModel().addListSelectionListener(event -> {
             if (event.getValueIsAdjusting() || objects.getSelectedRow() < 0) return;
             objectId.setText(objectsModel.getValueAt(objects.convertRowIndexToModel(objects.getSelectedRow()), 0).toString());
@@ -85,10 +88,18 @@ public final class HprofPanel extends JPanel {
         follow(objects);
         follow(incoming);
         follow(outgoing);
+        loaderClasses.addMouseListener(new MouseAdapter() {
+            @Override public void mouseClicked(MouseEvent event) {
+                if (event.getClickCount() != 2 || busy || loaderClasses.getSelectedRow() < 0) return;
+                filter.setText(loaderClasses.getValueAt(loaderClasses.getSelectedRow(), 1).toString());
+                search();
+            }
+        });
         JTabbedPane details = new JTabbedPane();
         details.addTab("Paths to GC roots", Ui.scroll(paths));
         details.addTab("Incoming references", Ui.scroll(incoming));
         details.addTab("Outgoing references", Ui.scroll(outgoing));
+        details.addTab("Loader-defined classes", Ui.scroll(loaderClasses));
         details.addTab("Object summary", Ui.scroll(summary));
         JSplitPane split = new JSplitPane(JSplitPane.VERTICAL_SPLIT, Ui.scroll(objects), details);
         split.setResizeWeight(.4);
@@ -117,7 +128,15 @@ public final class HprofPanel extends JPanel {
             snapshot = loaded;
             clear();
             status.setText("Loaded " + loaded.file() + ". Search a class or inspect a snapshot object ID.");
+            if (!filter.getText().isBlank()) search();
         });
+    }
+
+    public void focusClass(String className) {
+        filter.setText(className);
+        retained.setSelected(true);
+        if (snapshot != null && !busy) search();
+        else status.setText("Open HPROF to find loader instances. Choose the matching snapshot object; live and HPROF IDs differ.");
     }
 
     private void chooseFile() {
@@ -185,6 +204,9 @@ public final class HprofPanel extends JPanel {
     private void renderReport(HprofSnapshot.ObjectReport report) {
         renderReferences(incomingModel, report.incoming());
         renderReferences(outgoingModel, report.outgoing());
+        loaderModel.setRowCount(0);
+        for (var defined : report.loaderClasses()) loaderModel.addRow(new Object[]{hex(defined.classId()),
+                defined.name(), defined.instances(), defined.shallowBytes()});
         StringBuilder text = new StringBuilder();
         for (int index = 0; index < report.paths().size(); index++) {
             var path = report.paths().get(index);
@@ -208,7 +230,10 @@ public final class HprofPanel extends JPanel {
                 + "\nIncoming references: " + report.incomingCount() + "\nOutgoing references: " + report.outgoingCount()
                 + "\nReference tables show up to 1,000 edges. Double-click to inspect the referring or referenced object."
                 + "\nSnapshot IDs are HPROF identifiers, not live inspector handles or identityHashCode values."
-                + "\nRetained size uses the heap analyzer's retention model; root path filtering does not alter this calculation.");
+                + "\nRetained size uses the heap analyzer's retention model; root path filtering does not alter this calculation."
+                + (report.loaderClassCount() == 0 ? "" : "\n\nLoader-defined classes: " + report.loaderClassCount()
+                + "\nInstances of those classes: " + report.loaderInstances() + "\nTheir shallow bytes: " + report.loaderShallowBytes()
+                + "\nClass association is not exclusive retention ownership. Double-click a defined class to find its instances."));
         summary.setCaretPosition(0);
         status.setText(report.incomingCount() + " incoming | " + report.outgoingCount() + " outgoing | "
                 + report.paths().size() + " GC root paths" + (report.pathsLimited() ? " | paths limited" : ""));
@@ -256,6 +281,7 @@ public final class HprofPanel extends JPanel {
         objectsModel.setRowCount(0);
         incomingModel.setRowCount(0);
         outgoingModel.setRowCount(0);
+        loaderModel.setRowCount(0);
         paths.setText("");
         summary.setText("");
         objectId.setText("");

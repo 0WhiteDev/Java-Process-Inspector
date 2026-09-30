@@ -48,6 +48,11 @@ class HprofSnapshotIT {
                     .noneMatch(step -> step.edgeToChild().endsWith("referent")));
             assertTrue(snapshot.biggest(10).stream().anyMatch(value -> value.id() == objects.getFirst().id()));
             assertThrows(java.io.IOException.class, () -> snapshot.inspect(0, false, true));
+            var loaders = snapshot.search("jdk.internal.loader.ClassLoaders$AppClassLoader", 10);
+            assertEquals(1, loaders.size());
+            var loaderReport = snapshot.inspect(loaders.getFirst().id(), true, true);
+            assertTrue(loaderReport.loaderClasses().stream().anyMatch(type -> type.name().equals(HprofReferenceFixture.class.getName())));
+            assertTrue(loaderReport.loaderInstances() >= 1);
         }
         String classpath = System.getProperty("jpi.agent.jar") + java.io.File.pathSeparator + System.getProperty("jpi.test.classes");
         Process packaged = new ProcessBuilder(executable, "-cp", classpath,

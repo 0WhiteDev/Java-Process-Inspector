@@ -30,6 +30,7 @@ public final class SessionSnapshotExporter {
         reports.put("metrics.txt", session.requestText(Operation.METRICS, ""));
         reports.put("environment.txt", session.requestText(Operation.ENVIRONMENT, ""));
         reports.put("loaded-classes.tsv", session.requestText(Operation.CLASSES, ""));
+        reports.put("classloaders.tsv", session.requestText(Operation.CLASSLOADER_SNAPSHOT, ""));
         reports.put("class-events.tsv", session.requestText(Operation.CLASS_EVENTS, ""));
         reports.put("thread-dump.txt", session.requestText(Operation.THREAD_DUMP, ""));
         reports.put("thread-analysis.tsv", session.requestText(Operation.THREAD_ANALYZE, ""));

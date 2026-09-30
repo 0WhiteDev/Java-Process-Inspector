@@ -64,6 +64,8 @@ public final class HeapObjectPanel extends JPanel implements SessionAware {
     private final JTable counts = new JTable(countModel);
     private final JTable members = new JTable(memberModel);
     private final JTextArea objectHeader = Ui.outputArea();
+    private final HprofPanel snapshotPanel = new HprofPanel();
+    private final javax.swing.JTabbedPane modes = new javax.swing.JTabbedPane();
     private InspectorSession session;
 
     public HeapObjectPanel(DeobfuscationWorkspace workspace) {
@@ -126,9 +128,8 @@ public final class HeapObjectPanel extends JPanel implements SessionAware {
         main.setResizeWeight(.34);
         main.setDividerLocation(250);
         main.setBorder(null);
-        javax.swing.JTabbedPane modes = new javax.swing.JTabbedPane();
         modes.addTab("Live reachable graph", main);
-        modes.addTab("HPROF / GC roots", new HprofPanel());
+        modes.addTab("HPROF / GC roots", snapshotPanel);
         add(modes, BorderLayout.CENTER);
 
         rootFilter.addActionListener(event -> scan());
@@ -140,6 +141,11 @@ public final class HeapObjectPanel extends JPanel implements SessionAware {
         dump.addActionListener(event -> dumpHeap());
         objectHeader.setText("Select a sampled object. Handles are weak and may expire after the target releases an object.");
         setSession(null);
+    }
+
+    public void inspectLoaderMemory(String loaderType) {
+        modes.setSelectedIndex(1);
+        snapshotPanel.focusClass(loaderType);
     }
 
     @Override public void setSession(InspectorSession session) {

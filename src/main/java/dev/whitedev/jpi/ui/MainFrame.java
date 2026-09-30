@@ -41,6 +41,7 @@ import dev.whitedev.jpi.ui.inspection.ConstantSearchPanel;
 import dev.whitedev.jpi.ui.inspection.FieldsPanel;
 import dev.whitedev.jpi.ui.inspection.FieldWritesPanel;
 import dev.whitedev.jpi.ui.inspection.HeapObjectPanel;
+import dev.whitedev.jpi.ui.loader.ClassLoaderExplorerPanel;
 import dev.whitedev.jpi.ui.plugins.PluginsPanel;
 import com.formdev.flatlaf.extras.FlatSVGIcon;
 
@@ -167,6 +168,13 @@ public final class MainFrame extends JFrame {
         FieldsPanel fields = new FieldsPanel(mappingWorkspace, timelineStore, fieldWrites,
                 () -> selectView("Field writes"));
         HeapObjectPanel heapObjects = new HeapObjectPanel(mappingWorkspace);
+        ClassLoaderExplorerPanel loaders = new ClassLoaderExplorerPanel((id, name) -> {
+            classes.selectDefinition(id, name);
+            selectView("Loaded classes");
+        }, type -> {
+            heapObjects.inspectLoaderMemory(type);
+            selectView("Heap objects");
+        });
         EnvironmentPanel environment = new EnvironmentPanel(timelineStore);
         ConstantSearchPanel constantSearch = new ConstantSearchPanel(mappingWorkspace, value -> {
             investigation.investigate(value);
@@ -181,7 +189,7 @@ public final class MainFrame extends JFrame {
         views = new ArrayList<>(Arrays.asList(overview, timeline, profiler, threadAnalyzer, debugger, classes, tracer, callGraph, apiHooks, fileMonitor, xrefs,
                 cfg, differences,
                 investigation, deobfuscation,
-                constantSearch, executor, fields, fieldWrites, valueTrace, environment, network, heapObjects, nativeSymbols,
+                constantSearch, executor, fields, fieldWrites, valueTrace, loaders, environment, network, heapObjects, nativeSymbols,
                 memory, dll, plugins));
 
         addCard("Overview", overview);
@@ -190,6 +198,7 @@ public final class MainFrame extends JFrame {
         addCard("Thread Analyzer", threadAnalyzer);
         addCard("Debugger", debugger);
         addCard("Loaded classes", classes);
+        addCard("ClassLoader Explorer", loaders);
         addCard("Live tracer", tracer);
         addCard("Call graph", callGraph);
         addCard("API hooks", apiHooks);
@@ -285,6 +294,7 @@ public final class MainFrame extends JFrame {
         addNavigation(sidebar, "Thread Analyzer");
         addNavigation(sidebar, "Debugger");
         addNavigation(sidebar, "Loaded classes");
+        addNavigation(sidebar, "ClassLoader Explorer");
         addNavigation(sidebar, "Live tracer");
         addNavigation(sidebar, "Call graph");
         addNavigation(sidebar, "API hooks");

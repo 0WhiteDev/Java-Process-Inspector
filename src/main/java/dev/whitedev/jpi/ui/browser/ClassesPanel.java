@@ -895,6 +895,31 @@ public final class ClassesPanel extends JPanel implements SessionAware {
         refreshMethodPatchState();
     }
 
+    public void selectDefinition(String identifier, String className) {
+        InspectorSession current = session;
+        if (current == null || identifier == null || className == null) return;
+        search.setText(className);
+        Async.run(() -> parseClassInventory(current.requestText(Operation.CLASSES, "")), inventory -> {
+            if (session != current) return;
+            allClasses = inventory.classes;
+            capturedClassCount = inventory.captured;
+            filter(false, () -> {
+                if (session != current) return;
+                for (int position = 0; position < filteredClasses.size(); position++) {
+                    if (!identifier.equals(filteredClasses.get(position).id)) continue;
+                    classPage = position / CLASS_PAGE_SIZE;
+                    renderClassPage(identifier);
+                    LoadedClassInfo selected = list.getSelectedValue();
+                    if (selected != null && identifier.equals(selected.id)) decompile();
+                    return;
+                }
+                Ui.error(this, new IllegalStateException("The selected class definition is no longer loaded"));
+            });
+        }, error -> {
+            if (session == current) Ui.error(this, error);
+        });
+    }
+
     public void selectClass(String className) {
         if (className == null || className.isBlank()) return;
         search.setText(className);

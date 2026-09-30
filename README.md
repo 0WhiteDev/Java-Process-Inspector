@@ -140,8 +140,9 @@ This message commonly appears when a Java 21 agent is loaded into a target runni
 | Field writes | Find every bytecode write to a field and capture the exact runtime value transition, writer, thread, source line, call ID, object, and caller stack |
 | Trace value | Runtime value provenance from bounded field-write and tracer histories, call-ID and thread correlation, and static value Xrefs |
 | Heap objects | Live bounded static-root traversal and offline HPROF analysis with incoming/outgoing references, GC-root paths, retained sizes, and largest retained objects |
+| ClassLoader Explorer | Defining-loader tree, loaded classes, URLs and code sources, duplicate definitions, package overlaps, weak collection history, and HPROF memory navigation |
 | VM environment | VM arguments, redacted system properties, command line, and classloader inventory |
-| Session snapshot | One ZIP containing metrics, environment, class inventory, load events, and a thread dump |
+| Session snapshot | One ZIP containing metrics, environment, class and classloader inventories, load events, thread analysis, and a thread dump |
 | Network activity | Live process-owned TCP/UDP IPv4/IPv6 endpoints, states, filtering, and open/close timeline |
 | Native symbols | Offline PE, ELF, PDB, DWARF, and MAP analysis with C++ demangling, source locations, RTTI, and virtual-table discovery |
 | Plugins | Versioned Java API for trusted JAR extensions that add tabs, bytecode tools, deobfuscators, exporters, hook profiles, and decompilers |
@@ -594,6 +595,30 @@ Reference counts use the snapshot index; reference tables display at most 1,000 
 </details>
 
 <details>
+<summary><strong>ClassLoader Explorer</strong></summary>
+
+- Build the actual parent hierarchy from defining classloaders and their parents, including Bootstrap
+- Keep stable session loader IDs without holding strong references to the target loaders
+- Browse every loaded definition through 500-row pages and a class-name filter
+- Open the exact classloader-specific definition in Loaded classes by double-clicking a class row
+- Show inherited URLClassLoader URLs and observed ProtectionDomain code-source locations
+- Detect binary class names defined by multiple loaders and packages present in multiple namespaces
+- Compare snapshots to keep weak-reference collection history, first-observed time, and last-observed time
+- Jump to offline HPROF analysis for the selected loader type, then inspect its incoming references and retained size
+- Browse loader-defined classes and their snapshot instance counts and shallow bytes in the HPROF panel
+- Include the loader inventory in session ZIP exports as <code>classloaders.tsv</code>
+
+Attach to a JVM and open <strong>ClassLoader Explorer</strong>. Select a loader in the tree to browse its defined classes and the <strong>Loader details / URLs</strong> tab. Use <strong>Duplicate definitions (global)</strong> to find multiple definitions such as <code>com.google.gson.Gson</code>; each row includes its loader and definition ID. Double-click the desired row to decompile that exact definition. <strong>Package collisions (global)</strong> shows package names present in more than one loader. These overlaps are common in plugin isolation and do not alone indicate a linkage error. The global tables display up to 2,000 duplicate-definition rows and 1,000 package rows; narrow the filter to inspect further matches.
+
+Click <strong>Refresh loaders</strong> after plugins are loaded or unloaded. <code>collected</code> means the agent observed a cleared weak reference to a previously discovered loader. An active loader with zero current definitions is still alive. This history starts when Explorer first observes a loader; it does not reconstruct earlier unloads or exact JVM class-unload timestamps. Arrays are counted in each loader's inventory but excluded from duplicate-name and package-overlap analysis. The tree follows parent relationships and does not model custom child-first delegation rules or every loader instance that has never defined a class.
+
+For leak investigation, select a loader and click <strong>Inspect retained memory...</strong>. Open a local HPROF and select the matching loader instance from the prefilled class search. Snapshot IDs differ from live session IDs and identity hashes; JPI does not claim to match them automatically. Inspect retained size and GC roots, then use <strong>Loader-defined classes</strong> to browse related classes and double-click one to find its snapshot instances. Counts and shallow bytes describe class association, not exclusive ownership of every object by that loader.
+
+Loader URLs are best-effort metadata. Newer built-in loaders may not expose URLClassLoader APIs, so JPI uses observed class code sources. Custom <code>getURLs</code> overrides are skipped. Access denied by the target's security policy is reported rather than bypassed. The live shallow size of the loader object is distinct from retained memory, which requires offline HPROF analysis.
+
+</details>
+
+<details>
 <summary><strong>Plugin API</strong></summary>
 
 - Discover plugin entry points with Java <code>ServiceLoader</code> from <code>~/.jpi/plugins/*.jar</code>
@@ -738,6 +763,8 @@ flowchart LR
 | `dev.whitedev.jpi.provenance` | Value matching and runtime-to-static provenance correlation |
 | `dev.whitedev.jpi.agent.file` | Java file call-site transformation, local rules, path redirection, bounded events, and restoration |
 | `dev.whitedev.jpi.agent.heap` | Reachable-object inspection and optional heap dumps |
+| `dev.whitedev.jpi.agent.loader` | Defining-loader inventory, parent hierarchy, URL metadata, and weak collection tracking |
+| `dev.whitedev.jpi.loader` | Classloader snapshot parsing, duplicate definitions, and package-overlap analysis |
 | `dev.whitedev.jpi.heap` | Offline HPROF reference indexes, GC-root paths, retained-size analysis, and isolated worker lifecycle |
 | `dev.whitedev.jpi.agent.hook` | Automatic API hook profiles and call-site instrumentation |
 | `dev.whitedev.jpi.agent.patch` | Runtime compilation, schema validation, method patching, and source execution |
@@ -770,6 +797,7 @@ flowchart LR
 | `dev.whitedev.jpi.ui.analysis` | Investigation sessions, interactive bytecode CFG, coverage, and two-run difference tracing |
 | `dev.whitedev.jpi.ui.inspection` | Static fields, field-write provenance, constants, and heap-object views |
 | `dev.whitedev.jpi.ui.heap` | Offline HPROF browsing and memory-leak investigation |
+| `dev.whitedev.jpi.ui.loader` | ClassLoader Explorer tree, class pages, namespace comparisons, and memory navigation |
 | `dev.whitedev.jpi.ui.workspace` | Deobfuscation workspace and target-side code executor |
 | `dev.whitedev.jpi.ui.system` | Runtime overview and environment snapshot views |
 | `dev.whitedev.jpi.ui.nativeview` | Native symbols plus Windows network, memory, and DLL views |

@@ -99,8 +99,34 @@ public final class HprofSnapshot {
             }
         }
         Paths paths = paths(selected, excludeWeak);
+        List<LoaderClass> loaderClasses = new ArrayList<>();
+        long loaderInstances = 0;
+        long loaderBytes = 0;
+        int loaderClassCount = 0;
+        if (isLoader(selected)) {
+            for (Object value : heap.getAllClasses()) {
+                JavaClass type = (JavaClass) value;
+                Instance loader = type.getClassLoader();
+                if (loader == null || loader.getInstanceId() != id) continue;
+                loaderClassCount++;
+                loaderInstances += type.getInstancesCount();
+                loaderBytes += type.getAllInstancesSize();
+                if (loaderClasses.size() < MAX_REFERENCES) {
+                    loaderClasses.add(new LoaderClass(type.getJavaClassId(), type.getName(),
+                            type.getInstancesCount(), type.getAllInstancesSize()));
+                }
+            }
+        }
         return new ObjectReport(summary(selected, retained), allIncoming.size(), outgoingCount,
-                List.copyOf(incoming), List.copyOf(outgoing), paths.paths, paths.limited, paths.visited);
+                List.copyOf(incoming), List.copyOf(outgoing), paths.paths, paths.limited, paths.visited,
+                List.copyOf(loaderClasses), loaderClassCount, loaderInstances, loaderBytes);
+    }
+
+    private static boolean isLoader(Instance instance) {
+        for (JavaClass type = instance.getJavaClass(); type != null; type = type.getSuperClass()) {
+            if ("java.lang.ClassLoader".equals(type.getName())) return true;
+        }
+        return false;
     }
 
     private Paths paths(Instance selected, boolean excludeWeak) {
@@ -189,9 +215,11 @@ public final class HprofSnapshot {
     public record Reference(long id, String object, String edge, boolean weak) implements java.io.Serializable {}
     public record PathStep(long id, String object, String edgeToChild) implements java.io.Serializable {}
     public record RootPath(String kind, List<PathStep> steps) implements java.io.Serializable {}
+    public record LoaderClass(long classId, String name, long instances, long shallowBytes) implements java.io.Serializable {}
     public record ObjectReport(ObjectSummary object, long incomingCount, long outgoingCount,
                                List<Reference> incoming, List<Reference> outgoing, List<RootPath> paths,
-                               boolean pathsLimited, int visitedObjects) implements java.io.Serializable {}
+                               boolean pathsLimited, int visitedObjects, List<LoaderClass> loaderClasses,
+                               int loaderClassCount, long loaderInstances, long loaderShallowBytes) implements java.io.Serializable {}
     private record SearchNode(Instance instance, SearchNode child, String edge, int depth) {}
     private record Paths(List<RootPath> paths, boolean limited, int visited) {}
 }

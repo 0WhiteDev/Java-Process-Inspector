@@ -8,6 +8,7 @@ import dev.whitedev.jpi.agent.cfg.BytecodeCfgAnalyzer;
 import dev.whitedev.jpi.agent.cfg.CfgManager;
 import dev.whitedev.jpi.agent.heap.HeapDumpService;
 import dev.whitedev.jpi.agent.heap.HeapObjectInspector;
+import dev.whitedev.jpi.agent.loader.ClassLoaderExplorer;
 import dev.whitedev.jpi.agent.field.FieldWriteManager;
 import dev.whitedev.jpi.agent.file.FileInterceptorManager;
 import dev.whitedev.jpi.agent.hook.ApiHookManager;
@@ -62,6 +63,7 @@ final class TargetInspector {
     private final JfrProfilerManager jfrProfilerManager;
     private final ThreadAnalyzer threadAnalyzer;
     private final HeapObjectInspector heapInspector;
+    private final ClassLoaderExplorer classLoaderExplorer = new ClassLoaderExplorer();
     private final Map<String, WeakReference<Class<?>>> classIndex = new ConcurrentHashMap<>();
 
     TargetInspector(Instrumentation instrumentation, ClassRegistry registry) {
@@ -112,6 +114,12 @@ final class TargetInspector {
                     value.bytecode.length, value.capturedAt);
         }
         return output.toString();
+    }
+
+    String classLoaderSnapshot() {
+        Class<?>[] loaded = instrumentation.getAllLoadedClasses();
+        for (Class<?> type : loaded) index(type);
+        return classLoaderExplorer.snapshot(loaded, instrumentation);
     }
 
     byte[] classBytes(String identifier) throws Exception {
