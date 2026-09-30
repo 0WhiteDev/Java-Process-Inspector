@@ -22,6 +22,8 @@ import dev.whitedev.jpi.ui.connection.TunnelAgentDialog;
 import dev.whitedev.jpi.ui.debug.DebuggerPanel;
 import dev.whitedev.jpi.ui.file.FileMonitorPanel;
 import dev.whitedev.jpi.ui.profiler.ProfilerPanel;
+import dev.whitedev.jpi.ui.exceptions.ExceptionAnalyzerPanel;
+import dev.whitedev.jpi.loader.ClassLoaderSnapshot;
 import dev.whitedev.jpi.ui.nativeview.DllPanel;
 import dev.whitedev.jpi.ui.nativeview.MemoryPanel;
 import dev.whitedev.jpi.ui.nativeview.NativeSymbolsPanel;
@@ -126,6 +128,8 @@ public final class MainFrame extends JFrame {
                 () -> selectView("Difference tracing"), pluginManager.extensions(), timelineStore);
         FileMonitorPanel fileMonitor = new FileMonitorPanel(timelineStore);
         ProfilerPanel profiler = new ProfilerPanel(timelineStore);
+        ExceptionAnalyzerPanel exceptions = new ExceptionAnalyzerPanel((action, selection) ->
+                openExceptionAnalysis(action, selection, tracer, cfg, debugger));
         ThreadAnalyzerPanel threadAnalyzer = new ThreadAnalyzerPanel(timelineStore);
         fileMonitor.setNavigation((target, event) -> {
             switch (target) {
@@ -186,7 +190,7 @@ public final class MainFrame extends JFrame {
         DllPanel dll = new DllPanel(windows);
         NativeSymbolsPanel nativeSymbols = new NativeSymbolsPanel();
         PluginsPanel plugins = new PluginsPanel(pluginManager);
-        views = new ArrayList<>(Arrays.asList(overview, timeline, profiler, threadAnalyzer, debugger, classes, tracer, callGraph, apiHooks, fileMonitor, xrefs,
+        views = new ArrayList<>(Arrays.asList(overview, timeline, profiler, exceptions, threadAnalyzer, debugger, classes, tracer, callGraph, apiHooks, fileMonitor, xrefs,
                 cfg, differences,
                 investigation, deobfuscation,
                 constantSearch, executor, fields, fieldWrites, valueTrace, loaders, environment, network, heapObjects, nativeSymbols,
@@ -195,6 +199,7 @@ public final class MainFrame extends JFrame {
         addCard("Overview", overview);
         addCard("Runtime timeline", timeline);
         addCard("Profiler", profiler);
+        addCard("Exception Analyzer", exceptions);
         addCard("Thread Analyzer", threadAnalyzer);
         addCard("Debugger", debugger);
         addCard("Loaded classes", classes);
@@ -255,6 +260,42 @@ public final class MainFrame extends JFrame {
         cards.add(component, name);
     }
 
+    private void openExceptionAnalysis(String action, ExceptionAnalyzerPanel.Selection selection,
+                                       LiveTracerPanel tracer, BytecodeCfgPanel cfg, DebuggerPanel debugger) {
+        if ("debug".equals(action)) {
+            debugger.prepareExceptionBreakpoint(selection.exceptionType());
+            selectView("Debugger");
+            return;
+        }
+        InspectorSession current = session;
+        if (current == null) return;
+        var location = selection.location();
+        Async.run(() -> ClassLoaderSnapshot.parse(current.requestText(
+                dev.whitedev.jpi.protocol.Operation.CLASSLOADER_SNAPSHOT, "")), snapshot -> {
+            if (session != current) return;
+            var definitions = snapshot.definitions().stream().filter(definition ->
+                    definition.name().equals(location.owner()) && "definition".equals(definition.kind())).toList();
+            if (definitions.isEmpty()) {
+                Ui.error(this, new IllegalStateException("Observed class is no longer available: " + location.owner()));
+                return;
+            }
+            ClassLoaderSnapshot.Definition target = definitions.getFirst();
+            if (definitions.size() > 1) {
+                String[] options = definitions.stream().map(definition -> snapshot.loaderLabel(definition.loaderId())
+                        + " | " + definition.id()).toArray(String[]::new);
+                Object choice = JOptionPane.showInputDialog(this,
+                        "JFR locations do not identify a live class definition. Choose the defining loader:",
+                        "Select class definition", JOptionPane.QUESTION_MESSAGE, null, options, options[0]);
+                if (choice == null) return;
+                target = definitions.get(Arrays.asList(options).indexOf(choice.toString()));
+            }
+            tracer.selectTarget(target.id(), target.name(), location.method(), location.descriptor());
+            cfg.selectTarget(target.id(), target.name(), location.method(), location.descriptor());
+            debugger.prepareExceptionBreakpoint(selection.exceptionType());
+            selectView("cfg".equals(action) ? "Bytecode CFG" : "Live tracer");
+        }, error -> Ui.error(this, error));
+    }
+
     private JComponent sidebar() {
         JPanel sidebar = new JPanel();
         sidebar.setBackground(Ui.SIDEBAR);
@@ -291,6 +332,7 @@ public final class MainFrame extends JFrame {
         addNavigation(sidebar, "Overview");
         addNavigation(sidebar, "Runtime timeline");
         addNavigation(sidebar, "Profiler");
+        addNavigation(sidebar, "Exception Analyzer");
         addNavigation(sidebar, "Thread Analyzer");
         addNavigation(sidebar, "Debugger");
         addNavigation(sidebar, "Loaded classes");

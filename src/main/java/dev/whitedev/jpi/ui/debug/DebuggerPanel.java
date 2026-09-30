@@ -245,6 +245,12 @@ public final class DebuggerPanel extends JPanel implements SessionAware {
         breakpointLocation.setText("");
     }
 
+    public void prepareExceptionBreakpoint(String exceptionType) {
+        selectTarget(exceptionType, "", "");
+        breakpointType.setSelectedItem(BreakpointSpec.Type.EXCEPTION);
+        state.setText("Exception breakpoint prepared. Review scope and suspend policy, connect JDWP if needed, then click Add.");
+    }
+
     public void addMethodBreakpoint(String owner, String method, String descriptor) {
         selectTarget(owner, method, descriptor);
         addBreakpoint();

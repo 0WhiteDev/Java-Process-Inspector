@@ -62,6 +62,27 @@ class AttachIntegrationIT {
                 String profilerReport = session.requestText(Operation.JFR_PROFILE_REPORT, "");
                 assertTrue(profilerReport.startsWith("R\t"));
                 assertTrue(profilerReport.contains("\nF\tCPU\t"));
+                session.requestText(Operation.EXCEPTION_START, "durationSeconds=30");
+                String exceptionWork = "public class ExceptionWork { public static void emit() { throw new IllegalStateException(\"analysis fixture\"); } public static void execute(java.io.PrintStream out) { for (int i = 0; i < 3; i++) { try { emit(); } catch (IllegalStateException expected) { } } out.print(true); } }";
+                assertEquals("true", session.requestText(Operation.EXECUTE, exceptionWork));
+                dev.whitedev.jpi.exceptions.ExceptionSnapshot exceptionSnapshot = null;
+                boolean foundException = false;
+                for (int attempt = 0; attempt < 200; attempt++) {
+                    exceptionSnapshot = dev.whitedev.jpi.exceptions.ExceptionSnapshot.parse(
+                            session.requestText(Operation.EXCEPTION_SNAPSHOT, "30"));
+                    foundException = exceptionSnapshot.entries().stream().anyMatch(entry ->
+                            entry.type().equals("java.lang.IllegalStateException") && entry.total() >= 3
+                                    && entry.locations().stream().anyMatch(location -> location.owner().equals("ExceptionWork")
+                                    && location.method().equals("emit")));
+                    if (foundException) break;
+                    Thread.sleep(50L);
+                }
+                assertTrue(foundException, String.valueOf(exceptionSnapshot));
+                session.requestText(Operation.EXCEPTION_CLEAR, "");
+                assertTrue(dev.whitedev.jpi.exceptions.ExceptionSnapshot.parse(
+                        session.requestText(Operation.EXCEPTION_SNAPSHOT, "30")).entries().isEmpty());
+                assertEquals("stopped", dev.whitedev.jpi.exceptions.ExceptionSnapshot.parse(
+                        session.requestText(Operation.EXCEPTION_STOP, "")).state());
                 String loadedClasses = session.requestText(Operation.CLASSES, "");
                 assertTrue(loadedClasses.contains(AttachTarget.class.getName()));
                 var loaderSnapshot = dev.whitedev.jpi.loader.ClassLoaderSnapshot.parse(session.requestText(Operation.CLASSLOADER_SNAPSHOT, ""));

@@ -162,6 +162,10 @@ final class AgentServer implements Runnable {
         registry.put(Operation.JFR_PROFILE_STATUS, payload -> WireProtocol.utf8(inspector.jfrProfileStatus()));
         registry.put(Operation.JFR_PROFILE_STOP, payload -> WireProtocol.utf8(inspector.stopJfrProfile()));
         registry.put(Operation.JFR_PROFILE_REPORT, payload -> WireProtocol.utf8(inspector.jfrProfileReport()));
+        registry.put(Operation.EXCEPTION_START, payload -> WireProtocol.utf8(inspector.startExceptionAnalysis(payload)));
+        registry.put(Operation.EXCEPTION_STOP, payload -> WireProtocol.utf8(inspector.stopExceptionAnalysis()));
+        registry.put(Operation.EXCEPTION_SNAPSHOT, payload -> WireProtocol.utf8(inspector.exceptionSnapshot(payload)));
+        registry.put(Operation.EXCEPTION_CLEAR, payload -> WireProtocol.utf8(inspector.clearExceptions()));
         registry.put(Operation.DISCONNECT, payload -> WireProtocol.utf8("disconnected"));
         return registry;
     }

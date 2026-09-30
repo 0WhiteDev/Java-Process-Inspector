@@ -122,6 +122,7 @@ This message commonly appears when a Java 21 agent is loaded into a target runni
 | Overview | Live heap, non-heap, class, thread, GC, uptime, and full thread-dump data |
 | Runtime timeline | Unified trace, API hook, profiler, thread lifecycle, network, class-load, field-write, snapshot, and action-marker events correlated by call ID, parent call, thread, and time |
 | Profiler | Timed JFR recordings with CPU and allocation flame graphs plus locks, exceptions, GC, threads, and I/O analysis |
+| Exception Analyzer | Live JFR exception dashboard with rolling counts, session totals, first/last seen, distinct threads, observed locations, and tracer/CFG/debugger navigation |
 | Thread Analyzer | Live deadlock detection, lock ownership graph, CPU hot threads, contention metrics, parking, thread state history, and creation timeline |
 | Debugger | JDWP launch or remote attach, method/source/BCI/exception breakpoints, pause, continue, Resume All, stepping, call stacks, grouped lazy variables, value editing, evaluation, decompiled source, and force return |
 | Classes | Paged live definitions, original editable or mapped read-only decompilation, full-source HotSwap, modern method patches, raw bytecode editing, rollback, dumps, and selectable CFR, Vineflower, or Procyon engines |
@@ -164,6 +165,26 @@ The interface uses FlatLaf with a focused sidebar workspace instead of nested ut
 - Loopback-only socket, random session token, protocol magic, version, and payload limits
 - Minimal agent thread, the GUI never runs inside the target process
 - Re-attach support and deterministic disconnect handling
+
+</details>
+
+<details>
+<summary><strong>Exception Analyzer</strong></summary>
+
+Attach to a target JVM with Java 14+ and JFR available, open <strong>Exception Analyzer</strong>, set the recording duration and count window (30 seconds by default), then click <strong>Start recording</strong>. Exercise the application and select an exception type to inspect its observed locations and creation stacks. The dashboard refreshes every 1.5 seconds while visible; recording continues when another workspace is open.
+
+- Rolling window event counts and cumulative session totals
+- First and last observed timestamps, distinct thread counts, and per-location totals
+- Literal case-insensitive type filtering and sortable tables
+- <strong>Trace this throw</strong> prepares the selected method in Live tracer and CFG, plus an exception breakpoint in Debugger; it opens Live tracer without starting a probe
+- <strong>Open CFG</strong> prepares the same targets and opens Bytecode CFG; click Analyze CFG there
+- <strong>Prepare exception breakpoint</strong> opens Debugger with the exception type selected; review scope and suspend policy, connect JDWP if necessary, and click Add
+- Explicit defining-loader selection when more than one live class definition matches the observed method
+- Stop, automatic duration limit, and Clear that also discards older events still buffered by JFR
+
+This uses <code>jdk.JavaExceptionThrow</code>, which also covers Java errors. JPI does not additionally enable <code>jdk.JavaErrorThrow</code>, avoiding aggregation of overlapping event streams. Some JDK versions can still emit multiple construction events for a single Error, so counts represent JFR events, not unique throwable objects. Despite the event name, HotSpot emits these events when exceptions are created, not for every subsequent <code>athrow</code>. A caught exception can appear, an object created but never thrown can appear, and repeatedly throwing the same object is not counted repeatedly. Locations describe creation stacks, not guaranteed throw instructions; navigation uses the first non-constructor caller in the recorded stack. Use a debugger exception breakpoint to confirm the actual throw site. JFR delivery is asynchronous and counts are diagnostic observations, not a complete exception audit; stopping can omit buffered events. Recording exception stacks can add noticeable overhead in exception-heavy applications.
+
+Retention is bounded to 256 exception types, 32 locations per type (512 globally), 128 distinct thread IDs per type, 50,000 rolling events, 48 stack frames, and 8,192 characters of stack text per location. Snapshot rows are capped at 8 MiB, safely below the protocol payload limit. Window counts cover up to 300 seconds and can undercount after eviction. Dropped/evicted/omitted details are displayed, and thread counts show <code>+</code> when capped. Location counts are session totals. Exception messages, objects, and arguments are not included in JPI snapshots or sent to the desktop, and application getters are not called. Native JFR buffers and temporary recording chunks can still contain the event's exception message, so use recording only with appropriate access to target data. JFR loader identifiers are not treated as live definition identifiers.
 
 </details>
 
@@ -798,6 +819,9 @@ flowchart LR
 | `dev.whitedev.jpi.ui.inspection` | Static fields, field-write provenance, constants, and heap-object views |
 | `dev.whitedev.jpi.ui.heap` | Offline HPROF browsing and memory-leak investigation |
 | `dev.whitedev.jpi.ui.loader` | ClassLoader Explorer tree, class pages, namespace comparisons, and memory navigation |
+| `dev.whitedev.jpi.agent.exception` | Bounded live JFR exception aggregation and recording lifecycle |
+| `dev.whitedev.jpi.exceptions` | Exception dashboard snapshots and protocol parsing |
+| `dev.whitedev.jpi.ui.exceptions` | Live exception dashboard and analysis navigation |
 | `dev.whitedev.jpi.ui.workspace` | Deobfuscation workspace and target-side code executor |
 | `dev.whitedev.jpi.ui.system` | Runtime overview and environment snapshot views |
 | `dev.whitedev.jpi.ui.nativeview` | Native symbols plus Windows network, memory, and DLL views |

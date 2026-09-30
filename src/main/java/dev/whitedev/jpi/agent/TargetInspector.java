@@ -14,6 +14,7 @@ import dev.whitedev.jpi.agent.file.FileInterceptorManager;
 import dev.whitedev.jpi.agent.hook.ApiHookManager;
 import dev.whitedev.jpi.agent.patch.ClassSchema;
 import dev.whitedev.jpi.agent.profiler.JfrProfilerManager;
+import dev.whitedev.jpi.agent.exception.ExceptionAnalyzer;
 import dev.whitedev.jpi.agent.thread.ThreadAnalyzer;
 import dev.whitedev.jpi.agent.patch.MethodBodyPatcher;
 import dev.whitedev.jpi.agent.patch.ModernMethodPatcher;
@@ -61,6 +62,7 @@ final class TargetInspector {
     private final FieldWriteManager fieldWriteManager;
     private final FileInterceptorManager fileInterceptorManager;
     private final JfrProfilerManager jfrProfilerManager;
+    private final ExceptionAnalyzer exceptionAnalyzer = new ExceptionAnalyzer();
     private final ThreadAnalyzer threadAnalyzer;
     private final HeapObjectInspector heapInspector;
     private final ClassLoaderExplorer classLoaderExplorer = new ClassLoaderExplorer();
@@ -121,6 +123,16 @@ final class TargetInspector {
         for (Class<?> type : loaded) index(type);
         return classLoaderExplorer.snapshot(loaded, instrumentation);
     }
+
+    String startExceptionAnalysis(String settings) throws Exception { return exceptionAnalyzer.start(settings); }
+
+    String stopExceptionAnalysis() { return exceptionAnalyzer.stop(); }
+
+    String exceptionSnapshot(String window) {
+        return exceptionAnalyzer.snapshot(window.isEmpty() ? 30 : Integer.parseInt(window));
+    }
+
+    String clearExceptions() { exceptionAnalyzer.clear(); return exceptionAnalyzer.snapshot(30); }
 
     byte[] classBytes(String identifier) throws Exception {
         if (identifier.startsWith("b:")) {
@@ -545,6 +557,7 @@ final class TargetInspector {
         fieldWriteManager.close();
         fileInterceptorManager.close();
         jfrProfilerManager.close();
+        exceptionAnalyzer.close();
         threadAnalyzer.close();
         heapInspector.clear();
     }
