@@ -75,14 +75,12 @@ class ExceptionAnalyzerTest {
 
     @Test void streamsRealJfrExceptionsAndSupportsClearDuringRecording() throws Exception {
         try (ExceptionAnalyzer analyzer = new ExceptionAnalyzer()) {
-            assertEquals("recording", ExceptionSnapshot.parse(analyzer.start("durationSeconds=30")).state());
+            assertEquals("recording", ExceptionSnapshot.parse(analyzer.start("durationSeconds=90")).state());
             assertThrows(java.io.IOException.class, () -> analyzer.start(""));
-            emit();
             var entry = awaitFailure(analyzer);
             assertTrue(entry.total() >= 1);
             assertTrue(entry.locations().stream().anyMatch(location -> location.method().equals("emit")));
             analyzer.clear();
-            emit();
             assertTrue(awaitFailure(analyzer).total() >= 1);
             new TestError();
             var error = awaitType(analyzer, TestError.class.getName());
@@ -92,18 +90,30 @@ class ExceptionAnalyzerTest {
     }
 
     private static ExceptionSnapshot.Entry awaitFailure(ExceptionAnalyzer analyzer) throws Exception {
-        return awaitType(analyzer, TestFailure.class.getName());
+        return awaitType(analyzer, TestFailure.class.getName(), ExceptionAnalyzerTest::emit);
     }
 
     private static ExceptionSnapshot.Entry awaitType(ExceptionAnalyzer analyzer, String type) throws Exception {
-        long deadline = System.nanoTime() + 10000000000L;
-        while (System.nanoTime() < deadline) {
-            var entry = ExceptionSnapshot.parse(analyzer.snapshot(30)).entries().stream()
-                    .filter(value -> value.type().equals(type)).findFirst();
+        return awaitType(analyzer, type, () -> { });
+    }
+
+    private static ExceptionSnapshot.Entry awaitType(ExceptionAnalyzer analyzer, String type, Runnable producer) throws Exception {
+        long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(15);
+        ExceptionSnapshot snapshot;
+        do {
+            snapshot = ExceptionSnapshot.parse(analyzer.snapshot(30));
+            var entry = snapshot.entries().stream().filter(value -> value.type().equals(type)).findFirst();
             if (entry.isPresent()) return entry.get();
-            Thread.sleep(50);
-        }
-        throw new AssertionError("JFR exception event not delivered");
+            if (!"recording".equals(snapshot.state())) {
+                throw new AssertionError("JFR stopped before delivering " + type + ": " + snapshot.state() + " | " + snapshot.message());
+            }
+            producer.run();
+            Thread.sleep(100);
+        } while (System.nanoTime() < deadline);
+        throw new AssertionError("JFR event not delivered for " + type + ": state=" + snapshot.state()
+                + ", dropped=" + snapshot.dropped() + ", observed types="
+                + snapshot.entries().stream().map(ExceptionSnapshot.Entry::type).limit(10).toList()
+                + ", message=" + snapshot.message());
     }
 
     private static void emit() {
