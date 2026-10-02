@@ -267,6 +267,7 @@ Confidence is an analysis aid, not a correctness guarantee. CFG target-block hit
 - Create method breakpoints directly from Loaded classes, Xrefs, Live Tracer, and Investigation
 - Convert a selected CFG block's executable instruction ordinal into its exact JVM bytecode index and create a breakpoint at that location
 - Send the currently selected debugger frame directly to Live Tracer
+- Persist watch expressions and arm conditional field modification data breakpoints from the Watches tab
 - Open an existing breakpoint, enable or disable it, remove it, or change its suspend policy
 
 Open <strong>Debugger</strong> and choose <strong>Launch with debugger...</strong> to start an executable JAR under JPI control. Add breakpoints before clicking <strong>Continue</strong> if execution must be observed from startup. For an existing JVM, start it with an authorized JDWP listener such as <code>-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=127.0.0.1:5005</code>, then use <strong>Attach JDWP...</strong>. An ordinary JPI agent attachment does not silently enable debugging and the Debugger view reports that distinction.
@@ -276,6 +277,22 @@ Double-click a breakpoint row to enable or disable it. Use <strong>Open location
 When an Instrumentation session is connected to the same target, selecting a debugger frame also loads a CFR method view beside its exact JDI location. Decompiled lines are clearly treated as an analysis view and never used as source breakpoint coordinates. Duplicate binary names from different classloaders are not guessed. In that case JPI keeps the exact JDI location visible and asks the user to open the matching definition in Loaded classes.
 
 Forced return applies only to the selected top frame. The confirmation explicitly warns that the rest of the method is skipped, finally blocks may not execute, and target state can become inconsistent.
+
+<strong>Watch Expressions</strong>
+
+1. Connect the debugger, stop at a breakpoint or click Pause, then select a suspended thread and stack frame.
+2. Open the <strong>Watches</strong> tab beside <strong>Source / evaluate</strong> and click <strong>Add watch...</strong>. Enter an expression such as <code>session.token</code>, <code>player.health</code>, <code>config.debug</code>, or <code>args[0]</code>. The Evaluate bar also has an <strong>Add watch</strong> shortcut.
+3. Watches refresh when a stop selects a frame, when the selected frame changes, or when Refresh is clicked. Each expression reports errors independently, so an out-of-scope local or null path does not hide the other values. Resume and disconnect clear displayed values but retain the expression list.
+4. To stop on writes, select a watch that ends in a real field and click <strong>Break when...</strong>. Choose <strong>Value changes</strong> or <strong>Comparison</strong>. For <code>player.health</code>, enter <code>&lt; 5</code> in the comparison field, not the entire expression. Other examples are <code>== false</code>, <code>!= null</code>, and <code>== "ready"</code>. Select event-thread or all-thread suspension and confirm.
+5. Continue execution. A matching data breakpoint opens the writer's suspended frame and reports the current and proposed values. Use <strong>Enable / disable</strong> or <strong>Remove data breakpoint</strong> in the active list to control the request.
+
+Only the expression list is saved, atomically, to <code>~/.jpi/watches.txt</code>. Values, object handles, and active data breakpoint bindings are not persisted. The list supports up to 100 expressions of up to 2,048 characters each. The file uses Base64 encoding for line-safe storage, not encryption. Do not enter sensitive string literals unless storing their expression text locally is acceptable.
+
+Watches use the existing restricted evaluator: literals, locals, <code>this</code>, static fields of the selected frame's class, field paths, array elements, and array length. No arbitrary method calls, getters, arithmetic, or class-qualified static lookup are executed. <code>cache.entries.size</code> works only if the underlying object really has a field named <code>size</code>; <code>size()</code> is not invoked. Missing local-variable debug symbols can make local names unavailable.
+
+Data breakpoints require the target JVM's field modification watchpoint capability and a suspended frame at installation time. They bind once to the resolved defining field and, for instance fields, to that object's ID. The same field in another classloader or object is not treated as the selected field. Reassigning <code>player</code> does not move an existing <code>player.health</code> breakpoint to the new object: remove and re-arm it. Local variables, array elements, array length, and arbitrary expressions do not support JVM field watchpoints. Changes to the internals of a referenced object are not changes to the containing field. Object IDs are compared by identity, while strings are compared by content and numeric values without integer precision loss.
+
+JDI reports modifications <strong>before</strong> the instruction commits. The watch table therefore still shows the old field value while the active data breakpoint row and Runtime Timeline report the pending new value. A condition tests that proposed new value; it does not stop merely because the current value already matches, and it can match repeated assignments of the same value. <strong>Value changes</strong> skips equal assignments. JDI debugger value edits do not produce modification watchpoint events. There are at most 100 active data breakpoints, which are removed on debugger detach. Observing hot fields can be expensive: nonmatching writes still cause a short debugger event suspension before automatic resume. Thread-only suspension does not freeze unrelated writers; use all-thread suspension when a consistent multi-thread snapshot is required. Condition errors disable the affected data breakpoint and keep the event suspended for inspection.
 
 </details>
 
@@ -776,6 +793,7 @@ flowchart LR
 |---|---|
 | `dev.whitedev.jpi.attach` | JVM discovery, agent loading, and session lifecycle |
 | `dev.whitedev.jpi.debug` | JDI connectors, event loop, breakpoints, stepping, stacks, variables, evaluation, and lifecycle |
+| `dev.whitedev.jpi.debug.watch` | Persistent watch expressions, typed comparisons, and object-specific field modification data breakpoints |
 | `dev.whitedev.jpi.agent` | Agent entry point, control server, class registry, and target orchestration |
 | `dev.whitedev.jpi.agent.analysis` | Constant-pool search, deobfuscation inventory, and Xref analysis |
 | `dev.whitedev.jpi.agent.cfg` | Static control-flow analysis, bounded runtime block coverage, and ordered transitions |

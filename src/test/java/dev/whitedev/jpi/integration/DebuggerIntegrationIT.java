@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.jar.Attributes;
 import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
@@ -25,6 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class DebuggerIntegrationIT {
     @Test void attachesToRunningJdwpProcessByPid() throws Exception {
@@ -95,19 +97,74 @@ class DebuggerIntegrationIT {
         }
     }
 
+    @Test void dataBreakpointsFilterObjectsConditionsAndUnchangedWrites() throws Exception {
+        DebugSession session = DebugSession.launch(executableFixtureJar(WatchTarget.class), List.of(), List.of("hello"));
+        Process process = session.launchedProcess();
+        CountDownLatch ready = new CountDownLatch(1);
+        LinkedBlockingQueue<DebugEvent> hits = new LinkedBlockingQueue<>();
+        session.addListener(new DebugSession.Listener() {
+            @Override public void onEvent(DebugEvent event) {
+                if (event.type() == DebugEvent.Type.BREAK) ready.countDown();
+                if (event.type() == DebugEvent.Type.DATA_BREAK) hits.add(event);
+            }
+        });
+        try {
+            session.breakpoints().add(new BreakpointSpec(WatchTarget.class.getName(), "ready", "()V",
+                    null, null, BreakpointSpec.Type.METHOD, BreakpointSpec.SuspendPolicy.THREAD, true));
+            session.continueExecution();
+            assertTrue(ready.await(15, TimeUnit.SECONDS));
+            long thread = session.stoppedThreadId();
+            assertEquals("10", session.evaluator().evaluate(thread, 0, "player.health"));
+            assertThrows(IllegalArgumentException.class, () -> session.watchField(thread, 0, "1", "", BreakpointSpec.SuspendPolicy.THREAD));
+            var conditional = session.watchField(thread, 0, "player.health", "< 5", BreakpointSpec.SuspendPolicy.THREAD);
+            var counter = session.watchField(thread, 0, "counter", "", BreakpointSpec.SuspendPolicy.ALL);
+            assertTrue(conditional.objectId() > 0);
+            assertEquals(-1, counter.objectId());
+            session.continueExecution();
+            DebugEvent first = hits.poll(15, TimeUnit.SECONDS);
+            assertNotNull(first);
+            assertTrue(first.details().contains("8 -> 4"), first.toString());
+            assertEquals("8", session.evaluator().evaluate(session.stoppedThreadId(), 0, "player.health"));
+            session.dataBreakpoints().remove(conditional.id());
+            var changed = session.watchField(session.stoppedThreadId(), 0, "player.health", "", BreakpointSpec.SuspendPolicy.THREAD);
+            session.continueExecution();
+            DebugEvent second = hits.poll(15, TimeUnit.SECONDS);
+            assertNotNull(second);
+            assertTrue(second.details().contains("4 -> 2"), second.toString());
+            assertEquals(1, session.dataBreakpoints().snapshot().stream().filter(view -> view.id() == changed.id()).findFirst().orElseThrow().hits());
+            session.dataBreakpoints().remove(changed.id());
+            session.continueExecution();
+            DebugEvent third = hits.poll(15, TimeUnit.SECONDS);
+            assertNotNull(third);
+            assertTrue(third.details().contains("0 -> 1"), third.toString());
+            session.dataBreakpoints().setEnabled(counter.id(), false);
+            session.continueExecution();
+            assertTrue(process.waitFor(5, TimeUnit.SECONDS));
+            assertTrue(hits.isEmpty());
+        } finally {
+            session.close();
+            process.destroy();
+            if (!process.waitFor(3, TimeUnit.SECONDS)) process.destroyForcibly();
+        }
+    }
+
     private String javaExecutable() {
         String executable = System.getProperty("os.name").toLowerCase().contains("win") ? "java.exe" : "java";
         return new File(new File(System.getProperty("java.home"), "bin"), executable).getAbsolutePath();
     }
 
     private File executableFixtureJar() throws Exception {
+        return executableFixtureJar(AttachTarget.class);
+    }
+
+    private File executableFixtureJar(Class<?> target) throws Exception {
         File jar = Files.createTempFile("jpi-debug-target-", ".jar").toFile();
         jar.deleteOnExit();
         Manifest manifest = new Manifest();
         manifest.getMainAttributes().put(Attributes.Name.MANIFEST_VERSION, "1.0");
-        manifest.getMainAttributes().put(Attributes.Name.MAIN_CLASS, AttachTarget.class.getName());
-        String resource = AttachTarget.class.getName().replace('.', '/') + ".class";
-        try (InputStream input = AttachTarget.class.getClassLoader().getResourceAsStream(resource);
+        manifest.getMainAttributes().put(Attributes.Name.MAIN_CLASS, target.getName());
+        String resource = target.getName().replace('.', '/') + ".class";
+        try (InputStream input = target.getClassLoader().getResourceAsStream(resource);
              JarOutputStream output = new JarOutputStream(new FileOutputStream(jar), manifest)) {
             assertNotNull(input);
             output.putNextEntry(new JarEntry(resource));

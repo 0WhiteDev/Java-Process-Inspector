@@ -20,12 +20,48 @@ public final class BasicExpressionEvaluator {
     }
 
     public String evaluate(long threadId, int frameIndex, String expression) throws Exception {
+        return formatter.format(value(threadId, frameIndex, expression));
+    }
+
+    public Value value(long threadId, int frameIndex, String expression) throws Exception {
         String text = expression == null ? "" : expression.trim();
         if (text.isEmpty()) throw new IllegalArgumentException("Enter an expression");
         Value value = literal(text);
         if (value == null && !"null".equals(text)) value = resolve(threads.find(threadId).frame(frameIndex), text);
-        return formatter.format(value);
+        return value;
     }
+
+    public FieldTarget field(long threadId, int frameIndex, String expression) throws Exception {
+        String text = expression == null ? "" : expression.trim();
+        if (text.isEmpty() || text.endsWith("]") || text.contains("(") || text.contains(")")) {
+            throw new IllegalArgumentException("Data breakpoints require a field path, not a method call, literal, or array element");
+        }
+        StackFrame frame = threads.find(threadId).frame(frameIndex);
+        int separator = text.lastIndexOf('.');
+        if (separator >= 0) {
+            Value owner = resolve(frame, text.substring(0, separator));
+            if (!(owner instanceof ObjectReference object) || owner instanceof ArrayReference) {
+                throw new IllegalArgumentException("The field owner is null or is not an object");
+            }
+            return target(object.referenceType().fieldByName(text.substring(separator + 1)), object);
+        }
+        try {
+            if (frame.visibleVariableByName(text) != null) throw new IllegalArgumentException("Local variables cannot have JVM field watchpoints");
+        } catch (AbsentInformationException ignored) { }
+        ObjectReference receiver = frame.thisObject();
+        Field field = receiver == null ? null : receiver.referenceType().fieldByName(text);
+        if (field != null) return target(field, receiver);
+        field = frame.location().declaringType().fieldByName(text);
+        if (field != null && field.isStatic()) return target(field, null);
+        throw new IllegalArgumentException("Unknown field: " + text);
+    }
+
+    private static FieldTarget target(Field field, ObjectReference object) {
+        if (field == null) throw new IllegalArgumentException("Unknown field");
+        return new FieldTarget(field, field.isStatic() ? null : object);
+    }
+
+    public record FieldTarget(Field field, ObjectReference object) {}
 
     private Value resolve(StackFrame frame, String expression) throws Exception {
         int position = boundary(expression, 0);

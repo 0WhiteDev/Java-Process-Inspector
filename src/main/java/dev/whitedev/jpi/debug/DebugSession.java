@@ -9,6 +9,7 @@ import com.sun.jdi.VirtualMachine;
 import com.sun.jdi.VMDisconnectedException;
 
 import java.util.List;
+import dev.whitedev.jpi.debug.watch.DataBreakpointManager;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -21,6 +22,7 @@ public final class DebugSession implements AutoCloseable {
     private final ThreadManager threads;
     private final StackFrameManager frames;
     private final BasicExpressionEvaluator evaluator;
+    private final DataBreakpointManager dataBreakpoints;
     private final MethodLocationResolver locations;
     private final DebugEventLoop events;
     private final List<Listener> listeners = new CopyOnWriteArrayList<>();
@@ -37,6 +39,7 @@ public final class DebugSession implements AutoCloseable {
         threads = new ThreadManager(vm);
         frames = new StackFrameManager(vm, threads);
         evaluator = new BasicExpressionEvaluator(vm, threads);
+        dataBreakpoints = new DataBreakpointManager(vm);
         locations = new MethodLocationResolver(vm);
         events = new DebugEventLoop(this, vm, initiallySuspended);
         state = initiallySuspended ? DebugState.SUSPENDED : DebugState.RUNNING;
@@ -109,6 +112,14 @@ public final class DebugSession implements AutoCloseable {
 
     public BasicExpressionEvaluator evaluator() {
         return evaluator;
+    }
+
+    public DataBreakpointManager dataBreakpoints() { return dataBreakpoints; }
+
+    public DataBreakpointManager.View watchField(long threadId, int frameIndex, String expression,
+                                                 String condition, BreakpointSpec.SuspendPolicy policy) throws Exception {
+        requireSuspended();
+        return dataBreakpoints.add(expression, evaluator.field(threadId, frameIndex, expression), condition, policy);
     }
 
     public MethodLocationResolver locations() {
@@ -236,6 +247,7 @@ public final class DebugSession implements AutoCloseable {
         events.close();
         try {
             breakpoints.clear();
+            dataBreakpoints.clear();
             steps.clear(null);
             vm.dispose();
         } catch (RuntimeException ignored) {

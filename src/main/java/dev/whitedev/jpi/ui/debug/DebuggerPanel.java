@@ -100,6 +100,7 @@ public final class DebuggerPanel extends JPanel implements SessionAware {
     private final JTable breakpointTable = new JTable(breakpointModel);
     private final DecompilerService decompiler = new DecompilerService();
     private final Map<String, String> sourceCache = new LinkedHashMap<>();
+    private final WatchesPanel watches = new WatchesPanel();
     private DebugSession debugger;
     private InspectorSession instrumentationSession;
     private PendingInstruction pendingInstruction;
@@ -157,9 +158,14 @@ public final class DebuggerPanel extends JPanel implements SessionAware {
         JPanel evaluate = new JPanel(new BorderLayout(8, 0));
         evaluate.setOpaque(false);
         JButton evaluateButton = Ui.secondaryButton("Evaluate");
+        JButton addWatch = Ui.secondaryButton("Add watch");
         expression.putClientProperty("JTextField.placeholderText", "this.field, local, literal");
         evaluate.add(expression, BorderLayout.CENTER);
-        evaluate.add(evaluateButton, BorderLayout.EAST);
+        JPanel evaluationActions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 5, 0));
+        evaluationActions.setOpaque(false);
+        evaluationActions.add(evaluateButton);
+        evaluationActions.add(addWatch);
+        evaluate.add(evaluationActions, BorderLayout.EAST);
         evaluate.add(evaluation, BorderLayout.SOUTH);
         decompiled.setText("Attach the Instrumentation agent to show decompiled source beside the exact JDI location.");
         JTabbedPane codeViews = new JTabbedPane();
@@ -171,7 +177,10 @@ public final class DebuggerPanel extends JPanel implements SessionAware {
         JPanel breakpointEditor = breakpointEditor();
         JPanel breakpointPanel = titled("Breakpoints", new JScrollPane(breakpointTable));
         breakpointPanel.add(breakpointEditor, BorderLayout.NORTH);
-        JSplitPane lower = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, source, breakpointPanel);
+        JTabbedPane inspectionTabs = new JTabbedPane();
+        inspectionTabs.addTab("Source / evaluate", source);
+        inspectionTabs.addTab("Watches", watches);
+        JSplitPane lower = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, inspectionTabs, breakpointPanel);
         lower.setResizeWeight(.48);
         lower.setDividerLocation(500);
         lower.setBorder(null);
@@ -198,6 +207,7 @@ public final class DebuggerPanel extends JPanel implements SessionAware {
         forceReturn.addActionListener(event -> forceReturn());
         traceMethod.addActionListener(event -> traceSelectedMethod());
         evaluateButton.addActionListener(event -> evaluate());
+        addWatch.addActionListener(event -> watches.addExpression(expression.getText()));
         expression.addActionListener(event -> evaluate());
         threads.addListSelectionListener(event -> {
             if (!event.getValueIsAdjusting()) loadFrames();
@@ -205,6 +215,7 @@ public final class DebuggerPanel extends JPanel implements SessionAware {
         frames.addListSelectionListener(event -> {
             if (!event.getValueIsAdjusting()) {
                 loadVariables();
+                watches.setContext(debugger, frames.getSelectedValue());
                 updateControls();
             }
         });
@@ -456,12 +467,12 @@ public final class DebuggerPanel extends JPanel implements SessionAware {
         debugger = session;
         session.addListener(new DebugSession.Listener() {
             @Override public void onState(DebugState value) {
-                SwingUtilities.invokeLater(() -> stateChanged(value));
+                SwingUtilities.invokeLater(() -> { if (debugger == session) stateChanged(value); });
             }
 
             @Override public void onEvent(DebugEvent event) {
                 publish(event);
-                SwingUtilities.invokeLater(() -> eventReceived(event));
+                SwingUtilities.invokeLater(() -> { if (debugger == session) eventReceived(event); });
             }
         });
         stateChanged(session.state());
@@ -490,7 +501,7 @@ public final class DebuggerPanel extends JPanel implements SessionAware {
         });
         updateControls();
         if (value == DebugState.SUSPENDED) refreshSuspendedState();
-        if (value == DebugState.RUNNING) clearInspection();
+        if (value == DebugState.RUNNING || value == DebugState.DISCONNECTED) clearInspection();
     }
 
     private void eventReceived(DebugEvent event) {
@@ -498,8 +509,10 @@ public final class DebuggerPanel extends JPanel implements SessionAware {
             debugger = null;
             stateChanged(DebugState.DISCONNECTED);
         } else if (event.type() == DebugEvent.Type.BREAK || event.type() == DebugEvent.Type.STEP
-                || event.type() == DebugEvent.Type.EXCEPTION || event.type() == DebugEvent.Type.PAUSE) {
+                || event.type() == DebugEvent.Type.EXCEPTION || event.type() == DebugEvent.Type.PAUSE
+                || event.type() == DebugEvent.Type.DATA_BREAK) {
             refreshSuspendedState();
+            if (event.type() == DebugEvent.Type.DATA_BREAK) state.setText("Data breakpoint: " + event.details());
         } else if (event.type() == DebugEvent.Type.CLASS_PREPARE) {
             refreshBreakpoints();
         }
@@ -598,6 +611,7 @@ public final class DebuggerPanel extends JPanel implements SessionAware {
         Async.run(() -> current.setValue(variable, replacement), change -> {
             state.setText(change.name() + " changed: " + change.before() + " -> " + change.after());
             loadVariables();
+            watches.setContext(debugger, frames.getSelectedValue());
         }, error -> Ui.error(this, error));
     }
 
@@ -822,6 +836,7 @@ public final class DebuggerPanel extends JPanel implements SessionAware {
     }
 
     private void clearInspection() {
+        watches.setContext(debugger, null);
         threads.setListData(new ThreadManager.ThreadView[0]);
         frames.setListData(new StackFrameManager.FrameView[0]);
         variableRoot.removeAllChildren();

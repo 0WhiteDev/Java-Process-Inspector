@@ -1,7 +1,6 @@
 package dev.whitedev.jpi.debug;
 
 import com.sun.jdi.Location;
-import com.sun.jdi.ThreadReference;
 import com.sun.jdi.VMDisconnectedException;
 import com.sun.jdi.VirtualMachine;
 import com.sun.jdi.event.BreakpointEvent;
@@ -9,6 +8,7 @@ import com.sun.jdi.event.ClassPrepareEvent;
 import com.sun.jdi.event.Event;
 import com.sun.jdi.event.EventSet;
 import com.sun.jdi.event.ExceptionEvent;
+import com.sun.jdi.event.ModificationWatchpointEvent;
 import com.sun.jdi.event.StepEvent;
 import com.sun.jdi.event.ThreadDeathEvent;
 import com.sun.jdi.event.ThreadStartEvent;
@@ -85,6 +85,12 @@ final class DebugEventLoop implements AutoCloseable {
             } else if (event instanceof BreakpointEvent breakpoint) {
                 stopped = true;
                 session.stopped(breakpoint.thread(), DebugEvent.Type.BREAK, location(breakpoint.location()), "");
+            } else if (event instanceof ModificationWatchpointEvent write) {
+                var hit = session.dataBreakpoints().handle(write);
+                if (hit != null) {
+                    stopped = true;
+                    session.stopped(write.thread(), DebugEvent.Type.DATA_BREAK, location(write.location()), hit.details());
+                }
             } else if (event instanceof StepEvent step) {
                 stopped = true;
                 session.steps().completed((com.sun.jdi.request.StepRequest) step.request());
