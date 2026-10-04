@@ -1,5 +1,8 @@
 package dev.whitedev.jpi.ui.analysis;
 
+import dev.whitedev.jpi.ui.context.AnalysisTarget;
+import dev.whitedev.jpi.ui.context.ContextActions;
+
 import dev.whitedev.jpi.attach.InspectorSession;
 import dev.whitedev.jpi.deobfuscation.DeobfuscationWorkspace;
 import dev.whitedev.jpi.investigation.InvestigationAnalyzer;
@@ -102,6 +105,7 @@ public final class InvestigationPanel extends JPanel implements SessionAware {
     private InspectorSession session;
 
     private InvestigationReport report;
+    private InvestigationTarget explicitTarget;
 
     private List<InvestigationTarget> targets = List.of();
 
@@ -189,8 +193,24 @@ public final class InvestigationPanel extends JPanel implements SessionAware {
     }
 
     public void investigate(String value) {
+        explicitTarget = null;
         query.setText(value == null ? "" : value.trim());
         investigate();
+    }
+
+    public void investigateMethod(InvestigationTarget target) {
+        if (session == null || loading || !cfgProbeId.isEmpty()) {
+            status.setText("Finish the current analysis or stop branch tracing before opening another target.");
+            return;
+        }
+        explicitTarget = target;
+        query.setText(target.displayName());
+        constantsRaw = "";
+        xrefsRaw = "";
+        render(InvestigationAnalyzer.analyzeTarget(target, ""));
+        overview.setText("User-selected method: " + target.displayName()
+                + "\n\nThis entry point was selected manually, not ranked from constant matches.");
+        analyzeSelected();
     }
 
     public void setDebuggerIntegration(DebuggerPanel debugger, Runnable openDebugger) {
@@ -206,6 +226,7 @@ public final class InvestigationPanel extends JPanel implements SessionAware {
         loading = false;
         polling = false;
         report = null;
+        explicitTarget = null;
         targets = List.of();
         constantsRaw = "";
         xrefsRaw = "";
@@ -225,6 +246,7 @@ public final class InvestigationPanel extends JPanel implements SessionAware {
         InspectorSession current = session;
         String value = workspace.translateSource(query.getText().trim()).source();
         if (current == null || loading) return;
+        explicitTarget = null;
         if (value.length() < 2) {
             status.setText("Enter at least two characters");
             return;
@@ -268,7 +290,8 @@ public final class InvestigationPanel extends JPanel implements SessionAware {
         updateButtons();
         Async.run(() -> current.requestText(Operation.TRACE_EVENTS, ""), raw -> {
             if (session != current || generation != requestGeneration) return;
-            render(InvestigationAnalyzer.analyze(report.query(), constantsRaw, xrefsRaw, raw));
+            render(explicitTarget == null ? InvestigationAnalyzer.analyze(report.query(), constantsRaw, xrefsRaw, raw)
+                    : InvestigationAnalyzer.analyzeTarget(explicitTarget, raw));
             loading = false;
             status.setForeground(Ui.SUCCESS);
             status.setText("Runtime evidence refreshed and confidence scores updated");
@@ -428,6 +451,14 @@ public final class InvestigationPanel extends JPanel implements SessionAware {
         xrefDetails.setText("Selected: " + target.displayName() + "\n\nClick Analyze selected to load callers and outgoing references.");
         cfgDetails.setText("Selected: " + target.displayName() + "\n\nClick Analyze selected to build its CFG.");
         updateButtons();
+    }
+
+    public void setContextActions(ContextActions actions) {
+        actions.install(entries, () -> {
+            InvestigationTarget target = selectedTarget();
+            return target == null ? null : AnalysisTarget.method(
+                    target.classIdentifier(), target.className(), target.methodName(), target.descriptor());
+        });
     }
 
     private InvestigationTarget selectedTarget() {

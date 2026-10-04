@@ -1,5 +1,8 @@
 package dev.whitedev.jpi.ui.inspection;
 
+import dev.whitedev.jpi.ui.context.AnalysisTarget;
+import dev.whitedev.jpi.ui.context.ContextActions;
+
 import dev.whitedev.jpi.attach.InspectorSession;
 import dev.whitedev.jpi.deobfuscation.DeobfuscationWorkspace;
 import dev.whitedev.jpi.protocol.Operation;
@@ -74,6 +77,14 @@ public final class ConstantSearchPanel extends JPanel implements SessionAware {
         query.setEnabled(session != null);
         model.setRowCount(0);
         resultCount.setText(session == null ? "Not attached" : "Enter at least two characters");
+    }
+
+    public void setContextActions(ContextActions actions) {
+        actions.install(results, () -> {
+            int row = results.getSelectedRow();
+            return row < 0 ? null : AnalysisTarget.constant(
+                    String.valueOf(model.getValueAt(results.convertRowIndexToModel(row), 2)));
+        });
     }
 
     private void investigate() {

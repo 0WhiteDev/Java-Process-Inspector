@@ -1,5 +1,8 @@
 package dev.whitedev.jpi.ui.browser;
 
+import dev.whitedev.jpi.ui.context.AnalysisTarget;
+import dev.whitedev.jpi.ui.context.ContextActions;
+
 import dev.whitedev.jpi.ui.Async;
 import dev.whitedev.jpi.ui.CodeEditors;
 import dev.whitedev.jpi.ui.SessionAware;
@@ -791,6 +794,34 @@ public final class ClassesPanel extends JPanel implements SessionAware {
         if (method == null) return "Select a method";
         if (!method.patchable) return "Constructors, class initializers, abstract methods, and native methods are read-only";
         return null;
+    }
+
+    public void setContextActions(ContextActions actions) {
+        actions.install(list, () -> {
+            LoadedClassInfo selected = list.getSelectedValue();
+            return selected == null ? null : AnalysisTarget.type(selected.id, selected.name);
+        });
+        java.util.function.Supplier<AnalysisTarget> target = () -> {
+            LoadedClassInfo selected = list.getSelectedValue();
+            MethodInfo method = (MethodInfo) methodSelector.getSelectedItem();
+            if (selected == null || method == null || !selected.id.equals(methodClassId)) return null;
+            return AnalysisTarget.method(selected.id, selected.name, method.name, method.descriptor);
+        };
+        actions.install(methodSelector, target);
+        JMenu analysis = new JMenu("Analysis");
+        JPopupMenu editorMenu = methodBody.getPopupMenu();
+        editorMenu.addSeparator();
+        editorMenu.add(analysis);
+        editorMenu.addPopupMenuListener(new javax.swing.event.PopupMenuListener() {
+            @Override public void popupMenuWillBecomeVisible(javax.swing.event.PopupMenuEvent event) {
+                analysis.removeAll();
+                JPopupMenu menu = actions.menu(target.get());
+                while (menu.getComponentCount() > 0) analysis.add(menu.getComponent(0));
+                analysis.setEnabled(analysis.getMenuComponentCount() > 0);
+            }
+            @Override public void popupMenuWillBecomeInvisible(javax.swing.event.PopupMenuEvent event) { }
+            @Override public void popupMenuCanceled(javax.swing.event.PopupMenuEvent event) { }
+        });
     }
 
     private void loadMethodImplementation(LoadedClassInfo selected, MethodInfo method) {

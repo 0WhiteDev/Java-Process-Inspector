@@ -536,6 +536,21 @@ This is a Java call-site interceptor, not an operating-system filesystem driver.
 - Bound reverse analysis to 5,000 classes, 1,000 results, and 10 seconds per request
 - Bound the session dynamic graph to 20,000 aggregated edges instead of retaining every call
 
+#### Find usage at runtime and context actions
+
+Right-click a class, method, field, constant result, or observed call to open the shared analysis menu. It is available in Loaded classes, the method selector and its Java editor (under **Analysis**), Xrefs, Live tracer events and call tree, Call graph, Bytecode CFG, Investigation entries, Deobfuscation mappings, Static fields, and Field writes. Tables use the clicked row even when sorted. **Shift+F10** opens the menu for the focused selection.
+
+- **Find static usages** opens incoming method references, instruction-level class usages, field reads and writes, or methods loading a selected string constant.
+- **Find runtime usages** opens Xrefs in **Runtime only** mode for a class or method. It queries the existing observed graph without rescanning every loaded class. Empty results mean no matching usage was captured, not that the symbol is unused.
+- **Trace this method** prepares its exact JVM name and descriptor in Live tracer.
+- **Trace callers / Trace callees** lists available methods from the bounded Xrefs scan. Choose one, review capture limits, and click **Start probe** in Live tracer. Opening the menu never installs probes automatically.
+- **Open CFG** selects the same method in Bytecode CFG. Click **Analyze CFG** to build its graph.
+- **Add breakpoint** adds a method breakpoint when the debugger is connected, or prepares one for the next debugger connection. JDWP is still required.
+- **Watch writes** prepares a field and its descriptor in Field writes. Review the scope and click **Trace writes** to capture changes.
+- **Investigate** opens a method directly as a manually selected investigation entry point, or starts a marker search for a class, field, or constant.
+
+Actions are shown only for supported symbol kinds. Mapped names remain display aliases; requests use original names and JVM descriptors. References with only a class name prompt for the defining loader when multiple live definitions exist. Dynamic edges still inherit the tracer's name-based aggregation and incomplete coverage; they are evidence from active probes, not a global record of every JVM call. Runtime field changes remain in Field writes rather than being presented as method call edges.
+
 Select a method in <strong>Loaded classes</strong> and click <strong>Xrefs</strong>. Static results appear immediately. Start a Live Tracer probe on a relevant entry point, perform the action in the target application, then use <strong>Refresh Xrefs</strong> to merge the observed graph. A dynamic incoming caller discovered from a stack frame may not expose a JVM descriptor; double-clicking it resolves the first matching loaded method.
 
 Dynamic edges are collected only inside methods instrumented by Live Tracer. The red state identifies the last observed call site before an uncaught exception left the traced method. It is a useful lead, not proof that the callee itself threw the exception. Reflection is recognized from standard reflection and method-handle frames and call sites.

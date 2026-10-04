@@ -53,6 +53,29 @@ public final class XrefAnalyzer {
         return new ArrayList<Reference>(references.values());
     }
 
+    public static List<Reference> symbolUsers(byte[] bytecode, String identifier, String className,
+                                               String owner, String fieldName, String descriptor) throws IOException {
+        ClassNode type = read(bytecode);
+        List<Reference> users = new ArrayList<Reference>();
+        for (MethodNode method : type.methods) {
+            int count = 0;
+            for (AbstractInsnNode instruction : method.instructions.toArray()) {
+                if (fieldName.isEmpty()) {
+                    Reference reference = reference(instruction);
+                    if (reference != null && (owner.replace('/', '.').equals(reference.className)
+                            || reference.descriptor.contains("L" + owner + ";"))) count++;
+                } else if (instruction instanceof FieldInsnNode) {
+                    FieldInsnNode field = (FieldInsnNode) instruction;
+                    if (owner.equals(field.owner) && fieldName.equals(field.name)
+                            && (descriptor.isEmpty() || descriptor.equals(field.desc))) count++;
+                }
+            }
+            if (count > 0) users.add(new Reference("CALLED_BY", identifier, className,
+                    method.name, method.desc, fieldName.isEmpty() ? "type usage" : "field access", count));
+        }
+        return users;
+    }
+
     public static List<Reference> stringUsers(byte[] bytecode, String classIdentifier, String className,
                                        String query) throws IOException {
         ClassNode type = read(bytecode);

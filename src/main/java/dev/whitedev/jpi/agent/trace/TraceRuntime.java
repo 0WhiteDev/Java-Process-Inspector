@@ -134,13 +134,13 @@ public final class TraceRuntime {
         StringBuilder output = new StringBuilder();
         for (DynamicEdge edge : GRAPH.values()) {
             String layer = edge.failures.get() > 0L ? "FAILED" : edge.reflective ? "REFLECTIVE" : "DYNAMIC";
-            if (className.equals(edge.callerClass) && method.equals(edge.callerMethod)
-                    && descriptor.equals(edge.callerDescriptor)) {
+            if (className.equals(edge.callerClass) && (method.isEmpty() || method.equals(edge.callerMethod)
+                    && descriptor.equals(edge.callerDescriptor))) {
                 appendGraph(output, layer, "CALLS", edge.count.get(), edge.calleeClass,
                         edge.calleeClass, edge.calleeMethod, edge.calleeDescriptor, "observed");
             }
-            if (className.equals(edge.calleeClass) && method.equals(edge.calleeMethod)
-                    && (descriptor.equals(edge.calleeDescriptor) || edge.calleeDescriptor.isEmpty())) {
+            if (className.equals(edge.calleeClass) && (method.isEmpty() || method.equals(edge.calleeMethod)
+                    && (descriptor.equals(edge.calleeDescriptor) || edge.calleeDescriptor.isEmpty()))) {
                 appendGraph(output, layer, "CALLED_BY", edge.count.get(), edge.callerClass,
                         edge.callerClass, edge.callerMethod, edge.callerDescriptor, "observed");
             }

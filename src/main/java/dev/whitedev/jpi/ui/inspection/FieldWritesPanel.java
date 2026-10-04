@@ -1,5 +1,8 @@
 package dev.whitedev.jpi.ui.inspection;
 
+import dev.whitedev.jpi.ui.context.AnalysisTarget;
+import dev.whitedev.jpi.ui.context.ContextActions;
+
 import dev.whitedev.jpi.attach.InspectorSession;
 import dev.whitedev.jpi.deobfuscation.DeobfuscationWorkspace;
 import dev.whitedev.jpi.protocol.Operation;
@@ -47,6 +50,7 @@ public final class FieldWritesPanel extends JPanel implements SessionAware {
     private final DefaultTableModel sitesModel = model("Class", "Method", "Descriptor", "Line", "Opcode", "Sites");
     private final DefaultTableModel eventsModel = model("#", "Time", "Thread", "Value change", "Written by", "Line", "Call");
     private final JTable sites = new JTable(sitesModel);
+    private final java.util.List<AnalysisTarget> siteTargets = new java.util.ArrayList<>();
     private final JTable events = new JTable(eventsModel);
     private final JTextArea details = Ui.outputArea();
     private final Map<Long, WriteEvent> captured = new LinkedHashMap<>();
@@ -146,11 +150,30 @@ public final class FieldWritesPanel extends JPanel implements SessionAware {
     }
 
     public void selectField(String owner, String fieldName) {
+        selectField(owner, fieldName, "");
+    }
+
+    public void selectField(String owner, String fieldName, String fieldDescriptor) {
         this.owner.setText(owner);
         field.setText(fieldName);
-        descriptor.setText("");
+        descriptor.setText(fieldDescriptor);
         status.setText("Ready to analyze " + owner + "." + fieldName);
         scan();
+    }
+
+    public void setContextActions(ContextActions actions) {
+        actions.install(sites, () -> {
+            int row = sites.getSelectedRow();
+            return row < 0 ? null : siteTargets.get(sites.convertRowIndexToModel(row));
+        });
+        actions.install(events, () -> {
+            int row = events.getSelectedRow();
+            if (row < 0) return null;
+            Object sequence = eventsModel.getValueAt(events.convertRowIndexToModel(row), 0);
+            WriteEvent event = sequence instanceof Number ? captured.get(((Number) sequence).longValue()) : null;
+            return event == null ? null : AnalysisTarget.method(event.writerClass, event.writerClass,
+                    event.writerMethod, event.writerDescriptor);
+        });
     }
 
     @Override public void setSession(InspectorSession session) {
@@ -164,6 +187,7 @@ public final class FieldWritesPanel extends JPanel implements SessionAware {
         traceValue.setEnabled(attached && traceValueAction != null && events.getSelectedRow() >= 0);
         if (!attached) {
             sitesModel.setRowCount(0);
+            siteTargets.clear();
             clearEvents();
             status.setText("Attach to a JVM to analyze field writes");
         }
@@ -175,6 +199,7 @@ public final class FieldWritesPanel extends JPanel implements SessionAware {
         loading = true;
         scan.setEnabled(false);
         sitesModel.setRowCount(0);
+        siteTargets.clear();
         status.setText("Scanning loaded bytecode for PUTFIELD and PUTSTATIC...");
         Async.run(() -> current.requestText(Operation.FIELD_WRITE_SITES, targetPayload()), raw -> {
             if (session != current) return;
@@ -201,6 +226,7 @@ public final class FieldWritesPanel extends JPanel implements SessionAware {
                 String className = decoded(values[2]);
                 String methodName = decoded(values[3]);
                 String methodDescriptor = decoded(values[4]);
+                siteTargets.add(AnalysisTarget.method(decoded(values[1]), className, methodName, methodDescriptor));
                 sitesModel.addRow(new Object[]{workspace.classAlias(className),
                         workspace.methodAlias(className, methodName, methodDescriptor), methodDescriptor,
                         "-1".equals(values[5]) ? "unknown" : values[5], values[6], values[7]});

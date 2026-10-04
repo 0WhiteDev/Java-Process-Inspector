@@ -45,6 +45,17 @@ public final class InvestigationAnalyzer {
                 List.copyOf(runtimePaths), Map.copyOf(traces.hits), constants.classes.size());
     }
 
+    public static InvestigationReport analyzeTarget(InvestigationTarget selected, String tracesRaw) {
+        TraceData traces = traces(tracesRaw);
+        long hits = traces.hits.getOrDefault(selected.methodKey(), 0L);
+        InvestigationTarget target = new InvestigationTarget(selected.classIdentifier(), selected.className(),
+                selected.methodName(), selected.descriptor(), "", 100, hits);
+        List<String> paths = traces.paths.getOrDefault(selected.methodKey(), Set.of()).stream()
+                .limit(MAX_PATHS).toList();
+        return new InvestigationReport(selected.displayName(), List.of(target), List.of(), paths,
+                Map.copyOf(traces.hits), 1);
+    }
+
     private static ConstantData constants(String raw) {
         Set<String> classes = new LinkedHashSet<>();
         Set<String> values = new LinkedHashSet<>();

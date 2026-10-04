@@ -213,6 +213,17 @@ class AttachIntegrationIT {
                         classId + "\nruntimeValue\n()Ljava/lang/String;");
                 assertTrue(xrefs.contains("R\tSTATIC\t"));
                 assertTrue(xrefs.contains("R\tDYNAMIC\tCALLED_BY\t"));
+                String runtimeUsages = session.requestText(Operation.METHOD_XREFS,
+                        classId + "\nruntimeValue\n()Ljava/lang/String;\nruntime");
+                assertTrue(runtimeUsages.contains("R\tDYNAMIC\tCALLED_BY\t"));
+                assertFalse(runtimeUsages.contains("R\tSTATIC\t"));
+                String classRuntimeUsages = session.requestText(Operation.METHOD_XREFS, classId + "\n\n\nruntime");
+                assertTrue(classRuntimeUsages.contains("R\tDYNAMIC\t"));
+                assertFalse(classRuntimeUsages.contains("R\tSTATIC\t"));
+                String fieldUsages = session.requestText(Operation.METHOD_XREFS,
+                        classId + "\nmarker\nLjava/lang/String;");
+                assertTrue(fieldUsages.contains(Base64.getEncoder().encodeToString("setMarker".getBytes("UTF-8"))));
+                assertTrue(fieldUsages.contains("R\tSTATIC\tCALLED_BY\t"));
                 assertTrue(session.requestText(Operation.XREF_SEARCH, "before")
                         .contains(Base64.getEncoder().encodeToString(
                                 AttachTarget.class.getName().getBytes("UTF-8"))));

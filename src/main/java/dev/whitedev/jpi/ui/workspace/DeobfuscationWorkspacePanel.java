@@ -1,5 +1,8 @@
 package dev.whitedev.jpi.ui.workspace;
 
+import dev.whitedev.jpi.ui.context.AnalysisTarget;
+import dev.whitedev.jpi.ui.context.ContextActions;
+
 import dev.whitedev.jpi.ui.Async;
 import dev.whitedev.jpi.ui.SessionAware;
 import dev.whitedev.jpi.ui.Ui;
@@ -336,6 +339,22 @@ public final class DeobfuscationWorkspacePanel extends JPanel implements Session
         model.setRows(visible);
         status.setText(visible.size() + " visible  |  " + all.size() + " total"
                 + (query.structured() ? "  |  structured filter" : ""));
+    }
+
+    public void setContextActions(ContextActions actions) {
+        actions.install(table, () -> {
+            int row = table.getSelectedRow();
+            if (row < 0) return null;
+            MappingEntry entry = model.entry(table.convertRowIndexToModel(row));
+            return switch (entry.kind()) {
+                case CLASS -> AnalysisTarget.type(entry.originalName(), entry.originalName());
+                case METHOD, PARAMETER -> AnalysisTarget.method(
+                        entry.owner(), entry.owner(), entry.originalName(), entry.descriptor());
+                case FIELD -> AnalysisTarget.field(
+                        entry.owner(), entry.owner(), entry.originalName(), entry.descriptor());
+                default -> null;
+            };
+        });
     }
 
     private List<MappingEntry> selectedEntries() {

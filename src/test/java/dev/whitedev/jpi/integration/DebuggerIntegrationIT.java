@@ -11,12 +11,15 @@ import org.junit.jupiter.api.Test;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.CompletableFuture;
 import java.util.jar.Attributes;
 import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
@@ -33,10 +36,13 @@ class DebuggerIntegrationIT {
         Process process = new ProcessBuilder(javaExecutable(),
                 "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=127.0.0.1:0",
                 "-jar", executableFixtureJar().getAbsolutePath()).redirectErrorStream(true).start();
-        try (DebugSession session = DebugSession.attach(process.pid())) {
-            assertEquals(DebugState.RUNNING, session.state());
-            assertTrue(process.isAlive());
-            assertNotNull(session.capabilities());
+        try {
+            awaitJdwpListener(process);
+            try (DebugSession session = DebugSession.attach(process.pid())) {
+                assertEquals(DebugState.RUNNING, session.state());
+                assertTrue(process.isAlive());
+                assertNotNull(session.capabilities());
+            }
         } finally {
             process.destroy();
             if (!process.waitFor(3, TimeUnit.SECONDS)) process.destroyForcibly();
@@ -146,6 +152,29 @@ class DebuggerIntegrationIT {
             process.destroy();
             if (!process.waitFor(3, TimeUnit.SECONDS)) process.destroyForcibly();
         }
+    }
+
+    private void awaitJdwpListener(Process process) throws Exception {
+        CompletableFuture<String> ready = new CompletableFuture<>();
+        Thread reader = new Thread(() -> {
+            StringBuilder output = new StringBuilder();
+            try (BufferedReader lines = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+                String line;
+                while ((line = lines.readLine()) != null) {
+                    if (line.startsWith("Listening for transport dt_socket at address:")) {
+                        ready.complete(line);
+                        return;
+                    }
+                    if (output.length() < 8192) output.append(line).append('\n');
+                }
+                ready.completeExceptionally(new IllegalStateException("Target exited before JDWP was ready: " + output));
+            } catch (Exception error) {
+                ready.completeExceptionally(error);
+            }
+        }, "jpi-test-jdwp-ready");
+        reader.setDaemon(true);
+        reader.start();
+        assertTrue(ready.get(15, TimeUnit.SECONDS).startsWith("Listening for transport dt_socket"));
     }
 
     private String javaExecutable() {

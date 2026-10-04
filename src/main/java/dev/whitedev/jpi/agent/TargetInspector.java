@@ -452,14 +452,24 @@ final class TargetInspector {
     }
 
     String methodXrefs(String payload) throws Exception {
-        String[] values = payload.split("\\n", 3);
-        if (values.length != 3 || values[0].isEmpty() || values[1].isEmpty() || values[2].isEmpty()) {
+        String[] values = payload.split("\\n", -1);
+        if ((values.length != 3 && values.length != 4) || values[0].isEmpty()
+                || (values[1].isEmpty() && !values[2].isEmpty())) {
             throw new IOException("Missing class, method, or descriptor");
         }
         Class<?> target = resolveClass(values[0]);
+        if (values.length == 4) {
+            if (!"runtime".equals(values[3])) throw new IOException("Unknown Xrefs mode: " + values[3]);
+            if (!values[1].isEmpty() && !values[2].startsWith("("))
+                throw new IOException("Use Field writes to observe runtime field access");
+            return TraceRuntime.dynamicGraph(target.getName(), values[1], values[2]);
+        }
         StringBuilder output = new StringBuilder();
-        for (XrefAnalyzer.Reference reference : XrefAnalyzer.references(classBytes(values[0]), values[1], values[2])) {
-            appendXref(output, "STATIC", reference);
+        boolean methodTarget = values[2].startsWith("(");
+        if (methodTarget) {
+            for (XrefAnalyzer.Reference reference : XrefAnalyzer.references(classBytes(values[0]), values[1], values[2])) {
+                appendXref(output, "STATIC", reference);
+            }
         }
         String owner = target.getName().replace('.', '/');
         int scanned = 0;
@@ -471,8 +481,9 @@ final class TargetInspector {
             if (bytecode == null) continue;
             String id = index(candidate);
             try {
-                List<XrefAnalyzer.Reference> callers = XrefAnalyzer.callers(bytecode, id,
-                        candidate.getName(), owner, values[1], values[2]);
+                List<XrefAnalyzer.Reference> callers = methodTarget
+                        ? XrefAnalyzer.callers(bytecode, id, candidate.getName(), owner, values[1], values[2])
+                        : XrefAnalyzer.symbolUsers(bytecode, id, candidate.getName(), owner, values[1], values[2]);
                 for (XrefAnalyzer.Reference reference : callers) {
                     appendXref(output, "STATIC", reference);
                     results++;
@@ -481,7 +492,7 @@ final class TargetInspector {
             } catch (IOException ignored) {
             }
         }
-        output.append(TraceRuntime.dynamicGraph(target.getName(), values[1], values[2]));
+        if (methodTarget || values[1].isEmpty()) output.append(TraceRuntime.dynamicGraph(target.getName(), values[1], values[2]));
         return output.toString();
     }
 

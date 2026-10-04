@@ -1,5 +1,9 @@
 package dev.whitedev.jpi.ui;
 
+import dev.whitedev.jpi.ui.context.AnalysisTarget;
+import dev.whitedev.jpi.ui.context.ContextAction;
+import dev.whitedev.jpi.ui.context.ContextActions;
+
 import dev.whitedev.jpi.attach.AttachService;
 import dev.whitedev.jpi.attach.CommandLineTokenizer;
 import dev.whitedev.jpi.attach.InspectorSession;
@@ -184,6 +188,26 @@ public final class MainFrame extends JFrame {
             investigation.investigate(value);
             selectView("Investigation");
         });
+        ContextActions contextActions = new ContextActions(
+                () -> session != null, (action, target) -> {
+            if (target.kind() != AnalysisTarget.Kind.CONSTANT
+                    && (target.identifier().isEmpty() || target.identifier().equals(target.owner()))) {
+                resolveContextDefinition(target, resolved -> openContextAction(action, resolved,
+                        xrefs, tracer, cfg, debugger, fieldWrites, investigation));
+            } else {
+                openContextAction(action, target, xrefs, tracer, cfg, debugger, fieldWrites, investigation);
+            }
+        });
+        classes.setContextActions(contextActions);
+        xrefs.setContextActions(contextActions);
+        tracer.setContextActions(contextActions);
+        callGraph.setContextActions(contextActions);
+        cfg.setContextActions(contextActions);
+        investigation.setContextActions(contextActions);
+        fields.setContextActions(contextActions);
+        fieldWrites.setContextActions(contextActions);
+        deobfuscation.setContextActions(contextActions);
+        constantSearch.setContextActions(contextActions);
         WindowsNativeAccess windows = new WindowsNativeAccess();
         NetworkPanel network = new NetworkPanel(new WindowsNetworkAccess(), timelineStore);
         MemoryPanel memory = new MemoryPanel(windows);
@@ -294,6 +318,81 @@ public final class MainFrame extends JFrame {
             debugger.prepareExceptionBreakpoint(selection.exceptionType());
             selectView("cfg".equals(action) ? "Bytecode CFG" : "Live tracer");
         }, error -> Ui.error(this, error));
+    }
+
+    private void openContextAction(ContextAction action,
+                                   AnalysisTarget target,
+                                   XrefsPanel xrefs, LiveTracerPanel tracer, BytecodeCfgPanel cfg,
+                                   DebuggerPanel debugger, FieldWritesPanel writes, InvestigationPanel investigation) {
+        if (session == null || !action.supports(target)) return;
+        switch (action) {
+            case STATIC_USAGES, RUNTIME_USAGES -> {
+                if (target.kind() == AnalysisTarget.Kind.CONSTANT)
+                    xrefs.findStringUsages(target.value());
+                else xrefs.selectUsages(target, action == ContextAction.RUNTIME_USAGES);
+                selectView("Xrefs");
+            }
+            case TRACE_METHOD -> {
+                tracer.selectTarget(target.identifier(), target.owner(), target.member(), target.descriptor());
+                selectView("Live tracer");
+            }
+            case TRACE_CALLERS, TRACE_CALLEES -> xrefs.prepareRelatedTrace(target,
+                    action == ContextAction.TRACE_CALLERS,
+                    related -> resolveContextDefinition(related, resolved -> openContextAction(
+                            ContextAction.TRACE_METHOD, resolved,
+                            xrefs, tracer, cfg, debugger, writes, investigation)));
+            case CFG -> {
+                cfg.selectTarget(target.identifier(), target.owner(), target.member(), target.descriptor());
+                selectView("Bytecode CFG");
+            }
+            case BREAKPOINT -> {
+                debugger.prepareMethodBreakpoint(target.owner(), target.member(), target.descriptor());
+                selectView("Debugger");
+            }
+            case WATCH_WRITES -> {
+                writes.selectField(target.owner(), target.member(), target.descriptor());
+                selectView("Field writes");
+            }
+            case INVESTIGATE -> {
+                if (target.kind() == AnalysisTarget.Kind.METHOD)
+                    investigation.investigateMethod(new dev.whitedev.jpi.investigation.InvestigationTarget(
+                            target.identifier(), target.owner(), target.member(), target.descriptor(), "", 100, 0));
+                else investigation.investigate(target.query());
+                selectView("Investigation");
+            }
+        }
+    }
+
+    private void resolveContextDefinition(AnalysisTarget target,
+            java.util.function.Consumer<AnalysisTarget> ready) {
+        if (!target.identifier().isEmpty() && !target.identifier().equals(target.owner())) {
+            ready.accept(target);
+            return;
+        }
+        InspectorSession current = session;
+        if (current == null) return;
+        Async.run(() -> ClassLoaderSnapshot.parse(current.requestText(
+                dev.whitedev.jpi.protocol.Operation.CLASSLOADER_SNAPSHOT, "")), snapshot -> {
+            if (session != current) return;
+            var definitions = snapshot.definitions().stream().filter(definition ->
+                    definition.name().equals(target.owner()) && "definition".equals(definition.kind())).toList();
+            if (definitions.isEmpty()) {
+                Ui.error(this, new IllegalStateException("No loaded definition found for " + target.owner()));
+                return;
+            }
+            int index = 0;
+            if (definitions.size() > 1) {
+                String[] choices = definitions.stream().map(definition -> snapshot.loaderLabel(definition.loaderId())
+                        + " | " + definition.id()).toArray(String[]::new);
+                Object choice = JOptionPane.showInputDialog(this,
+                        "This reference has no defining loader. Select the class definition:",
+                        "Select class definition", JOptionPane.QUESTION_MESSAGE, null, choices, choices[0]);
+                if (choice == null) return;
+                index = Arrays.asList(choices).indexOf(choice.toString());
+            }
+            ready.accept(new AnalysisTarget(target.kind(), definitions.get(index).id(),
+                    target.owner(), target.member(), target.descriptor(), target.value()));
+        }, error -> { if (session == current) Ui.error(this, error); });
     }
 
     private JComponent sidebar() {

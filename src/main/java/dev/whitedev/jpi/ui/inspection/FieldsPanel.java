@@ -1,5 +1,8 @@
 package dev.whitedev.jpi.ui.inspection;
 
+import dev.whitedev.jpi.ui.context.AnalysisTarget;
+import dev.whitedev.jpi.ui.context.ContextActions;
+
 import dev.whitedev.jpi.attach.InspectorSession;
 import dev.whitedev.jpi.deobfuscation.DeobfuscationWorkspace;
 import dev.whitedev.jpi.protocol.Operation;
@@ -155,6 +158,15 @@ public final class FieldsPanel extends JPanel implements SessionAware {
             loading = false;
             inspect.setEnabled(true);
             Ui.error(this, error);
+        });
+    }
+
+    public void setContextActions(ContextActions actions) {
+        actions.install(table, () -> {
+            int row = table.getSelectedRow();
+            if (row < 0) return null;
+            FieldValue value = fieldRows.get(table.convertRowIndexToModel(row));
+            return AnalysisTarget.field(value.owner, value.owner, value.name, "");
         });
     }
 

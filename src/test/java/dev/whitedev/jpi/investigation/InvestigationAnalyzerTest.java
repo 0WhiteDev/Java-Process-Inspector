@@ -9,6 +9,17 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class InvestigationAnalyzerTest {
+    @Test void investigatesAnExplicitMethodWithoutInventingConstantMatches() {
+        var target = new InvestigationTarget("c:8", "app.Service", "run", "()V", "", 100, 0);
+        String traces = String.join("\t", "S", "trace-1", "7", "0", "0", "0", "true",
+                encoded("app.Service"), encoded("run"), encoded("()V"));
+        var report = InvestigationAnalyzer.analyzeTarget(target, traces);
+        assertEquals("c:8", report.entryPoints().getFirst().classIdentifier());
+        assertEquals(7, report.entryPoints().getFirst().runtimeHits());
+        assertTrue(report.constants().isEmpty());
+        assertEquals("", report.entryPoints().getFirst().matchedConstant());
+    }
+
     @Test
     void correlatesConstantsMethodsAndRuntimeEvidence() {
         String constantRaw = "com.foo.LicenseService\tapp\thttps://api.example.com/license\n"

@@ -1,5 +1,8 @@
 package dev.whitedev.jpi.ui.tracing;
 
+import dev.whitedev.jpi.ui.context.AnalysisTarget;
+import dev.whitedev.jpi.ui.context.ContextActions;
+
 import dev.whitedev.jpi.ui.Async;
 import dev.whitedev.jpi.ui.SessionAware;
 import dev.whitedev.jpi.ui.Ui;
@@ -37,6 +40,8 @@ public final class XrefsPanel extends JPanel implements SessionAware {
     private final ReferenceTable data = new ReferenceTable();
     private final ReferenceTable stringUsers = new ReferenceTable();
     private final JTabbedPane tabs = new JTabbedPane();
+    private final JComboBox<String> layers = new JComboBox<>(new String[]{"All references", "Static only", "Runtime only"});
+    private boolean selectingTarget;
     private InspectorSession session;
     private String classIdentifier = "";
     private String actualClassName = "";
@@ -62,6 +67,8 @@ public final class XrefsPanel extends JPanel implements SessionAware {
         actions.add(search);
         actions.add(debugBreakpoint);
         actions.add(refresh);
+        actions.add(layers);
+        layers.addActionListener(event -> { if (!selectingTarget) refresh(); });
         add(Ui.sectionHeader("Xrefs and call graph",
                 "Static bytecode references combined with calls observed by Live Tracer", actions),
                 BorderLayout.NORTH);
@@ -113,6 +120,54 @@ public final class XrefsPanel extends JPanel implements SessionAware {
         refresh();
     }
 
+    public void selectUsages(AnalysisTarget target, boolean runtime) {
+        selectingTarget = true;
+        layers.setSelectedIndex(runtime ? 2 : 1);
+        selectingTarget = false;
+        tabs.setSelectedIndex(0);
+        selectTarget(target.identifier(), target.owner(), target.member(), target.descriptor());
+    }
+
+    public void findStringUsages(String value) {
+        stringQuery.setText(value);
+        searchStrings();
+    }
+
+    public void setContextActions(ContextActions actions) {
+        calledBy.install(actions);
+        calls.install(actions);
+        data.install(actions);
+        stringUsers.install(actions);
+    }
+
+    public void prepareRelatedTrace(AnalysisTarget target, boolean callers,
+                                    java.util.function.Consumer<AnalysisTarget> prepare) {
+        InspectorSession current = session;
+        if (current == null) return;
+        String payload = target.identifier() + "\n" + target.member() + "\n" + target.descriptor();
+        Async.run(() -> current.requestText(Operation.METHOD_XREFS, payload), raw -> {
+            if (session != current) return;
+            var candidates = new java.util.LinkedHashMap<String, XrefRow>();
+            for (XrefRow row : parse(raw)) {
+                if (!(callers ? "CALLED_BY" : "CALLS").equals(row.relation)
+                        || row.className.startsWith("<") || !row.descriptor.startsWith("(")) continue;
+                candidates.putIfAbsent(row.targetIdentifier + row.className + row.member + row.descriptor, row);
+            }
+            if (candidates.isEmpty()) {
+                JOptionPane.showMessageDialog(this, "No traceable " + (callers ? "callers" : "callees")
+                        + " found in the bounded Xrefs scan. Run probes first to add observed edges.");
+                return;
+            }
+            var choices = candidates.values().toArray(XrefRow[]::new);
+            Object choice = JOptionPane.showInputDialog(this,
+                    "Choose a method to prepare. Review capture limits, then click Start probe in Live tracer.",
+                    callers ? "Trace callers" : "Trace callees", JOptionPane.PLAIN_MESSAGE, null, choices, choices[0]);
+            if (choice instanceof XrefRow row) prepare.accept(AnalysisTarget.method(
+                    row.targetIdentifier.isEmpty() ? row.className : row.targetIdentifier,
+                    row.className, row.member, row.descriptor));
+        }, error -> { if (session == current) Ui.error(this, error); });
+    }
+
     public void setDebuggerIntegration(DebuggerPanel debugger, Runnable openDebugger) {
         this.debugger = debugger;
         this.openDebugger = openDebugger;
@@ -144,7 +199,8 @@ public final class XrefsPanel extends JPanel implements SessionAware {
         if (current == null || classIdentifier.isEmpty()) return;
         refresh.setEnabled(false);
         status.setText("Scanning bytecode and merging observed calls...");
-        String payload = classIdentifier + "\n" + method.getText() + "\n" + descriptor.getText();
+        String payload = classIdentifier + "\n" + method.getText() + "\n" + descriptor.getText()
+                + (layers.getSelectedIndex() == 2 ? "\nruntime" : "");
         long generation = ++xrefGeneration;
         Async.run(() -> current.requestText(Operation.METHOD_XREFS, payload), raw -> {
             if (generation != xrefGeneration) return;
@@ -184,13 +240,15 @@ public final class XrefsPanel extends JPanel implements SessionAware {
         });
     }
 
-    private void renderXrefs(String raw) {
+    void renderXrefs(String raw) {
         calledBy.clear();
         calls.clear();
         data.clear();
         int staticCount = 0;
         int dynamicCount = 0;
         for (XrefRow row : parse(raw)) {
+            if (layers.getSelectedIndex() == 1 && !"STATIC".equals(row.layer)) continue;
+            if (layers.getSelectedIndex() == 2 && "STATIC".equals(row.layer)) continue;
             if ("CALLED_BY".equals(row.relation)) calledBy.add(row);
             else if ("CALLS".equals(row.relation)) calls.add(row);
             else data.add(row);
@@ -198,6 +256,8 @@ public final class XrefsPanel extends JPanel implements SessionAware {
             else dynamicCount++;
         }
         status.setText(staticCount + " static references, " + dynamicCount + " observed edges");
+        if (layers.getSelectedIndex() == 2 && dynamicCount == 0) status.setText(
+                "No observed usages yet. Start Live tracer probes, exercise the target, then refresh.");
     }
 
     private List<XrefRow> parse(String raw) {
@@ -304,6 +364,22 @@ public final class XrefsPanel extends JPanel implements SessionAware {
             return Ui.scroll(table);
         }
 
+        void install(ContextActions actions) {
+            actions.install(table, () -> {
+                int view = table.getSelectedRow();
+                if (view < 0) return null;
+                XrefRow row = rows.get(table.convertRowIndexToModel(view));
+                if ("CONSTANT".equals(row.relation)) return AnalysisTarget.constant(row.detail);
+                if (row.className.isEmpty() || row.className.startsWith("<")) return null;
+                String id = row.targetIdentifier.isEmpty() ? row.className : row.targetIdentifier;
+                if ("FIELD".equals(row.relation)) return AnalysisTarget.field(
+                        id, row.className, row.member, row.descriptor);
+                if (row.descriptor.startsWith("(")) return AnalysisTarget.method(
+                        id, row.className, row.member, row.descriptor);
+                return AnalysisTarget.type(id, row.className);
+            });
+        }
+
         void add(XrefRow row) {
             rows.add(row);
             String mappedClass = workspace.classAlias(row.className);
@@ -373,6 +449,10 @@ public final class XrefsPanel extends JPanel implements SessionAware {
             this.member = member;
             this.descriptor = descriptor;
             this.detail = detail;
+        }
+
+        @Override public String toString() {
+            return className + "." + member + descriptor + " [" + layer + ", " + targetIdentifier + "]";
         }
     }
 }

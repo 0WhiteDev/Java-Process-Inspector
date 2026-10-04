@@ -9,6 +9,23 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class XrefAnalyzerTest {
+    @Test void findsClassAndFieldInstructionUsagesWithDefinitionIdentifiers() throws Exception {
+        String resource = "/" + SymbolFixture.class.getName().replace('.', '/') + ".class";
+        byte[] bytecode;
+        try (InputStream input = SymbolFixture.class.getResourceAsStream(resource)) {
+            bytecode = input.readAllBytes();
+        }
+        String owner = SymbolFixture.class.getName().replace('.', '/');
+        var fields = XrefAnalyzer.symbolUsers(bytecode, "c:21", SymbolFixture.class.getName(), owner, "value", "I");
+        assertTrue(fields.stream().anyMatch(row -> row.member.equals("read") && row.count == 1));
+        assertTrue(fields.stream().anyMatch(row -> row.member.equals("write") && row.count == 1));
+        assertTrue(fields.stream().allMatch(row -> row.targetIdentifier.equals("c:21")
+                && row.relation.equals("CALLED_BY") && row.descriptor.startsWith("(")));
+        assertTrue(XrefAnalyzer.symbolUsers(bytecode, "c:21", SymbolFixture.class.getName(), owner, "value", "J").isEmpty());
+        var types = XrefAnalyzer.symbolUsers(bytecode, "c:21", SymbolFixture.class.getName(), "java/lang/StringBuilder", "", "");
+        assertTrue(types.stream().anyMatch(row -> row.member.equals("build")));
+    }
+
     @Test void findsCallsTypesConstantsAndReverseCallers() throws Exception {
         byte[] bytecode = fixtureBytes();
         List<XrefAnalyzer.Reference> references = XrefAnalyzer.references(
@@ -37,5 +54,15 @@ class XrefAnalyzerTest {
             if (input == null) throw new IllegalStateException("Trace fixture bytecode is unavailable");
             return input.readAllBytes();
         }
+    }
+
+    static final class SymbolFixture {
+        int value;
+
+        int read() { return value; }
+
+        void write(int next) { value = next; }
+
+        String build() { return new StringBuilder().append(value).toString(); }
     }
 }

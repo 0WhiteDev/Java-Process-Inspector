@@ -1,5 +1,8 @@
 package dev.whitedev.jpi.ui.tracing;
 
+import dev.whitedev.jpi.ui.context.AnalysisTarget;
+import dev.whitedev.jpi.ui.context.ContextActions;
+
 import dev.whitedev.jpi.ui.Async;
 import dev.whitedev.jpi.ui.SessionAware;
 import dev.whitedev.jpi.ui.Ui;
@@ -85,6 +88,7 @@ public final class LiveTracerPanel extends JPanel implements SessionAware {
     private String currentClassName = "";
     private DebuggerPanel debugger;
     private Runnable openDebugger;
+    private boolean unifiedContext;
 
     public LiveTracerPanel(DeobfuscationWorkspace workspace) {
         this(workspace, new RuntimeTimelineStore());
@@ -614,7 +618,28 @@ public final class LiveTracerPanel extends JPanel implements SessionAware {
         return selected instanceof TraceEvent ? (TraceEvent) selected : null;
     }
 
+    public void setContextActions(ContextActions actions) {
+        unifiedContext = true;
+        actions.install(events, () -> {
+            int row = events.getSelectedRow();
+            if (row < 0) return null;
+            Object id = eventModel.getValueAt(events.convertRowIndexToModel(row), 0);
+            TraceEvent event = id instanceof Number ? captured.get(((Number) id).longValue()) : null;
+            return contextTarget(event);
+        });
+        actions.install(callTree, () -> {
+            Object value = selectedTreeValue();
+            return value instanceof TraceEvent event ? contextTarget(event) : null;
+        });
+    }
+
+    private AnalysisTarget contextTarget(TraceEvent event) {
+        return event == null ? null : AnalysisTarget.method(
+                event.targetIdentifier, event.className, event.methodName, event.descriptor);
+    }
+
     private void showDebugMenu(MouseEvent event, JComponent source) {
+        if (unifiedContext) return;
         if (!event.isPopupTrigger() || debugger == null) return;
         if (source == events) {
             int row = events.rowAtPoint(event.getPoint());

@@ -1,5 +1,9 @@
 package dev.whitedev.jpi.ui.callgraph;
 
+import dev.whitedev.jpi.ui.context.AnalysisTarget;
+import dev.whitedev.jpi.ui.context.ContextAction;
+import dev.whitedev.jpi.ui.context.ContextActions;
+
 import dev.whitedev.jpi.deobfuscation.DeobfuscationWorkspace;
 import dev.whitedev.jpi.ui.Ui;
 
@@ -66,6 +70,15 @@ final class CallGraphCanvas extends JComponent {
 
     void setSelectionListener(Consumer<CallGraphModel.Node> listener) {
         selectionListener = listener == null ? ignored -> {} : listener;
+    }
+
+    void setContextActions(ContextActions actions) {
+        actions.install(this, () -> selected == null ? null : AnalysisTarget.method(
+                selected.className, selected.className, selected.methodName, selected.descriptor), point -> {
+            selected = nodeAt(point);
+            selectionListener.accept(selected);
+            repaint();
+        });
     }
 
     void setView(CallGraphModel.View value) {

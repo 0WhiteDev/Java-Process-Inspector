@@ -1,5 +1,8 @@
 package dev.whitedev.jpi.ui.analysis;
 
+import dev.whitedev.jpi.ui.context.AnalysisTarget;
+import dev.whitedev.jpi.ui.context.ContextActions;
+
 import dev.whitedev.jpi.attach.InspectorSession;
 import dev.whitedev.jpi.deobfuscation.DeobfuscationWorkspace;
 import dev.whitedev.jpi.protocol.Operation;
@@ -163,6 +166,14 @@ public final class BytecodeCfgPanel extends JPanel implements SessionAware {
         this.debugger = debugger;
         this.openDebugger = openDebugger;
         updateButtons();
+    }
+
+    public void setContextActions(ContextActions actions) {
+        java.util.function.Supplier<AnalysisTarget> target = () ->
+                classIdentifier.isEmpty() ? null : AnalysisTarget.method(
+                        classIdentifier, actualClassName, actualMethodName, actualDescriptor);
+        actions.install(graph, target);
+        actions.install(methodName, target);
     }
 
     @Override public void setSession(InspectorSession value) {

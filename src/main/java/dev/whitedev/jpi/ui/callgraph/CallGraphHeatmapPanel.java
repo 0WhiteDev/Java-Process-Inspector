@@ -1,5 +1,8 @@
 package dev.whitedev.jpi.ui.callgraph;
 
+import dev.whitedev.jpi.ui.context.ContextAction;
+import dev.whitedev.jpi.ui.context.ContextActions;
+
 import dev.whitedev.jpi.attach.InspectorSession;
 import dev.whitedev.jpi.deobfuscation.DeobfuscationWorkspace;
 import dev.whitedev.jpi.protocol.Operation;
@@ -154,6 +157,10 @@ public final class CallGraphHeatmapPanel extends JPanel implements SessionAware 
         }));
         pollTimer.start();
         setSession(null);
+    }
+
+    public void setContextActions(ContextActions actions) {
+        graph.setContextActions(actions);
     }
 
     @Override public void setSession(InspectorSession value) {
