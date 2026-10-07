@@ -458,18 +458,24 @@ final class TargetInspector {
             throw new IOException("Missing class, method, or descriptor");
         }
         Class<?> target = resolveClass(values[0]);
-        if (values.length == 4) {
-            if (!"runtime".equals(values[3])) throw new IOException("Unknown Xrefs mode: " + values[3]);
+        if (values.length == 4 && "runtime".equals(values[3])) {
             if (!values[1].isEmpty() && !values[2].startsWith("("))
                 throw new IOException("Use Field writes to observe runtime field access");
             return TraceRuntime.dynamicGraph(target.getName(), values[1], values[2]);
         }
+        boolean outgoingOnly = values.length == 4 && "outgoing".equals(values[3]);
+        if (values.length == 4 && !outgoingOnly) throw new IOException("Unknown Xrefs mode: " + values[3]);
         StringBuilder output = new StringBuilder();
         boolean methodTarget = values[2].startsWith("(");
         if (methodTarget) {
             for (XrefAnalyzer.Reference reference : XrefAnalyzer.references(classBytes(values[0]), values[1], values[2])) {
                 appendXref(output, "STATIC", reference);
             }
+        }
+        if (outgoingOnly) {
+            if (!methodTarget) throw new IOException("Outgoing Xrefs require a method descriptor");
+            output.append(TraceRuntime.dynamicGraph(target.getName(), values[1], values[2]));
+            return output.toString();
         }
         String owner = target.getName().replace('.', '/');
         int scanned = 0;

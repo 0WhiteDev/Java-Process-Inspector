@@ -133,7 +133,7 @@ This message commonly appears when a Java 21 agent is loaded into a target runni
 | Xrefs | Static and observed Called by and Calls edges, field and type references, constants, and method-level string or endpoint users |
 | Bytecode CFG | Interactive basic-block graph with branches, exception edges, dominators, complexity, dead code, and live execution counts |
 | Difference tracing | Two-run behavioral comparison with common and unique methods, ordered branch transitions, changed returns, API-call differences, and the first observed divergence |
-| Investigation | Guided constant-to-code workflow with ranked entry points, correlated Xrefs, suggested probes, runtime caller paths, and interesting CFG branches |
+| Investigation | Deterministic automatic assistant with staged progress, bounded call graph expansion, likely chains, crypto/network evidence, suggested probes, Markdown export, and selected-method CFG |
 | Deobfuscation | Persistent aliases, notes, tags, colors, scoped AutoMap, package exclusions, mapping exports, and Code Executor name resolution |
 | Constant search | Global search through strings, descriptors, class names, methods, and fields in available class constant pools |
 | Executor | Java editor with syntax highlighting, line numbers, folding, bracket matching, and Ctrl+Enter execution |
@@ -236,10 +236,25 @@ The profiler runs independently from Live Tracer, API Hooks, File Monitor, field
 - Preserve exact classloader-specific identifiers so every suggested action targets the correct loaded definition
 - Refresh existing Live Tracer evidence and promote methods that were actually executed
 - Show captured caller stacks as runtime paths from the application entry point to the investigated method
-- Load reverse callers, outgoing calls, fields, types, constants, and CFG only for the selected candidate
+- Automatically expand a bounded set of top-ranked entry points into connected call graph paths
+- Detect supported crypto and network API references and keep static references separate from observed edges
+- Suggest classloader-resolved application methods as trace points without installing probes automatically
+- Export the assistant report, graph edges, API findings, confidence scores, and limitations as Markdown
+- Cancel exploration between requests and keep target methods untouched
+- Load detailed fields, types, constants, and CFG for the selected candidate
 - Prepare the selected method directly in Live Tracer, Xrefs, or Bytecode CFG without searching for it again
 - Install an explicit 30-second CFG probe and correlate branch blocks with live target-block hit counts
-- Keep initial analysis bounded by the existing constant and Xref limits instead of repeating reverse scans for every candidate
+- Limit automatic expansion to 5 seeds, 16 Xrefs requests, depth 3, 80 graph nodes, 200 edges, and a 30-second soft deadline
+
+### Automatic Investigation Assistant
+
+Open **Investigation**, enter a marker such as `api.example.com/v2/login`, and click **Investigate**. The **Assistant** tab shows the stages: constant search, method users, ranking, graph expansion, trace suggestions, crypto references, and network caller references. It generates connected likely execution chains with a deterministic heuristic score and an observed-edge count. The exported report includes the complete bounded edge list.
+
+Select a suggested method and click **Prepare selected probe** to open Live tracer. Review capture limits, click **Start probe**, and exercise the target. Return to Investigation and click **Refresh runtime** to rerun the bounded assistant with fresh evidence. Use **Entry points and CFG** for the full ranked candidate table, detailed Xrefs, and branch inspection. **Export report...** saves Markdown locally; **Cancel analysis** stops after the current request finishes.
+
+The assistant is not an AI chat and does not execute target methods or install instrumentation. Static graph edges show possible calls, not branch order. Separate crypto and network calls are not stitched into a fabricated sequential path. Even a chain whose edges were all observed is not proof that they occurred in one invocation. Confidence is a ranking score, not a probability. Runtime evidence inherits the existing tracer's name-based aggregation and coverage limits.
+
+JDK, JPI agent, and recognized API-library methods are graph boundaries, not recursively inspected internals. Unresolved or ambiguous classloader references remain visible but are not expanded or suggested as probes. Entry-point, depth, node, edge, request, time, and bytecode-availability limits can produce a partial report. The 30-second budget is checked between requests; an in-flight bounded reverse scan may finish later. Each seed's reverse scan retains the existing 5,000-class, 1,000-result, and 10-second limits. Unsupported APIs and reflection-only paths may not be discovered.
 
 Open <strong>Constant search</strong>, search for a value such as <code>https://api.example.com/license</code>, and click <strong>Investigate</strong>. JPI opens the Investigation workspace with ranked method-level users and interesting related constants. Select an entry point and click <strong>Analyze selected</strong> to load its Xrefs and CFG. Use <strong>Prepare tracer</strong>, perform the action in the target, then return and click <strong>Refresh runtime</strong> to add observed calls and caller paths to the same report. Use <strong>Trace branches 30s</strong> when branch-level evidence is needed.
 

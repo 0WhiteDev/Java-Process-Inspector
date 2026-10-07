@@ -8,6 +8,8 @@ import dev.whitedev.jpi.deobfuscation.DeobfuscationWorkspace;
 import dev.whitedev.jpi.investigation.InvestigationAnalyzer;
 import dev.whitedev.jpi.investigation.InvestigationReport;
 import dev.whitedev.jpi.investigation.InvestigationTarget;
+import dev.whitedev.jpi.investigation.assistant.AssistantReport;
+import dev.whitedev.jpi.investigation.assistant.InvestigationAssistant;
 import dev.whitedev.jpi.protocol.Operation;
 import dev.whitedev.jpi.ui.Async;
 import dev.whitedev.jpi.ui.SessionAware;
@@ -17,6 +19,9 @@ import dev.whitedev.jpi.ui.debug.DebuggerPanel;
 import javax.swing.BorderFactory;
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
+import javax.swing.JFileChooser;
+import javax.swing.JProgressBar;
+import javax.swing.SwingUtilities;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
@@ -38,12 +43,15 @@ import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.GridLayout;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.CancellationException;
 
 public final class InvestigationPanel extends JPanel implements SessionAware {
     private final DeobfuscationWorkspace workspace;
@@ -57,6 +65,22 @@ public final class InvestigationPanel extends JPanel implements SessionAware {
     private final JTextField query = new JTextField();
 
     private final JButton investigate = Ui.primaryButton("Investigate");
+    private final JButton cancelAssistant = Ui.secondaryButton("Cancel analysis");
+    private final JButton exportAssistant = Ui.secondaryButton("Export report...");
+    private final JTextArea assistantDetails = output();
+    private final JLabel[] assistantSteps = new JLabel[7];
+    private final JProgressBar assistantProgress = new JProgressBar(0, 7);
+    private final DefaultTableModel probeModel = new DefaultTableModel(
+            new Object[]{"Suggested method", "Definition"}, 0) {
+        @Override public boolean isCellEditable(int row, int column) { return false; }
+    };
+    private final JTable suggestedProbes = new JTable(probeModel);
+    private final JTabbedPane workspaceTabs = new JTabbedPane();
+    private final JButton prepareSuggestion = Ui.secondaryButton("Prepare selected probe");
+    private AssistantReport assistantReport;
+    private AtomicBoolean assistantCancelled = new AtomicBoolean();
+    private boolean assistantRunning;
+    private List<InvestigationTarget> probeTargets = List.of();
 
     private final JButton refreshRuntime = Ui.secondaryButton("Refresh runtime");
 
@@ -139,19 +163,31 @@ public final class InvestigationPanel extends JPanel implements SessionAware {
         setBorder(new EmptyBorder(4, 0, 0, 0));
         setOpaque(false);
 
-        JPanel headerActions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+        JPanel headerActions = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
         headerActions.setOpaque(false);
-        query.setPreferredSize(new Dimension(330, 34));
+        query.setPreferredSize(new Dimension(280, 34));
         query.putClientProperty("JTextField.placeholderText", "URL, endpoint, error text, token...");
         query.addActionListener(event -> investigate());
         investigate.addActionListener(event -> investigate());
         refreshRuntime.addActionListener(event -> refreshRuntime());
         headerActions.add(query);
         headerActions.add(refreshRuntime);
+        cancelAssistant.addActionListener(event -> {
+            assistantCancelled.set(true);
+            cancelAssistant.setEnabled(false);
+            status.setText("Cancellation requested. Waiting for the current bounded request to finish...");
+        });
+        exportAssistant.addActionListener(event -> exportAssistant());
+        headerActions.add(cancelAssistant);
+        headerActions.add(exportAssistant);
         headerActions.add(investigate);
-        add(Ui.sectionHeader("Investigation session",
-                "Correlate constants, method users, Xrefs, runtime calls, caller paths, and bytecode CFG",
-                headerActions), BorderLayout.NORTH);
+        JPanel heading = new JPanel(new BorderLayout(0, 8));
+        heading.setOpaque(false);
+        heading.add(Ui.sectionHeader("Investigation Assistant",
+                "Deterministic constant-to-code analysis, connected call paths, API evidence, and suggested probes",
+                null), BorderLayout.NORTH);
+        heading.add(headerActions, BorderLayout.CENTER);
+        add(heading, BorderLayout.NORTH);
 
         entries.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         entries.setFillsViewportHeight(true);
@@ -180,11 +216,13 @@ public final class InvestigationPanel extends JPanel implements SessionAware {
         split.setResizeWeight(.48);
         split.setDividerLocation(310);
         split.setBorder(null);
+        workspaceTabs.addTab("Assistant", assistantView());
+        workspaceTabs.addTab("Entry points and CFG", split);
 
         JPanel body = new JPanel(new BorderLayout(0, 10));
         body.setOpaque(false);
         body.add(metrics(), BorderLayout.NORTH);
-        body.add(split, BorderLayout.CENTER);
+        body.add(workspaceTabs, BorderLayout.CENTER);
         status.setForeground(Ui.MUTED);
         body.add(status, BorderLayout.SOUTH);
         add(body, BorderLayout.CENTER);
@@ -193,6 +231,10 @@ public final class InvestigationPanel extends JPanel implements SessionAware {
     }
 
     public void investigate(String value) {
+        if (loading || !cfgProbeId.isEmpty()) {
+            status.setText("Finish the current analysis or stop branch tracing before opening another investigation.");
+            return;
+        }
         explicitTarget = null;
         query.setText(value == null ? "" : value.trim());
         investigate();
@@ -204,6 +246,8 @@ public final class InvestigationPanel extends JPanel implements SessionAware {
             return;
         }
         explicitTarget = target;
+        workspaceTabs.setSelectedIndex(1);
+        clearAssistant();
         query.setText(target.displayName());
         constantsRaw = "";
         xrefsRaw = "";
@@ -222,6 +266,9 @@ public final class InvestigationPanel extends JPanel implements SessionAware {
     @Override
     public void setSession(InspectorSession value) {
         session = value;
+        assistantRunning = false;
+        assistantCancelled.set(true);
+        clearAssistant();
         generation++;
         loading = false;
         polling = false;
@@ -245,43 +292,78 @@ public final class InvestigationPanel extends JPanel implements SessionAware {
     private void investigate() {
         InspectorSession current = session;
         String value = workspace.translateSource(query.getText().trim()).source();
-        if (current == null || loading) return;
+        if (current == null || loading || !cfgProbeId.isEmpty()) return;
         explicitTarget = null;
         if (value.length() < 2) {
             status.setText("Enter at least two characters");
             return;
         }
         loading = true;
+        workspaceTabs.setSelectedIndex(0);
+        clearAssistant();
+        cfgRaw = "";
+        report = null;
+        targets = List.of();
+        constantsRaw = "";
+        xrefsRaw = "";
+        clearMetrics();
+        overview.setText("Automatic investigation in progress...");
+        callerTree.setText("Runtime evidence pending.");
+        xrefDetails.setText("Select a candidate entry point to load its Xrefs.");
+        cfgDetails.setText("Select a candidate entry point to analyze its CFG.");
+        AtomicBoolean cancelled = new AtomicBoolean();
+        assistantCancelled = cancelled;
+        assistantRunning = true;
         long requestGeneration = ++generation;
         status.setForeground(Ui.MUTED);
         status.setText("Correlating constants, method users, and captured runtime calls...");
         entryModel.setRowCount(0);
         updateButtons();
-        Async.run(() -> new InitialData(
-                current.requestText(Operation.CONSTANT_SEARCH, value),
-                current.requestText(Operation.XREF_SEARCH, value),
-                current.requestText(Operation.TRACE_EVENTS, "")), data -> {
+        Async.run(() -> new InvestigationAssistant(current::requestText, InvestigationAssistant.Limits.defaults())
+                .run(value, progress -> SwingUtilities.invokeLater(() -> {
+                    if (session != current || generation != requestGeneration || cancelled.get()) return;
+                    assistantSteps[progress.step() - 1].setText(progress.step() + ". " + progress.detail());
+                    assistantProgress.setValue(progress.step());
+                    status.setText(progress.detail());
+                }), cancelled::get), data -> {
             if (session != current || generation != requestGeneration) return;
-            constantsRaw = data.constants;
-            xrefsRaw = data.xrefs;
-            render(InvestigationAnalyzer.analyze(value, data.constants, data.xrefs, data.traces));
+            if (cancelled.get()) {
+                loading = false;
+                assistantRunning = false;
+                status.setText("Investigation cancelled; no probes installed");
+                updateButtons();
+                return;
+            }
+            constantsRaw = data.constantsRaw();
+            assistantRunning = false;
+            xrefsRaw = data.usersRaw();
+            assistantReport = data;
+            render(data.investigation());
+            renderAssistant(data);
             loading = false;
             status.setForeground(Ui.SUCCESS);
             status.setText(targets.isEmpty()
                     ? "Constants were found, but no method-level string users are available"
-                    : targets.size() + " candidate entry points ranked. Select one for Xrefs and CFG.");
+                    : (data.partial() ? "Bounded partial report" : "Investigation complete")
+                    + ": " + data.edges().size() + " edges, " + data.probes().size() + " suggested probes.");
             updateButtons();
         }, error -> {
             if (session != current || generation != requestGeneration) return;
             loading = false;
+            assistantRunning = false;
             status.setForeground(Ui.WARNING);
-            status.setText("Investigation failed");
+            status.setText(error instanceof CancellationException ? "Investigation cancelled; no probes installed"
+                    : "Investigation failed");
             updateButtons();
-            Ui.error(this, error);
+            if (!(error instanceof CancellationException)) Ui.error(this, error);
         });
     }
 
     private void refreshRuntime() {
+        if (assistantReport != null) {
+            investigate();
+            return;
+        }
         InspectorSession current = session;
         if (current == null || report == null || loading) return;
         loading = true;
@@ -454,6 +536,11 @@ public final class InvestigationPanel extends JPanel implements SessionAware {
     }
 
     public void setContextActions(ContextActions actions) {
+        actions.install(suggestedProbes, () -> {
+            InvestigationTarget target = selectedSuggestion();
+            return target == null ? null : AnalysisTarget.method(
+                    target.classIdentifier(), target.className(), target.methodName(), target.descriptor());
+        });
         actions.install(entries, () -> {
             InvestigationTarget target = selectedTarget();
             return target == null ? null : AnalysisTarget.method(
@@ -601,6 +688,9 @@ public final class InvestigationPanel extends JPanel implements SessionAware {
         tracer.setEnabled(attached && selected);
         cfg.setEnabled(attached && selected);
         debuggerButton.setEnabled(debugger != null && selected);
+        cancelAssistant.setEnabled(assistantRunning && !assistantCancelled.get());
+        exportAssistant.setEnabled(assistantReport != null && !loading);
+        prepareSuggestion.setEnabled(attached && !loading && selectedSuggestion() != null);
     }
 
     private void clearMetrics() {
@@ -657,7 +747,76 @@ public final class InvestigationPanel extends JPanel implements SessionAware {
         return panel;
     }
 
-    private record InitialData(String constants, String xrefs, String traces) {
+    private JPanel assistantView() {
+        JPanel steps = new JPanel(new GridLayout(8, 1, 0, 3));
+        steps.setOpaque(false);
+        for (int i = 0; i < assistantSteps.length; i++) {
+            assistantSteps[i] = new JLabel((i + 1) + ". Pending");
+            steps.add(assistantSteps[i]);
+        }
+        assistantProgress.setStringPainted(true);
+        steps.add(assistantProgress);
+        suggestedProbes.setAutoCreateRowSorter(true);
+        suggestedProbes.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        suggestedProbes.getSelectionModel().addListSelectionListener(event -> updateButtons());
+        prepareSuggestion.addActionListener(event -> {
+            InvestigationTarget selected = selectedSuggestion();
+            if (selected != null) openTracer.accept(selected);
+        });
+        JPanel probes = new JPanel(new BorderLayout(0, 6));
+        probes.setOpaque(false);
+        probes.add(new JLabel("Suggested trace points (review capture limits before starting)"), BorderLayout.NORTH);
+        probes.add(Ui.scroll(suggestedProbes), BorderLayout.CENTER);
+        probes.add(prepareSuggestion, BorderLayout.SOUTH);
+        JSplitPane split = new JSplitPane(JSplitPane.VERTICAL_SPLIT, Ui.scroll(assistantDetails), probes);
+        split.setResizeWeight(.72);
+        split.setBorder(null);
+        JPanel panel = new JPanel(new BorderLayout(0, 8));
+        panel.setBorder(new EmptyBorder(8, 8, 8, 8));
+        panel.setOpaque(false);
+        panel.add(steps, BorderLayout.NORTH);
+        panel.add(split, BorderLayout.CENTER);
+        return panel;
+    }
+
+    private void clearAssistant() {
+        assistantReport = null;
+        probeTargets = List.of();
+        probeModel.setRowCount(0);
+        assistantProgress.setValue(0);
+        for (int i = 0; i < assistantSteps.length; i++) if (assistantSteps[i] != null)
+            assistantSteps[i].setText((i + 1) + ". Pending");
+        assistantDetails.setText("Enter a marker and click Investigate to run the bounded deterministic assistant.\n"
+                + "No probes are installed automatically. Static call graph paths do not prove execution order.");
+    }
+
+    private void renderAssistant(AssistantReport data) {
+        assistantDetails.setText(data.text());
+        assistantDetails.setCaretPosition(0);
+        probeTargets = data.probes();
+        probeModel.setRowCount(0);
+        for (InvestigationTarget target : probeTargets) probeModel.addRow(new Object[]{display(target), target.classIdentifier()});
+        if (!probeTargets.isEmpty()) suggestedProbes.setRowSelectionInterval(0, 0);
+    }
+
+    private InvestigationTarget selectedSuggestion() {
+        int row = suggestedProbes.getSelectedRow();
+        if (row < 0) return null;
+        int model = suggestedProbes.convertRowIndexToModel(row);
+        return model < probeTargets.size() ? probeTargets.get(model) : null;
+    }
+
+    private void exportAssistant() {
+        AssistantReport current = assistantReport;
+        if (current == null) return;
+        JFileChooser chooser = new JFileChooser();
+        chooser.setSelectedFile(new java.io.File("jpi-investigation.md"));
+        if (chooser.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) return;
+        var path = chooser.getSelectedFile().toPath();
+        if (Files.exists(path) && JOptionPane.showConfirmDialog(this, "Replace the existing report?",
+                "Export investigation", JOptionPane.OK_CANCEL_OPTION) != JOptionPane.OK_OPTION) return;
+        Async.run(() -> { Files.writeString(path, current.markdown(), StandardCharsets.UTF_8); return path; },
+                saved -> status.setText("Report exported to " + saved), error -> Ui.error(this, error));
     }
 
     private record SelectedData(String xrefs, String cfg) {

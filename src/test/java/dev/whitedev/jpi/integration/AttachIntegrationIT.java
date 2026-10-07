@@ -8,6 +8,8 @@ import dev.whitedev.jpi.protocol.Operation;
 import dev.whitedev.jpi.export.SessionSnapshotExporter;
 import dev.whitedev.jpi.investigation.InvestigationAnalyzer;
 import dev.whitedev.jpi.investigation.InvestigationReport;
+import dev.whitedev.jpi.investigation.assistant.InvestigationAssistant;
+import java.time.Duration;
 import dev.whitedev.jpi.file.FileDecision;
 import dev.whitedev.jpi.file.FileOperation;
 import dev.whitedev.jpi.file.FileProtocolCodec;
@@ -233,6 +235,17 @@ class AttachIntegrationIT {
                         session.requestText(Operation.TRACE_EVENTS, ""));
                 assertTrue(investigation.entryPoints().stream().anyMatch(entry ->
                         "runtimeValue".equals(entry.methodName()) && entry.runtimeHits() > 0));
+                String outgoing = session.requestText(Operation.METHOD_XREFS,
+                        classId + "\ndigest\n([B)[B\noutgoing");
+                assertTrue(outgoing.contains(Base64.getEncoder().encodeToString("java.security.MessageDigest".getBytes("UTF-8"))));
+                assertFalse(outgoing.contains("R\tSTATIC\tCALLED_BY\t"));
+                var automatic = new InvestigationAssistant(session::requestText,
+                        new InvestigationAssistant.Limits(1, 3, 1, 20, 30, Duration.ofSeconds(15)))
+                        .run("before", progress -> { }, () -> false);
+                assertTrue(automatic.investigation().entryPoints().stream().anyMatch(entry ->
+                        "runtimeValue".equals(entry.methodName()) && entry.runtimeHits() > 0));
+                assertFalse(automatic.probes().isEmpty());
+                assertTrue(automatic.analyzedMethods() > 0);
                 String heatmap = session.requestText(Operation.TRACE_GRAPH, "");
                 assertTrue(heatmap.startsWith("G\t"));
                 assertTrue(heatmap.contains("\nN\t"));

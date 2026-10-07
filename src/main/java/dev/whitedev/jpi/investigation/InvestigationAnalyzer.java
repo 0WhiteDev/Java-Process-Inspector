@@ -76,7 +76,7 @@ public final class InvestigationAnalyzer {
             try {
                 Candidate candidate = new Candidate(decoded(values[4]), decoded(values[5]), decoded(values[6]),
                         decoded(values[7]), decoded(values[8]));
-                candidates.putIfAbsent(candidate.key(), candidate);
+                candidates.putIfAbsent(candidate.identifier + "\u0000" + candidate.key(), candidate);
             } catch (RuntimeException ignored) {
             }
         }
