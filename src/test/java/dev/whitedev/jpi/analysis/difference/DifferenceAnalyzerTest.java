@@ -55,8 +55,57 @@ class DifferenceAnalyzerTest {
         assertEquals(1, report.differentReturns());
         assertEquals(1, report.differentApiCalls());
         assertEquals("sample.Validator.check()Z", report.firstDivergence().subject());
-        assertEquals("B4 -> B7", report.firstDivergence().runA());
-        assertEquals("B4 -> B5", report.firstDivergence().runB());
+        assertEquals("RETURN sample.Validator.check()Z = false", report.firstDivergence().runA());
+        assertEquals("RETURN sample.Validator.check()Z = true", report.firstDivergence().runB());
+    }
+
+    @Test
+    void hidesOnlyUnchangedCommonCallsAndPreservesCountAndReturnDifferences() {
+        List<TimelineEvent> baseline = new java.util.ArrayList<>();
+        List<TimelineEvent> action = new java.util.ArrayList<>();
+        for (int index = 0; index < 100; index++) {
+            baseline.add(trace("a" + index, index, "Noise.tick()V", "ENTER", ""));
+            action.add(trace("b" + index, index, "Noise.tick()V", "ENTER", ""));
+        }
+        baseline.add(trace("ac", 101, "Check.test()Z", "ENTER", ""));
+        action.add(trace("bc", 101, "Check.test()Z", "ENTER", ""));
+        baseline.add(trace("ar", 102, "Check.test()Z", "RETURN", "false"));
+        action.add(trace("br", 102, "Check.test()Z", "RETURN", "true"));
+        action.add(trace("bo", 103, "Session.open()V", "ENTER", ""));
+        DifferenceReport report = new DifferenceAnalyzer().compare(
+                new DifferenceRun("Fail", 0, 110, baseline, List.of()),
+                new DifferenceRun("Success", 0, 110, action, List.of()));
+
+        assertEquals(100, report.noiseView(0).commonCalls());
+        assertEquals(0, report.noiseView(0).hiddenCalls());
+        assertEquals(95, report.noiseView(95).hiddenCalls());
+        assertEquals(5, report.noiseView(95).methods().stream()
+                .filter(method -> method.subject().equals("Noise.tick()V")).findFirst().orElseThrow().baseline());
+        assertEquals(List.of("Check.test()Z", "Session.open()V"), report.noiseView(100).methods().stream()
+                .map(DifferenceReport.MethodCalls::subject).toList());
+        assertEquals(1, report.differentReturns());
+        assertEquals(List.of("Session.open()V"), report.onlyB());
+    }
+
+    @Test
+    void keepsRepeatedCallCountDifferencesVisible() {
+        DifferenceReport report = new DifferenceAnalyzer().compare(
+                new DifferenceRun("Baseline", 0, 4, List.of(trace("a", 1, "Tick.run()V", "ENTER", "")), List.of()),
+                new DifferenceRun("Action", 0, 4, List.of(trace("b", 1, "Tick.run()V", "ENTER", ""),
+                        trace("c", 2, "Tick.run()V", "ENTER", "")), List.of()));
+        assertEquals(0, report.noiseView(100).hiddenCalls());
+        assertEquals(2, report.noiseView(100).methods().get(0).action());
+        assertEquals("Calls", report.changes().get(0).category());
+    }
+
+    @Test
+    void emptyRunsHaveNoNoiseOrDivergence() {
+        DifferenceRun empty = new DifferenceRun("Empty", 0, 0, List.of(), List.of());
+        DifferenceReport report = new DifferenceAnalyzer().compare(empty, empty);
+        assertEquals(0, report.noiseView(100).hiddenCalls());
+        assertEquals(List.of(), report.noiseView(95).methods());
+        org.junit.jupiter.api.Assertions.assertNull(report.firstDivergence());
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> report.noiseView(101));
     }
 
     private static TimelineEvent trace(String key, long timestamp, String subject, String phase, String value) {

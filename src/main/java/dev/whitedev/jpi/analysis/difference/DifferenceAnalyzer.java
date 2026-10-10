@@ -9,6 +9,8 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.Objects;
+import java.util.TreeMap;
 
 public final class DifferenceAnalyzer {
     private static final int RESYNC_WINDOW = 48;
@@ -22,37 +24,49 @@ public final class DifferenceAnalyzer {
         common.retainAll(methodsB);
 
         List<DifferenceReport.Change> changes = new ArrayList<>();
-        DifferenceReport.Divergence branchDivergence = compareTransitions(runA.transitions(), runB.transitions(), changes);
+        compareTransitions(runA.transitions(), runB.transitions(), changes);
         int branchChanges = count(changes, "Branch");
         compareValues("Return", completions(runA.events()), completions(runB.events()), changes);
         int returnChanges = count(changes, "Return");
         compareSequence("API call", apiCalls(runA.events()), apiCalls(runB.events()), changes);
         int apiChanges = count(changes, "API call");
 
-        DifferenceReport.Divergence first = branchDivergence;
-        if (first == null) first = firstExecutionDivergence(runA, runB);
+        List<DifferenceReport.MethodCalls> calls = new ArrayList<>();
+        Map<String, Long> countsA = callCounts(runA.events());
+        Map<String, Long> countsB = callCounts(runB.events());
+        Set<String> changed = new LinkedHashSet<>();
+        for (DifferenceReport.Change change : changes) changed.add(change.subject());
+        for (String method : union(countsA.keySet(), countsB.keySet())) {
+            long a = countsA.getOrDefault(method, 0L);
+            long b = countsB.getOrDefault(method, 0L);
+            calls.add(new DifferenceReport.MethodCalls(method, a, b, a == b && !changed.contains(method)));
+            if (a != b) changes.add(new DifferenceReport.Change("Calls", method, Long.toString(a), Long.toString(b)));
+        }
+        DifferenceReport.Divergence first = firstExecutionDivergence(runA, runB);
         return new DifferenceReport(common.size(), onlyA, onlyB, branchChanges, returnChanges,
-                apiChanges, first, changes);
+                apiChanges, first, changes, calls);
     }
 
-    private DifferenceReport.Divergence compareTransitions(List<CfgTransition> left,
+    private static Map<String, Long> callCounts(List<TimelineEvent> events) {
+        Map<String, Long> counts = new TreeMap<>();
+        for (TimelineEvent event : events) {
+            if (event.source() == TimelineSource.TRACE && "ENTER".equals(event.phase())
+                    && !event.subject().isEmpty()) counts.merge(event.subject(), 1L, Long::sum);
+        }
+        return counts;
+    }
+
+    private void compareTransitions(List<CfgTransition> left,
                                                             List<CfgTransition> right,
                                                             List<DifferenceReport.Change> changes) {
         Map<String, List<String>> a = transitionRoutes(left);
         Map<String, List<String>> b = transitionRoutes(right);
-        DifferenceReport.Divergence first = null;
         Set<String> subjects = union(a.keySet(), b.keySet());
         for (String subject : subjects) {
             List<String> valuesA = a.getOrDefault(subject, List.of());
             List<String> valuesB = b.getOrDefault(subject, List.of());
-            int mismatch = firstMismatch(valuesA, valuesB);
-            if (first == null && mismatch >= 0) {
-                first = new DifferenceReport.Divergence("Branch", subject,
-                        value(valuesA, mismatch), value(valuesB, mismatch));
-            }
             compareOrdered("Branch", subject, valuesA, valuesB, changes);
         }
-        return first;
     }
 
     private void compareValues(String category, Map<String, List<String>> left,
@@ -115,14 +129,6 @@ public final class DifferenceAnalyzer {
         return best;
     }
 
-    private static int firstMismatch(List<String> left, List<String> right) {
-        int size = Math.max(left.size(), right.size());
-        for (int index = 0; index < size; index++) {
-            if (!value(left, index).equals(value(right, index))) return index;
-        }
-        return -1;
-    }
-
     private static String range(List<String> values, int start, int end) {
         if (start >= end) return "<not observed>";
         StringBuilder output = new StringBuilder();
@@ -144,7 +150,7 @@ public final class DifferenceAnalyzer {
             Token valueB = index < b.size() ? b.get(index) : null;
             String renderedA = valueA == null ? "<not observed>" : valueA.value;
             String renderedB = valueB == null ? "<not observed>" : valueB.value;
-            if (!renderedA.equals(renderedB)) {
+            if (!Objects.equals(valueA, valueB)) {
                 String subject = valueA != null ? valueA.subject : valueB == null ? "" : valueB.subject;
                 String category = valueA != null ? valueA.category : valueB == null ? "Execution" : valueB.category;
                 return new DifferenceReport.Divergence(category, subject, renderedA, renderedB);

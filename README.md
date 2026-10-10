@@ -354,18 +354,22 @@ Call ID is the strongest correlation. Thread and time correlation is labeled sep
 <details>
 <summary><strong>Difference tracing</strong></summary>
 
-- Record a baseline Run A and a changed Run B without creating a separate target-side event system
+- Record named BASELINE and ACTION captures, such as Login fail and Login success, without creating a separate target-side event system
 - Reuse structured Live Tracer and Automatic API Hook events already published to Runtime Timeline
 - Optionally instrument one selected method with bounded, ordered basic-block transitions for exact branch comparison
 - Count distinct methods common to both runs and methods observed only in one run
+- Inspect per-method invocation counts and keep changed counts visible even when both runs call the same method
+- Hide common noise with a 0-100% slider, defaulting to 95%, and see the exact number of matched calls hidden
+- Aggregate method rows instead of rendering thousands of individual calls; compare captures outside the UI thread
 - Compare return values and thrown exceptions by method and invocation order
 - Compare ordered API calls together with their application callers
-- Show the first changed CFG route, such as <code>B4 -&gt; B7</code> against <code>B4 -&gt; B5</code>
-- Fall back to the first method, result, exception, or API event divergence when no CFG target is selected
+- Show the first observed divergence in timestamp-ordered method, result, exception, API, and CFG evidence, including routes such as <code>B4 -&gt; B7</code> against <code>B4 -&gt; B5</code>
 - Keep at most 20,000 CFG transitions per run and report through the existing bounded desktop timeline
 - Copy a compact text report containing metrics, the first divergence, and every detected change
 
-Open <strong>Loaded classes</strong>, decompile a class, select a method in <strong>Method patch</strong>, and click <strong>Compare runs</strong>. Start any wider Live Tracer probes or API Hook profiles that should contribute to the comparison. In <strong>Difference tracing</strong>, click <strong>Record Run A</strong>, perform the baseline action, and stop the recording. Repeat with <strong>Record Run B</strong> after changing the input or state. JPI compares both captures automatically.
+Open <strong>Loaded classes</strong>, decompile a class, select a method in <strong>Method patch</strong>, and click <strong>Compare runs</strong>. Start any wider Live Tracer probes or API Hook profiles that should contribute to the comparison. In <strong>Difference tracing</strong>, name the BASELINE and ACTION captures, click <strong>Record baseline</strong>, perform the baseline action, and stop the recording. Repeat with <strong>Record action</strong> after changing the input or state. JPI compares both captures automatically. Use <strong>Methods</strong> to find methods unique to either run or with changed counts, and <strong>Behavioral differences</strong> for returns, exceptions, branches, and API differences. <strong>Copy report</strong> includes capture names and unique-method lists.
+
+<strong>Hide common</strong> hides matched invocation counts only for methods with equal counts and no observed return or CFG differences. At 100% these common method rows disappear; changed and unique methods and all behavioral differences remain visible. Visible counts for common rows describe the remaining calls after filtering, not the original totals. The percentage applies to the total eligible call count, rounded down, with deterministic method-name ordering. It is a presentation filter, not target-side sampling. First divergence compares observed event order, not causality: concurrent scheduling, sampling, and bounded or missing evidence can affect the result.
 
 The selected method is used for ordered CFG evidence. Clear <strong>Capture ordered CFG branches</strong> when only method, return, exception, and API evidence is needed. CFG instrumentation temporarily replaces the selected class definition and can stop another active probe on that same class. Method and API counts describe the explicitly active probes and profiles, not every method executed by the JVM.
 

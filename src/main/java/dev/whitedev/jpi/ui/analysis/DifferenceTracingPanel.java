@@ -24,6 +24,8 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JSpinner;
 import javax.swing.JSplitPane;
+import javax.swing.JSlider;
+import javax.swing.JTabbedPane;
 import javax.swing.JTable;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
@@ -51,8 +53,13 @@ public final class DifferenceTracingPanel extends JPanel implements SessionAware
     private final JTextField descriptor = targetField();
     private final JCheckBox branches = new JCheckBox("Capture ordered CFG branches", true);
     private final JSpinner duration = new JSpinner(new SpinnerNumberModel(120, 5, 600, 5));
-    private final JButton startA = Ui.primaryButton("Record Run A");
-    private final JButton startB = Ui.primaryButton("Record Run B");
+    private final JButton startA = Ui.primaryButton("Record baseline");
+    private final JButton startB = Ui.primaryButton("Record action");
+    private final JTextField baselineName = new JTextField("Baseline", 16);
+    private final JTextField actionName = new JTextField("Action", 16);
+    private final JSlider hideCommon = new JSlider(0, 100, 95);
+    private final JLabel noiseSummary = new JLabel("Hide common: 95%");
+    private final DefaultTableModel methodModel = readOnlyModel("Method", "Baseline calls", "Action calls", "Behavior");
     private final JButton stop = Ui.secondaryButton("Stop recording");
     private final JButton compare = Ui.primaryButton("Compare runs");
     private final JButton reset = Ui.secondaryButton("Reset");
@@ -67,7 +74,7 @@ public final class DifferenceTracingPanel extends JPanel implements SessionAware
     private final JLabel apiChanges = metric("0");
     private final JLabel status = new JLabel("Attach and record two executions");
     private final JTextArea divergence = Ui.outputArea();
-    private final DefaultTableModel changeModel = readOnlyModel("Kind", "Location", "Run A", "Run B");
+    private final DefaultTableModel changeModel = readOnlyModel("Kind", "Location", "Baseline", "Action");
     private final JTable changes = new JTable(changeModel);
 
     private InspectorSession session;
@@ -75,6 +82,8 @@ public final class DifferenceTracingPanel extends JPanel implements SessionAware
     private DifferenceRun runB;
     private Capture capture;
     private DifferenceReport report;
+    private boolean preparing;
+    private boolean comparing;
     private String classIdentifier = "";
     private String actualClass = "";
     private String actualMethod = "";
@@ -115,8 +124,8 @@ public final class DifferenceTracingPanel extends JPanel implements SessionAware
 
         JPanel runControls = new JPanel(new GridLayout(1, 2, 8, 0));
         runControls.setOpaque(false);
-        runControls.add(runCard("Run A", "Perform the baseline action", stateA, startA));
-        runControls.add(runCard("Run B", "Perform the changed action", stateB, startB));
+        runControls.add(runCard("BASELINE", baselineName, stateA, startA));
+        runControls.add(runCard("ACTION", actionName, stateB, startB));
 
         JPanel top = new JPanel(new BorderLayout(0, 10));
         top.setOpaque(false);
@@ -130,8 +139,8 @@ public final class DifferenceTracingPanel extends JPanel implements SessionAware
         JPanel metrics = new JPanel(new GridLayout(1, 6, 8, 0));
         metrics.setOpaque(false);
         metrics.add(metricCard("Common methods", common));
-        metrics.add(metricCard("Only A", onlyA));
-        metrics.add(metricCard("Only B", onlyB));
+        metrics.add(metricCard("Only baseline", onlyA));
+        metrics.add(metricCard("Only action", onlyB));
         metrics.add(metricCard("Branches", branchChanges));
         metrics.add(metricCard("Returns", returnChanges));
         metrics.add(metricCard("API calls", apiChanges));
@@ -147,7 +156,24 @@ public final class DifferenceTracingPanel extends JPanel implements SessionAware
         first.add(new JScrollPane(divergence), BorderLayout.CENTER);
         changes.setAutoCreateRowSorter(true);
         changes.setFillsViewportHeight(true);
-        JSplitPane results = new JSplitPane(JSplitPane.VERTICAL_SPLIT, first, new JScrollPane(changes));
+        JTable methods = new JTable(methodModel);
+        methods.setAutoCreateRowSorter(true);
+        methods.setFillsViewportHeight(true);
+        JTabbedPane tabs = new JTabbedPane();
+        tabs.addTab("Methods", new JScrollPane(methods));
+        tabs.addTab("Behavioral differences", new JScrollPane(changes));
+        JPanel comparison = new JPanel(new BorderLayout(0, 8));
+        comparison.setOpaque(false);
+        JPanel noise = new JPanel(new BorderLayout(8, 0));
+        noise.setOpaque(false);
+        hideCommon.setOpaque(false);
+        hideCommon.setPreferredSize(new Dimension(180, 32));
+        hideCommon.setToolTipText("Hide a percentage of matched calls in methods with unchanged captured behavior. Differences stay visible.");
+        noise.add(noiseSummary, BorderLayout.CENTER);
+        noise.add(hideCommon, BorderLayout.EAST);
+        comparison.add(noise, BorderLayout.NORTH);
+        comparison.add(tabs, BorderLayout.CENTER);
+        JSplitPane results = new JSplitPane(JSplitPane.VERTICAL_SPLIT, first, comparison);
         results.setResizeWeight(.32);
         results.setDividerLocation(150);
         results.setBorder(null);
@@ -174,11 +200,14 @@ public final class DifferenceTracingPanel extends JPanel implements SessionAware
         reset.addActionListener(event -> reset());
         copy.addActionListener(event -> copy());
         branches.addActionListener(event -> updateButtons());
+        hideCommon.addChangeListener(event -> {
+            if (!hideCommon.getValueIsAdjusting()) renderMethods();
+        });
         setSession(null);
     }
 
     public void selectTarget(String identifier, String owner, String method, String methodDescriptor) {
-        if (capture != null) {
+        if (capture != null || preparing || comparing) {
             status.setText("Stop the current recording before selecting another CFG target");
             return;
         }
@@ -199,6 +228,8 @@ public final class DifferenceTracingPanel extends JPanel implements SessionAware
 
     @Override public void setSession(InspectorSession value) {
         session = value;
+        preparing = false;
+        comparing = false;
         capture = null;
         runA = null;
         runB = null;
@@ -206,17 +237,19 @@ public final class DifferenceTracingPanel extends JPanel implements SessionAware
         clearResults();
         stateA.setText("Not recorded");
         stateB.setText("Not recorded");
-        status.setText(value == null ? "Not attached" : "Record Run A, then Run B");
+        status.setText(value == null ? "Not attached" : "Record a baseline, then the changed action");
         updateButtons();
     }
 
     private void start(boolean first) {
         InspectorSession current = session;
-        if (current == null || capture != null) return;
+        if (current == null || capture != null || preparing || comparing) return;
         report = null;
         clearResults();
         (first ? stateA : stateB).setText("Preparing...");
-        Capture next = new Capture(first, System.currentTimeMillis(), keys(), "");
+        String name = (first ? baselineName : actionName).getText().trim();
+        if (name.isEmpty()) name = first ? "Baseline" : "Action";
+        Capture next = new Capture(first, System.currentTimeMillis(), keys(), "", name);
         if (!branches.isSelected() || classIdentifier.isEmpty()) {
             begin(next);
             return;
@@ -225,8 +258,11 @@ public final class DifferenceTracingPanel extends JPanel implements SessionAware
         String payload = classIdentifier + "\n" + actualMethod + "\n" + actualDescriptor + "\n"
                 + ((Number) duration.getValue()).longValue() * 1000L;
         disableActions();
+        preparing = true;
+        updateButtons();
         Async.run(() -> current.requestText(Operation.CFG_TRACE_START, payload), raw -> {
             if (session != current) return;
+            preparing = false;
             String[] values = raw.split("\t", -1);
             if (values.length != 4 || !"P".equals(values[0])) {
                 status.setText("The target returned an invalid CFG probe response");
@@ -234,9 +270,10 @@ public final class DifferenceTracingPanel extends JPanel implements SessionAware
                 updateButtons();
                 return;
             }
-            begin(new Capture(first, System.currentTimeMillis(), keys(), values[1]));
+            begin(new Capture(first, System.currentTimeMillis(), keys(), values[1], next.name));
         }, error -> {
             if (session != current) return;
+            preparing = false;
             status.setText("Could not start CFG trace");
             restoreRunState(first);
             updateButtons();
@@ -247,7 +284,7 @@ public final class DifferenceTracingPanel extends JPanel implements SessionAware
     private void begin(Capture value) {
         capture = value;
         status.setForeground(Ui.SUCCESS);
-        status.setText("Recording Run " + (value.first ? "A" : "B") + ". Perform the action, then click Stop recording.");
+        status.setText("Recording " + value.name + ". Perform the action, then click Stop recording.");
         (value.first ? stateA : stateB).setText("Recording...");
         updateButtons();
     }
@@ -284,7 +321,7 @@ public final class DifferenceTracingPanel extends JPanel implements SessionAware
             if (!active.baseline.contains(event.key())) events.add(event);
         }
         List<CfgTransition> transitions = CfgTransition.parse(snapshot, subject());
-        DifferenceRun completed = new DifferenceRun(active.first ? "Run A" : "Run B",
+        DifferenceRun completed = new DifferenceRun(active.name,
                 active.startedAt, stoppedAt, events, transitions);
         if (active.first) runA = completed;
         else runB = completed;
@@ -309,8 +346,30 @@ public final class DifferenceTracingPanel extends JPanel implements SessionAware
     }
 
     private void compare() {
-        if (runA == null || runB == null) return;
-        report = analyzer.compare(runA, runB);
+        if (runA == null || runB == null || comparing) return;
+        DifferenceRun baseline = runA;
+        DifferenceRun action = runB;
+        comparing = true;
+        status.setText("Comparing captured executions...");
+        updateButtons();
+        Async.run(() -> analyzer.compare(baseline, action), result -> {
+            if (runA != baseline || runB != action) return;
+            comparing = false;
+            report = result;
+            renderReport();
+        }, error -> {
+            if (runA != baseline || runB != action) return;
+            comparing = false;
+            status.setText("Could not compare recordings");
+            updateButtons();
+            Ui.error(this, error);
+        });
+    }
+
+    private void renderReport() {
+        changes.getColumnModel().getColumn(2).setHeaderValue(runA.name());
+        changes.getColumnModel().getColumn(3).setHeaderValue(runB.name());
+        changes.getTableHeader().repaint();
         common.setText(String.valueOf(report.commonMethods()));
         onlyA.setText(String.valueOf(report.onlyA().size()));
         onlyB.setText(String.valueOf(report.onlyB().size()));
@@ -325,12 +384,29 @@ public final class DifferenceTracingPanel extends JPanel implements SessionAware
         if (first == null) {
             divergence.setText("No divergence was observed in the captured methods, branches, returns, or API calls.");
         } else {
-            divergence.setText(first.category() + "\n" + first.subject() + "\n\nRun A:\n"
-                    + first.runA() + "\n\nRun B:\n" + first.runB());
+            divergence.setText(first.category() + "\n" + first.subject() + "\n\n" + runA.name() + ":\n"
+                    + first.runA() + "\n\n" + runB.name() + ":\n" + first.runB());
         }
         divergence.setCaretPosition(0);
         status.setText(report.changes().size() + " behavioral differences found");
+        renderMethods();
         updateButtons();
+    }
+
+    private void renderMethods() {
+        methodModel.setRowCount(0);
+        if (report == null) {
+            noiseSummary.setText("Hide common: " + hideCommon.getValue() + "%");
+            return;
+        }
+        DifferenceReport.NoiseView view = report.noiseView(hideCommon.getValue());
+        noiseSummary.setText("Hide common: " + hideCommon.getValue() + "% | " + view.hiddenCalls()
+                + " / " + view.commonCalls() + " matched calls hidden");
+        for (DifferenceReport.MethodCalls method : view.methods()) {
+            String behavior = method.baseline() == 0 ? "Only action" : method.action() == 0 ? "Only baseline"
+                    : method.unchanged() ? "Common (visible calls)" : "Changed";
+            methodModel.addRow(new Object[]{method.subject(), method.baseline(), method.action(), behavior});
+        }
     }
 
     private void reset() {
@@ -340,20 +416,25 @@ public final class DifferenceTracingPanel extends JPanel implements SessionAware
         stateA.setText("Not recorded");
         stateB.setText("Not recorded");
         clearResults();
-        status.setText(session == null ? "Not attached" : "Record Run A, then Run B");
+        status.setText(session == null ? "Not attached" : "Record a baseline, then the changed action");
         updateButtons();
     }
 
     private void copy() {
         if (report == null) return;
         StringBuilder value = new StringBuilder();
-        value.append("Difference tracing\n\nCommon methods: ").append(report.commonMethods())
+        value.append("Difference tracing\nBaseline: ").append(runA.name()).append("\nAction: ").append(runB.name())
+                .append("\n").append(noiseSummary.getText()).append("\n\nCommon methods: ").append(report.commonMethods())
                 .append("\nOnly A: ").append(report.onlyA().size())
                 .append("\nOnly B: ").append(report.onlyB().size())
                 .append("\nDifferent branches: ").append(report.differentBranches())
                 .append("\nDifferent returns: ").append(report.differentReturns())
                 .append("\nDifferent API calls: ").append(report.differentApiCalls()).append("\n\n")
                 .append(divergence.getText()).append("\n\nChanges\n");
+        value.append("Only in ").append(runA.name()).append(":\n");
+        for (String method : report.onlyA()) value.append(method).append('\n');
+        value.append("Only in ").append(runB.name()).append(":\n");
+        for (String method : report.onlyB()) value.append(method).append('\n');
         for (DifferenceReport.Change change : report.changes()) {
             value.append(change.category()).append(" | ").append(change.subject()).append(" | ")
                     .append(change.runA()).append(" | ").append(change.runB()).append('\n');
@@ -380,6 +461,7 @@ public final class DifferenceTracingPanel extends JPanel implements SessionAware
         returnChanges.setText("0");
         apiChanges.setText("0");
         changeModel.setRowCount(0);
+        renderMethods();
         divergence.setText("First divergence will appear after both runs are compared.");
     }
 
@@ -399,29 +481,29 @@ public final class DifferenceTracingPanel extends JPanel implements SessionAware
 
     private void updateButtons() {
         boolean attached = session != null;
-        boolean recording = capture != null;
+        boolean recording = capture != null || preparing || comparing;
         startA.setEnabled(attached && !recording);
         startB.setEnabled(attached && !recording);
-        stop.setEnabled(attached && recording);
+        stop.setEnabled(attached && capture != null && !preparing && !comparing);
         compare.setEnabled(!recording && runA != null && runB != null);
         reset.setEnabled(!recording && (runA != null || runB != null));
-        copy.setEnabled(report != null);
+        copy.setEnabled(report != null && !recording);
         branches.setEnabled(attached && !recording);
         duration.setEnabled(attached && !recording && branches.isSelected());
+        baselineName.setEnabled(!recording);
+        actionName.setEnabled(!recording);
     }
 
-    private JPanel runCard(String title, String hint, JLabel state, JButton button) {
+    private JPanel runCard(String title, JTextField name, JLabel state, JButton button) {
         JPanel panel = Ui.card(new BorderLayout(8, 0));
         JPanel labels = new JPanel();
         labels.setOpaque(false);
         labels.setLayout(new BoxLayout(labels, BoxLayout.Y_AXIS));
         JLabel heading = new JLabel(title);
         heading.setFont(heading.getFont().deriveFont(Font.BOLD, 14f));
-        JLabel description = new JLabel(hint);
-        description.setForeground(Ui.MUTED);
         state.setForeground(Ui.MUTED);
         labels.add(heading);
-        labels.add(description);
+        labels.add(name);
         labels.add(state);
         panel.add(labels, BorderLayout.CENTER);
         panel.add(button, BorderLayout.EAST);
@@ -461,6 +543,10 @@ public final class DifferenceTracingPanel extends JPanel implements SessionAware
 
     private static DefaultTableModel readOnlyModel(String... columns) {
         return new DefaultTableModel(columns, 0) {
+            @Override public Class<?> getColumnClass(int column) {
+                return columns[column].endsWith(" calls") ? Long.class : String.class;
+            }
+
             @Override public boolean isCellEditable(int row, int column) {
                 return false;
             }
@@ -471,6 +557,6 @@ public final class DifferenceTracingPanel extends JPanel implements SessionAware
         return value == null ? "" : value;
     }
 
-    private record Capture(boolean first, long startedAt, Set<String> baseline, String probeId) {
+    private record Capture(boolean first, long startedAt, Set<String> baseline, String probeId, String name) {
     }
 }
