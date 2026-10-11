@@ -2,10 +2,14 @@ package dev.whitedev.jpi.agent.exception;
 
 import dev.whitedev.jpi.exceptions.ExceptionSnapshot;
 import org.junit.jupiter.api.Test;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 class ExceptionAnalyzerTest {
+    private static volatile Throwable retained;
     @Test void aggregatesWindowTotalsThreadsAndLocations() {
         ExceptionAnalyzer analyzer = new ExceptionAnalyzer();
         long now = System.currentTimeMillis();
@@ -24,13 +28,27 @@ class ExceptionAnalyzerTest {
     @Test void clearDiscardsOldBufferedEventsButAcceptsNewEvents() {
         ExceptionAnalyzer analyzer = new ExceptionAnalyzer();
         long old = System.currentTimeMillis() - 1000;
+        long previousGeneration = analyzer.generation();
         analyzer.clear();
-        analyzer.record(analyzer.generation(), "old", old, 1, "A", "run", "()V", 1, "");
+        analyzer.record(previousGeneration, "old", old, 1, "A", "run", "()V", 1, "");
         assertTrue(ExceptionSnapshot.parse(analyzer.snapshot(30)).entries().isEmpty());
-        analyzer.record(analyzer.generation(), "new", System.currentTimeMillis(), 1, "A", "run", "()V", 1, "");
+        analyzer.record(analyzer.generation(), "new", old, 1, "A", "run", "()V", 1, "");
         assertEquals("new", ExceptionSnapshot.parse(analyzer.snapshot(30)).entries().getFirst().type());
         analyzer.clear();
         assertTrue(ExceptionSnapshot.parse(analyzer.snapshot(30)).entries().isEmpty());
+    }
+
+    @Test void acceptsCurrentStreamEventsWithoutComparingJfrAndWallClocks() {
+        ExceptionAnalyzer analyzer = new ExceptionAnalyzer();
+        long previous = analyzer.generation();
+        analyzer.clear();
+        analyzer.record(previous, "stale", System.currentTimeMillis() + 60000, 1, "A", "run", "()V", 1, "");
+        analyzer.record(analyzer.generation(), "current", 1, 1, "A", "run", "()V", 1, "");
+        var snapshot = ExceptionSnapshot.parse(analyzer.snapshot(30));
+        assertEquals(1, snapshot.entries().size());
+        assertEquals("current", snapshot.entries().getFirst().type());
+        assertEquals(1, snapshot.entries().getFirst().total());
+        assertEquals(1, snapshot.entries().getFirst().firstSeen());
     }
 
     @Test void boundsUniqueTypesAndThreadsAndRejectsInvalidWindow() {
@@ -80,9 +98,19 @@ class ExceptionAnalyzerTest {
             var entry = awaitFailure(analyzer);
             assertTrue(entry.total() >= 1);
             assertTrue(entry.locations().stream().anyMatch(location -> location.method().equals("emit")));
+            var deadlineField = ExceptionAnalyzer.class.getDeclaredField("deadlineNanos");
+            deadlineField.setAccessible(true);
+            long deadline = deadlineField.getLong(analyzer);
+            long generation = analyzer.generation();
             analyzer.clear();
+            assertEquals(deadline, deadlineField.getLong(analyzer));
+            assertTrue(analyzer.generation() > generation);
             assertTrue(awaitFailure(analyzer).total() >= 1);
-            new TestError();
+            Thread errorProducer = new Thread(() -> retained = new TestError(), "JPI test error producer");
+            errorProducer.setDaemon(true);
+            errorProducer.start();
+            errorProducer.join(5000);
+            assertFalse(errorProducer.isAlive(), "Error producer did not finish");
             var error = awaitType(analyzer, TestError.class.getName());
             assertTrue(error.total() >= 1 && error.total() <= 2);
             assertEquals("stopped", ExceptionSnapshot.parse(analyzer.stop()).state());
@@ -90,15 +118,35 @@ class ExceptionAnalyzerTest {
     }
 
     private static ExceptionSnapshot.Entry awaitFailure(ExceptionAnalyzer analyzer) throws Exception {
-        return awaitType(analyzer, TestFailure.class.getName(), ExceptionAnalyzerTest::emit);
+        AtomicBoolean running = new AtomicBoolean(true);
+        CountDownLatch started = new CountDownLatch(1);
+        Thread producer = new Thread(() -> {
+            started.countDown();
+            while (running.get()) {
+                emit();
+                try {
+                    Thread.sleep(25);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+            }
+        }, "JPI test exception producer");
+        producer.setDaemon(true);
+        producer.start();
+        try {
+            assertTrue(started.await(5, TimeUnit.SECONDS), "Exception producer did not start");
+            return awaitType(analyzer, TestFailure.class.getName());
+        } finally {
+            running.set(false);
+            producer.interrupt();
+            producer.join(5000);
+            assertFalse(producer.isAlive(), "Exception producer did not finish");
+        }
     }
 
     private static ExceptionSnapshot.Entry awaitType(ExceptionAnalyzer analyzer, String type) throws Exception {
-        return awaitType(analyzer, type, () -> { });
-    }
-
-    private static ExceptionSnapshot.Entry awaitType(ExceptionAnalyzer analyzer, String type, Runnable producer) throws Exception {
-        long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(15);
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15);
         ExceptionSnapshot snapshot;
         do {
             snapshot = ExceptionSnapshot.parse(analyzer.snapshot(30));
@@ -107,7 +155,6 @@ class ExceptionAnalyzerTest {
             if (!"recording".equals(snapshot.state())) {
                 throw new AssertionError("JFR stopped before delivering " + type + ": " + snapshot.state() + " | " + snapshot.message());
             }
-            producer.run();
             Thread.sleep(100);
         } while (System.nanoTime() < deadline);
         throw new AssertionError("JFR event not delivered for " + type + ": state=" + snapshot.state()
@@ -117,7 +164,7 @@ class ExceptionAnalyzerTest {
     }
 
     private static void emit() {
-        try { throw new TestFailure(); } catch (TestFailure ignored) { }
+        try { throw new TestFailure(); } catch (TestFailure failure) { retained = failure; }
     }
 
     private static final class TestFailure extends RuntimeException { }

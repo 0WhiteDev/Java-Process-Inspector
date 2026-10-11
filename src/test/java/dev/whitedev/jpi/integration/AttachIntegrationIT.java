@@ -253,9 +253,23 @@ class AttachIntegrationIT {
                 assertTrue(session.requestText(Operation.TRACE_STOP, traceId).contains("Stopped"));
                 assertEquals("before", session.requestText(Operation.EXECUTE, probe));
                 String methodPatch = classId + "\nruntimeValue\n()Ljava/lang/String;\n{ return \"method-patched\"; }";
+                byte[] beforePatch = session.request(Operation.CLASS_BYTES, classId);
+                byte[] preview = session.request(Operation.PREVIEW_METHOD, methodPatch);
+                assertTrue(preview.length > 0);
+                assertEquals("before", session.requestText(Operation.EXECUTE, probe));
+                assertEquals("", session.requestText(Operation.PATCH_HISTORY, classId));
                 assertTrue(session.requestText(Operation.PATCH_METHOD, methodPatch).contains("Patched"));
                 assertEquals("method-patched", session.requestText(Operation.EXECUTE, probe));
                 byte[] patchedBytecode = session.request(Operation.CLASS_BYTES, classId);
+                var patchEntry = dev.whitedev.jpi.analysis.patch.PatchEntry.parse(session.requestText(Operation.PATCH_HISTORY, classId)).getFirst();
+                assertArrayEquals(beforePatch, session.request(Operation.CLASS_VERSION, classId + "\nbefore:" + patchEntry.id()));
+                assertArrayEquals(patchedBytecode, session.request(Operation.CLASS_VERSION, classId + "\nafter:" + patchEntry.id()));
+                assertThrows(IOException.class, () -> session.requestText(Operation.ROLLBACK_PATCH, classId + "\n" + patchEntry.id() + "\ninvalid"));
+                assertEquals("method-patched", session.requestText(Operation.EXECUTE, probe));
+                assertTrue(session.requestText(Operation.ROLLBACK_PATCH, classId + "\n" + patchEntry.id() + "\n"
+                        + dev.whitedev.jpi.agent.patch.PatchHistory.sha256(patchedBytecode)).contains("Restored"));
+                assertEquals("before", session.requestText(Operation.EXECUTE, probe));
+                assertEquals(2, dev.whitedev.jpi.analysis.patch.PatchEntry.parse(session.requestText(Operation.PATCH_HISTORY, classId)).size());
                 assertTrue(session.requestText(Operation.ROLLBACK_CLASS, classId).contains("Restored"));
                 assertEquals("before", session.requestText(Operation.EXECUTE, probe));
                 String rawPatch = classId + "\n" + Base64.getEncoder().encodeToString(patchedBytecode);
@@ -272,6 +286,10 @@ class AttachIntegrationIT {
                 assertTrue(session.requestText(Operation.ROLLBACK_CLASS, classId).contains("Restored"));
                 assertEquals("4", session.requestText(Operation.EXECUTE, lambdaProbe));
                 String replacement = "package dev.whitedev.jpi.integration; import java.lang.management.ManagementFactory; public final class AttachTarget { public static volatile String marker = \"jpi-smoke-target\"; public static void setMarker(String value) { marker = value; } public static String runtimeValue() { return \"after\"; } public static byte[] digest(byte[] input) throws Exception { return java.security.MessageDigest.getInstance(\"SHA-256\").digest(input); } public static int lambdaValue(int input) { java.util.function.IntUnaryOperator operation = value -> value + 1; return operation.applyAsInt(input); } public static int branchValue(int input) { if (input < 0) return -1; return input % 2 == 0 ? input * 2 : input + 1; } public static byte[] fileRoundTrip(String path, byte[] value) throws Exception { java.nio.file.Path target = java.nio.file.Paths.get(path); java.nio.file.Files.write(target, value); return java.nio.file.Files.readAllBytes(target); } public static boolean fileDelete(String path) throws Exception { return java.nio.file.Files.deleteIfExists(java.nio.file.Paths.get(path)); } public static void main(String[] args) throws Exception { System.out.println(ManagementFactory.getRuntimeMXBean().getName().split(\"@\", 2)[0]); System.out.flush(); while (true) Thread.sleep(1000); } }";
+                int historySize = dev.whitedev.jpi.analysis.patch.PatchEntry.parse(session.requestText(Operation.PATCH_HISTORY, classId)).size();
+                assertTrue(session.request(Operation.PREVIEW_SOURCE, classId + "\n" + replacement).length > 0);
+                assertEquals("before", session.requestText(Operation.EXECUTE, probe));
+                assertEquals(historySize, dev.whitedev.jpi.analysis.patch.PatchEntry.parse(session.requestText(Operation.PATCH_HISTORY, classId)).size());
                 assertTrue(session.requestText(Operation.REDEFINE_SOURCE, classId + "\n" + replacement).contains("Redefined"));
                 assertEquals("after", session.requestText(Operation.EXECUTE, probe));
                 assertTrue(session.requestText(Operation.ROLLBACK_CLASS, classId).contains("Restored"));

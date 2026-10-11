@@ -119,6 +119,11 @@ final class AgentServer implements Runnable {
         registry.put(Operation.CONSTANT_SEARCH, payload -> WireProtocol.utf8(inspector.constantSearch(payload)));
         registry.put(Operation.REDEFINE_SOURCE, payload -> WireProtocol.utf8(inspector.redefineSource(payload)));
         registry.put(Operation.ROLLBACK_CLASS, payload -> WireProtocol.utf8(inspector.rollbackClass(payload)));
+        registry.put(Operation.PATCH_HISTORY, payload -> WireProtocol.utf8(inspector.patchHistory(payload)));
+        registry.put(Operation.CLASS_VERSION, inspector::classVersion);
+        registry.put(Operation.ROLLBACK_PATCH, payload -> WireProtocol.utf8(inspector.rollbackPatch(payload)));
+        registry.put(Operation.PREVIEW_SOURCE, inspector::previewSource);
+        registry.put(Operation.PREVIEW_METHOD, inspector::previewMethod);
         registry.put(Operation.CLASS_METHODS, payload -> WireProtocol.utf8(inspector.classMethods(payload)));
         registry.put(Operation.PATCH_METHOD, payload -> WireProtocol.utf8(inspector.patchMethod(payload)));
         registry.put(Operation.APPLY_CLASS_BYTES, payload -> WireProtocol.utf8(inspector.applyClassBytes(payload)));

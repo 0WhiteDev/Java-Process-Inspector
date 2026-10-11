@@ -31,12 +31,19 @@ public final class ExceptionAnalyzer implements AutoCloseable {
     private Thread deadline;
     private long dropped;
     private long generation;
-    private long clearedAt;
+    private long deadlineNanos;
     private int locationCount;
 
     public synchronized String start(String settings) throws Exception {
         if (stream != null) throw new IOException("Exception analysis is already running");
         int seconds = duration(settings);
+        resetData();
+        deadlineNanos = System.nanoTime() + seconds * 1000000000L;
+        openStream();
+        return snapshot(30);
+    }
+
+    private void openStream() throws Exception {
         Class<?> type;
         try {
             type = Class.forName("jdk.jfr.consumer.RecordingStream");
@@ -44,9 +51,8 @@ public final class ExceptionAnalyzer implements AutoCloseable {
             throw new IOException("Live Exception Analyzer requires JFR and target Java 14 or newer", error);
         }
         final Object recording = type.getConstructor().newInstance();
-        clear();
         final long epoch;
-        synchronized (dataLock) { epoch = ++generation; }
+        synchronized (dataLock) { epoch = generation; }
         try {
             invoke(recording, "setMaxSize", new Class<?>[]{long.class}, 32L * 1024 * 1024);
             invoke(recording, "setMaxAge", new Class<?>[]{Duration.class}, Duration.ofSeconds(60));
@@ -56,6 +62,8 @@ public final class ExceptionAnalyzer implements AutoCloseable {
             Class<?> eventSettings = Class.forName("jdk.jfr.EventSettings");
             eventSettings.getMethod("withStackTrace").invoke(enabled);
             eventSettings.getMethod("withoutThreshold").invoke(enabled);
+            eventSettings.getMethod("with", String.class, String.class).invoke(enabled, "throttle", "off");
+            invoke(recording, "enable", new Class<?>[]{String.class}, "jdk.JavaErrorThrow");
             invoke(recording, "onEvent", new Class<?>[]{String.class, Consumer.class}, name, consumer);
             invoke(recording, "onError", new Class<?>[]{Consumer.class}, (Consumer<Throwable>) error -> {
                 if (stream == recording) {
@@ -69,7 +77,8 @@ public final class ExceptionAnalyzer implements AutoCloseable {
             invoke(recording, "startAsync", new Class<?>[0]);
             deadline = new Thread(() -> {
                 try {
-                    Thread.sleep(seconds * 1000L);
+                    long remaining = deadlineNanos - System.nanoTime();
+                    if (remaining > 0) java.util.concurrent.TimeUnit.NANOSECONDS.sleep(remaining);
                     stopIfCurrent(recording);
                 } catch (InterruptedException ignored) {
                     Thread.currentThread().interrupt();
@@ -77,10 +86,10 @@ public final class ExceptionAnalyzer implements AutoCloseable {
             }, "JPI Exception Analyzer deadline");
             deadline.setDaemon(true);
             deadline.start();
-            return snapshot(30);
         } catch (Exception error) {
             stream = null;
             state = "error";
+            message = "Unable to start JFR stream: " + rootMessage(error);
             try { invoke(recording, "close", new Class<?>[0]); } catch (Exception ignored) { }
             throw error;
         }
@@ -89,6 +98,7 @@ public final class ExceptionAnalyzer implements AutoCloseable {
     public synchronized String stop() {
         Object current = stream;
         stream = null;
+        synchronized (dataLock) { generation++; }
         if (deadline != null && deadline != Thread.currentThread()) deadline.interrupt();
         deadline = null;
         if (current != null) {
@@ -108,13 +118,35 @@ public final class ExceptionAnalyzer implements AutoCloseable {
         if (stream == expected) stop();
     }
 
-    public void clear() {
+    public synchronized void clear() {
+        Object current = stream;
+        stream = null;
+        if (deadline != null && deadline != Thread.currentThread()) deadline.interrupt();
+        deadline = null;
+        resetData();
+        if (current == null) return;
+        try {
+            invoke(current, "close", new Class<?>[0]);
+            if (deadlineNanos - System.nanoTime() <= 0) {
+                state = "stopped";
+                message = "Recording duration elapsed. History cleared.";
+                return;
+            }
+            openStream();
+        } catch (Exception error) {
+            state = "error";
+            message = "Unable to reset JFR stream: " + rootMessage(error);
+            throw new IllegalStateException(message, error);
+        }
+    }
+
+    private void resetData() {
         synchronized (dataLock) {
+            generation++;
             summaries.clear();
             samples.clear();
             dropped = 0;
             locationCount = 0;
-            clearedAt = System.currentTimeMillis();
         }
     }
 
@@ -183,14 +215,14 @@ public final class ExceptionAnalyzer implements AutoCloseable {
             }
             record(epoch, type, timestamp, threadId, owner, method, descriptor, line, stack.toString());
         } catch (Exception ignored) {
-            synchronized (dataLock) { dropped++; }
+            synchronized (dataLock) { if (epoch == generation) dropped++; }
         }
     }
 
     void record(long epoch, String type, long timestamp, long threadId, String owner, String method,
                 String descriptor, int line, String stack) {
         synchronized (dataLock) {
-            if (epoch != generation || timestamp < clearedAt) return;
+            if (epoch != generation) return;
             Summary summary = summaries.get(type);
             if (summary == null) {
                 if (summaries.size() >= MAX_TYPES) { dropped++; return; }
@@ -243,6 +275,12 @@ public final class ExceptionAnalyzer implements AutoCloseable {
 
     private static String encode(String value) {
         return Base64.getEncoder().encodeToString(value.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private static String rootMessage(Throwable error) {
+        Throwable cause = error;
+        while (cause.getCause() != null) cause = cause.getCause();
+        return cause.getClass().getSimpleName() + (cause.getMessage() == null ? "" : ": " + cause.getMessage());
     }
 
     private static final class Summary {

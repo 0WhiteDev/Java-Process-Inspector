@@ -13,6 +13,7 @@ import dev.whitedev.jpi.agent.field.FieldWriteManager;
 import dev.whitedev.jpi.agent.file.FileInterceptorManager;
 import dev.whitedev.jpi.agent.hook.ApiHookManager;
 import dev.whitedev.jpi.agent.patch.ClassSchema;
+import dev.whitedev.jpi.agent.patch.PatchHistory;
 import dev.whitedev.jpi.agent.profiler.JfrProfilerManager;
 import dev.whitedev.jpi.agent.exception.ExceptionAnalyzer;
 import dev.whitedev.jpi.agent.thread.ThreadAnalyzer;
@@ -37,6 +38,7 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 final class TargetInspector {
+    private final PatchHistory patchHistory = new PatchHistory();
     private static final String[] BUNDLED_COMPILER_TYPES = {
             "javax.annotation.CheckForNull",
             "javax.annotation.CheckReturnValue",
@@ -158,18 +160,16 @@ final class TargetInspector {
         } finally { stream.close(); }
     }
 
-    String redefineSource(String payload) throws Exception {
+    synchronized String redefineSource(String payload) throws Exception {
         int separator = payload.indexOf('\n');
         if (separator <= 0 || separator == payload.length() - 1) throw new IOException("Missing class identifier or Java source");
         String identifier = payload.substring(0, separator);
         String source = payload.substring(separator + 1);
         Class<?> target = resolveClass(identifier);
         requireRedefinable(target);
-        apiHookManager.stopForClass(target);
-        fileInterceptorManager.stopForClass(target);
         byte[] current = classBytes(identifier);
         byte[] replacement = RuntimeJavaCompiler.compile(target.getName(), source, runtimeClassPath(target));
-        applyDefinition(target, current, replacement);
+        applyDefinition(target, current, replacement, "Java source");
         return "Redefined " + target.getName() + " with " + replacement.length + " bytes";
     }
 
@@ -178,7 +178,19 @@ final class TargetInspector {
         return MethodBodyPatcher.methods(classBytes(identifier), target.getClassLoader());
     }
 
-    String patchMethod(String payload) throws Exception {
+    synchronized String patchMethod(String payload) throws Exception {
+        PreparedMethod prepared = prepareMethod(payload);
+        applyDefinition(prepared.target, prepared.current, prepared.replacement, "Method " + prepared.method);
+        return "Patched " + prepared.target.getName() + "." + prepared.method + " with " + prepared.compiler;
+    }
+
+    synchronized byte[] previewMethod(String payload) throws Exception {
+        PreparedMethod prepared = prepareMethod(payload);
+        ClassSchema.verifyCompatible(prepared.current, prepared.replacement);
+        return prepared.replacement;
+    }
+
+    private PreparedMethod prepareMethod(String payload) throws Exception {
         int first = payload.indexOf('\n');
         int second = first < 0 ? -1 : payload.indexOf('\n', first + 1);
         int third = second < 0 ? -1 : payload.indexOf('\n', second + 1);
@@ -191,8 +203,6 @@ final class TargetInspector {
         String body = payload.substring(third + 1);
         Class<?> target = resolveClass(identifier);
         requireRedefinable(target);
-        apiHookManager.stopForClass(target);
-        fileInterceptorManager.stopForClass(target);
         byte[] current = classBytes(identifier);
         byte[] replacement;
         String compiler;
@@ -213,8 +223,71 @@ final class TargetInspector {
                         + (char) 10 + "Javassist fallback failed: " + legacyMessage, modernError);
             }
         }
-        applyDefinition(target, current, replacement);
-        return "Patched " + target.getName() + "." + method + descriptor + " with " + compiler;
+        return new PreparedMethod(target, current, replacement, method + descriptor, compiler);
+    }
+
+    synchronized byte[] previewSource(String payload) throws Exception {
+        int separator = payload.indexOf('\n');
+        if (separator <= 0) throw new IOException("Missing class identifier or Java source");
+        String identifier = payload.substring(0, separator);
+        Class<?> target = resolveClass(identifier);
+        byte[] replacement = RuntimeJavaCompiler.compile(target.getName(), payload.substring(separator + 1), runtimeClassPath(target));
+        ClassSchema.verifyCompatible(classBytes(identifier), replacement);
+        return replacement;
+    }
+
+    String patchHistory(String identifier) throws Exception {
+        return patchHistory.list(identifier.isEmpty() ? "" : registry.keyFor(resolveClass(identifier)));
+    }
+
+    synchronized byte[] classVersion(String payload) throws Exception {
+        String[] values = payload.split("\n", 2);
+        if (values.length != 2) throw new IOException("Missing class identifier or version");
+        if (values[1].startsWith("before:") || values[1].startsWith("after:")) {
+            String[] revision = values[1].split(":", 2);
+            String key = values[0].contains("@") ? values[0] : registry.keyFor(resolveClass(values[0]));
+            return patchHistory.version(key, Long.parseLong(revision[1]), "before".equals(revision[0]));
+        }
+        Class<?> target = resolveClass(values[0]);
+        if ("current".equals(values[1])) return classBytes(values[0]);
+        if ("original".equals(values[1])) {
+            classBytes(values[0]);
+            byte[] original = registry.originalBytecodeFor(target);
+            if (original == null) throw new IOException("Original bytecode is unavailable");
+            return original;
+        }
+        throw new IOException("Unknown class version");
+    }
+
+    synchronized String rollbackPatch(String payload) throws Exception {
+        String[] values = payload.split("\n", -1);
+        if (values.length != 3) throw new IOException("Missing class, patch ID, or expected current fingerprint");
+        Class<?> target = resolveClass(values[0]);
+        requireRedefinable(target);
+        byte[] current = classBytes(values[0]);
+        if (!PatchHistory.sha256(current).equals(values[2])) {
+            throw new IOException("Class changed since the preview was loaded. Refresh before rollback.");
+        }
+        long id = Long.parseLong(values[1]);
+        byte[] replacement = patchHistory.version(registry.keyFor(target), id, true);
+        applyDefinition(target, current, replacement, "Rollback before #" + id);
+        return "Restored " + target.getName() + " to the state before patch #" + id;
+    }
+
+    private static final class PreparedMethod {
+        final Class<?> target;
+        final byte[] current;
+        final byte[] replacement;
+        final String method;
+        final String compiler;
+
+        PreparedMethod(Class<?> target, byte[] current, byte[] replacement, String method, String compiler) {
+            this.target = target;
+            this.current = current;
+            this.replacement = replacement;
+            this.method = method;
+            this.compiler = compiler;
+        }
     }
 
     String startTrace(String payload) throws Exception {
@@ -579,7 +652,7 @@ final class TargetInspector {
         heapInspector.clear();
     }
 
-    String applyClassBytes(String payload) throws Exception {
+    synchronized String applyClassBytes(String payload) throws Exception {
         int separator = payload.indexOf('\n');
         if (separator <= 0 || separator == payload.length() - 1) throw new IOException("Missing class identifier or bytecode");
         String identifier = payload.substring(0, separator);
@@ -594,13 +667,12 @@ final class TargetInspector {
         }
         Class<?> target = resolveClass(identifier);
         requireRedefinable(target);
-        apiHookManager.stopForClass(target);
         byte[] current = classBytes(identifier);
-        applyDefinition(target, current, replacement);
+        applyDefinition(target, current, replacement, "Raw bytecode");
         return "Applied " + replacement.length + " byte class definition to " + target.getName();
     }
 
-    String rollbackClass(String identifier) throws Exception {
+    synchronized String rollbackClass(String identifier) throws Exception {
         Class<?> target = resolveClass(identifier);
         requireRedefinable(target);
         cfgManager.stopForClass(target);
@@ -612,8 +684,7 @@ final class TargetInspector {
         if (original == null) throw new IOException("Original bytecode is unavailable for " + target.getName());
         byte[] current = registry.bytecodeFor(target);
         if (current != null) ClassSchema.verifyCompatible(current, original);
-        instrumentation.redefineClasses(new ClassDefinition(target, original));
-        registry.recordApplied(target, original);
+        applyDefinition(target, current == null ? classBytes(identifier) : current, original, "Rollback original");
         return "Restored the original definition of " + target.getName();
     }
 
@@ -859,15 +930,19 @@ final class TargetInspector {
         if (target.isArray() || target.isPrimitive()) throw new IOException("Array and primitive classes cannot be redefined");
     }
 
-    private void applyDefinition(Class<?> target, byte[] current, byte[] replacement) throws Exception {
+    private void applyDefinition(Class<?> target, byte[] current, byte[] replacement, String description) throws Exception {
+        ClassSchema.verifyCompatible(current, replacement);
         cfgManager.stopForClass(target);
         traceManager.stopForClass(target);
         apiHookManager.stopForClass(target);
         fieldWriteManager.stopForClass(target);
         fileInterceptorManager.stopForClass(target);
+        byte[] restored = registry.bytecodeFor(target);
+        if (restored != null) current = restored;
         ClassSchema.verifyCompatible(current, replacement);
         instrumentation.redefineClasses(new ClassDefinition(target, replacement));
         registry.recordApplied(target, replacement);
+        patchHistory.record(registry.keyFor(target), target.getName(), description, current, replacement);
     }
 
     private static void appendClass(StringBuilder output, String id, String name, String loader,

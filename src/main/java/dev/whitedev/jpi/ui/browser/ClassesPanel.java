@@ -7,6 +7,7 @@ import dev.whitedev.jpi.ui.Async;
 import dev.whitedev.jpi.ui.CodeEditors;
 import dev.whitedev.jpi.ui.SessionAware;
 import dev.whitedev.jpi.ui.Ui;
+import dev.whitedev.jpi.ui.layout.WrappingFlowLayout;
 import dev.whitedev.jpi.ui.debug.DebuggerPanel;
 import dev.whitedev.jpi.ui.tracing.LiveTracerPanel;
 import dev.whitedev.jpi.ui.tracing.XrefsPanel;
@@ -86,6 +87,7 @@ public final class ClassesPanel extends JPanel implements SessionAware {
     private final JButton decompile = Ui.primaryButton("Decompile");
     private final JButton applySource = Ui.primaryButton("Apply source");
     private final JButton rollback = Ui.secondaryButton("Rollback original");
+    private final JButton patchDiff = Ui.secondaryButton("Class diff / History");
     private final JButton pluginTools = Ui.secondaryButton("Plugin tools...");
     private final JCheckBox live = new JCheckBox("Live tracking", true);
     private final JComboBox<DecompilerOption> decompilerSelector = new JComboBox<>();
@@ -171,24 +173,24 @@ public final class ClassesPanel extends JPanel implements SessionAware {
         browser.add(Ui.scroll(list), BorderLayout.CENTER);
         classCount.setForeground(Ui.MUTED);
         classPageStatus.setForeground(Ui.MUTED);
-        JPanel classFooter = new JPanel(new BorderLayout(8, 0));
+        JPanel classFooter = new JPanel(new BorderLayout(0, 6));
         classFooter.setOpaque(false);
-        JPanel classPaging = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
+        JPanel classPaging = new JPanel(new WrappingFlowLayout(FlowLayout.LEFT, 6, 3));
         classPaging.setOpaque(false);
         classPaging.add(previousClassPage);
         classPaging.add(classPageStatus);
         classPaging.add(nextClassPage);
-        classFooter.add(classCount, BorderLayout.CENTER);
-        classFooter.add(classPaging, BorderLayout.EAST);
+        classFooter.add(classCount, BorderLayout.NORTH);
+        classFooter.add(classPaging, BorderLayout.CENTER);
         browser.add(classFooter, BorderLayout.SOUTH);
 
         JPanel detail = Ui.card(new BorderLayout(0, 10));
-        JPanel tools = new JPanel(new GridLayout(2, 1, 0, 6));
+        JPanel tools = new JPanel(new GridBagLayout());
         tools.setOpaque(false);
         metadata.setForeground(Ui.MUTED);
-        JPanel generalRow = new JPanel(new BorderLayout(8, 0));
+        JPanel generalRow = new JPanel(new BorderLayout(8, 6));
         generalRow.setOpaque(false);
-        JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+        JPanel actions = new JPanel(new WrappingFlowLayout(FlowLayout.LEFT, 8, 3));
         actions.setOpaque(false);
         JButton dump = Ui.secondaryButton("Dump selected");
         JButton dumpAll = Ui.secondaryButton("Dump all");
@@ -200,6 +202,7 @@ public final class ClassesPanel extends JPanel implements SessionAware {
         decompile.addActionListener(e -> decompile());
         applySource.addActionListener(e -> applySource());
         rollback.addActionListener(e -> rollback());
+        patchDiff.addActionListener(e -> openPatchDiff());
         dump.addActionListener(e -> dumpSelected());
         dumpAll.addActionListener(e -> dumpAll());
         refreshEvents.addActionListener(e -> refreshEvents());
@@ -210,24 +213,38 @@ public final class ClassesPanel extends JPanel implements SessionAware {
         actions.add(dump);
         actions.add(dumpAll);
         actions.add(pluginTools);
-        generalRow.add(metadata, BorderLayout.CENTER);
-        generalRow.add(actions, BorderLayout.EAST);
+        generalRow.add(metadata, BorderLayout.NORTH);
+        generalRow.add(actions, BorderLayout.CENTER);
 
-        JPanel sourceActions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+        JPanel sourceActions = new JPanel(new WrappingFlowLayout(FlowLayout.LEFT, 8, 3));
         sourceActions.setOpaque(false);
         JLabel sourceHint = new JLabel("Mapped source is display-only and never changes the target");
         sourceHint.setForeground(Ui.MUTED);
-        sourceActions.add(sourceHint);
         sourceActions.add(new JLabel("Decompiler"));
         sourceActions.add(decompilerSelector);
         sourceActions.add(new JLabel("Source"));
         sourceActions.add(sourceMode);
         sourceActions.add(decompile);
         sourceActions.add(rollback);
+        sourceActions.add(patchDiff);
         sourceActions.add(applySource);
-        tools.add(generalRow);
-        tools.add(sourceActions);
+        GridBagConstraints toolbarRow = new GridBagConstraints();
+        toolbarRow.gridx = 0;
+        toolbarRow.gridy = 0;
+        toolbarRow.weightx = 1;
+        toolbarRow.fill = GridBagConstraints.HORIZONTAL;
+        toolbarRow.insets = new Insets(0, 0, 6, 0);
+        tools.add(generalRow, toolbarRow);
+        toolbarRow.gridy++;
+        tools.add(sourceActions, toolbarRow);
+        toolbarRow.gridy++;
+        tools.add(sourceHint, toolbarRow);
         detail.add(tools, BorderLayout.NORTH);
+        detail.addComponentListener(new java.awt.event.ComponentAdapter() {
+            @Override public void componentResized(java.awt.event.ComponentEvent event) {
+                tools.revalidate();
+            }
+        });
         source.setText("Select a class and click Decompile.");
         events.setText("Class definition events will appear here.");
         bytecodeHex.setEditable(true);
@@ -673,13 +690,13 @@ public final class ClassesPanel extends JPanel implements SessionAware {
     private JPanel methodPatchPanel() {
         JPanel panel = new JPanel(new BorderLayout(0, 10));
         panel.setOpaque(false);
-        JPanel header = new JPanel(new BorderLayout(10, 0));
+        JPanel header = new JPanel(new BorderLayout(0, 6));
         header.setOpaque(false);
         methodSelector.setPreferredSize(new Dimension(460, 34));
         JLabel help = new JLabel("Java body: { return value; }   Parameters: $1, $2   Instance: this or $0   Lambdas: Java compiler backend");
         help.setForeground(Ui.MUTED);
         methodStatus.setForeground(Ui.MUTED);
-        JPanel controls = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+        JPanel controls = new JPanel(new WrappingFlowLayout(FlowLayout.LEFT, 8, 3));
         controls.setOpaque(false);
         JButton refresh = Ui.secondaryButton("Refresh methods");
         refresh.addActionListener(event -> loadMethods(true));
@@ -696,8 +713,8 @@ public final class ClassesPanel extends JPanel implements SessionAware {
         controls.add(debugMethod);
         controls.add(traceMethod);
         controls.add(patchMethod);
-        header.add(methodSelector, BorderLayout.CENTER);
-        header.add(controls, BorderLayout.EAST);
+        header.add(methodSelector, BorderLayout.NORTH);
+        header.add(controls, BorderLayout.CENTER);
         panel.add(header, BorderLayout.NORTH);
         panel.add(CodeEditors.scrollPane(methodBody), BorderLayout.CENTER);
         JPanel footer = new JPanel();
@@ -712,7 +729,7 @@ public final class ClassesPanel extends JPanel implements SessionAware {
     private JPanel rawBytecodePanel() {
         JPanel panel = new JPanel(new BorderLayout(0, 10));
         panel.setOpaque(false);
-        JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+        JPanel actions = new JPanel(new WrappingFlowLayout(FlowLayout.LEFT, 8, 3));
         actions.setOpaque(false);
         JLabel help = new JLabel("Hex editor for the complete class file. Schema validation and JVM verification run before activation.");
         help.setForeground(Ui.MUTED);
@@ -721,10 +738,10 @@ public final class ClassesPanel extends JPanel implements SessionAware {
         applyHex.addActionListener(event -> applyHexBytecode());
         actions.add(loadClass);
         actions.add(applyHex);
-        JPanel header = new JPanel(new BorderLayout());
+        JPanel header = new JPanel(new BorderLayout(0, 6));
         header.setOpaque(false);
-        header.add(help, BorderLayout.CENTER);
-        header.add(actions, BorderLayout.EAST);
+        header.add(help, BorderLayout.NORTH);
+        header.add(actions, BorderLayout.CENTER);
         panel.add(header, BorderLayout.NORTH);
         panel.add(Ui.scroll(bytecodeHex), BorderLayout.CENTER);
         return panel;
@@ -1160,6 +1177,30 @@ public final class ClassesPanel extends JPanel implements SessionAware {
             setRedefinitionControls(true);
             Ui.error(this, error);
         });
+    }
+
+    private void openPatchDiff() {
+        LoadedClassInfo selected = list.getSelectedValue();
+        InspectorSession current = session;
+        if (selected == null || current == null || "captured-only".equals(selected.kind)) return;
+        MethodInfo selectedMethod = (MethodInfo) methodSelector.getSelectedItem();
+        String methodDraft = selectedMethod == null ? "" : selectedMethod.name + "\n" + selectedMethod.descriptor + "\n" + methodBody.getText();
+        dev.whitedev.jpi.ui.patch.PatchDiffPanel panel = new dev.whitedev.jpi.ui.patch.PatchDiffPanel(current, selected.id,
+                selected.name, (DecompilerOption) decompilerSelector.getSelectedItem(), isMappedSource() ? "" : source.getText(),
+                bytecodeHex.getText(), methodDraft, () -> session == current, () -> {
+                    methodClassId = null;
+                    refreshEvents();
+                    if (list.getSelectedValue() != null && selected.id.equals(list.getSelectedValue().id)) decompile();
+                });
+        JDialog dialog = new JDialog(SwingUtilities.getWindowAncestor(this), "Class diff / Patch history: " + selected.name);
+        dialog.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
+        dialog.setContentPane(panel);
+        dialog.setSize(1200, 800);
+        dialog.setLocationRelativeTo(this);
+        dialog.addWindowListener(new java.awt.event.WindowAdapter() {
+            @Override public void windowClosed(java.awt.event.WindowEvent event) { panel.close(); }
+        });
+        dialog.setVisible(true);
     }
 
     private void setRedefinitionControls(boolean enabled) {
