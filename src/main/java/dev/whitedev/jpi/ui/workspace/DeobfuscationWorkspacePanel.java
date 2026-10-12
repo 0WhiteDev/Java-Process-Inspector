@@ -31,6 +31,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 public final class DeobfuscationWorkspacePanel extends JPanel implements SessionAware {
+    public void setFingerprintWarning(String message) {
+        fingerprintWarning.setText(message);
+        fingerprintWarning.setToolTipText(message);
+        fingerprintWarning.setVisible(!message.isEmpty());
+    }
+    private final JLabel fingerprintWarning = new JLabel();
     private final DeobfuscationWorkspace workspace;
     private final JTextField scope = new JTextField();
     private final JTextField exclusions = new JTextField();
@@ -129,7 +135,13 @@ public final class DeobfuscationWorkspacePanel extends JPanel implements Session
         options.add(mapPackages);
         status.setForeground(Ui.MUTED);
         card.add(options, BorderLayout.CENTER);
-        card.add(status, BorderLayout.SOUTH);
+        JPanel messages = new JPanel(new GridLayout(0, 1, 0, 4));
+        messages.setOpaque(false);
+        fingerprintWarning.setForeground(Ui.WARNING);
+        fingerprintWarning.setVisible(false);
+        messages.add(status);
+        messages.add(fingerprintWarning);
+        card.add(messages, BorderLayout.SOUTH);
         return card;
     }
 
@@ -269,6 +281,7 @@ public final class DeobfuscationWorkspacePanel extends JPanel implements Session
         chooser.setFileFilter(new FileNameExtensionFilter("JPI mapping workspace (*.json)", "json"));
         if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) return;
         try {
+            String fingerprint = MappingFormats.readFingerprint(chooser.getSelectedFile().toPath());
             List<MappingEntry> imported = MappingFormats.readJson(chooser.getSelectedFile().toPath());
             Object[] options = {"Merge", "Replace", "Cancel"};
             int choice = JOptionPane.showOptionDialog(this, "Import " + imported.size() + " entries?",
@@ -276,6 +289,7 @@ public final class DeobfuscationWorkspacePanel extends JPanel implements Session
                     null, options, options[0]);
             if (choice == 0) workspace.merge(imported);
             else if (choice == 1) workspace.replace(imported);
+            if (choice == 1 || choice == 0 && workspace.targetFingerprint().isEmpty()) workspace.setTargetFingerprint(fingerprint);
         } catch (Exception error) {
             Ui.error(this, error);
         }
@@ -291,7 +305,7 @@ public final class DeobfuscationWorkspacePanel extends JPanel implements Session
         chooser.setSelectedFile(new File("jpi-mappings." + selected.extension()));
         if (chooser.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) return;
         try {
-            MappingFormats.write(chooser.getSelectedFile().toPath(), selected, workspace.entries());
+            MappingFormats.write(chooser.getSelectedFile().toPath(), selected, workspace.entries(), workspace.targetFingerprint());
             status.setText("Exported " + selected + " to " + chooser.getSelectedFile().getName());
         } catch (Exception error) {
             Ui.error(this, error);
@@ -304,7 +318,10 @@ public final class DeobfuscationWorkspacePanel extends JPanel implements Session
             return;
         }
         try {
-            workspace.replace(MappingFormats.readJson(defaultFile));
+            String fingerprint = MappingFormats.readFingerprint(defaultFile);
+            List<MappingEntry> restored = MappingFormats.readJson(defaultFile);
+            workspace.replace(restored);
+            workspace.setTargetFingerprint(fingerprint);
             status.setText("Restored workspace from " + defaultFile);
         } catch (Exception error) {
             status.setText("Could not restore saved workspace: " + error.getMessage());
@@ -315,7 +332,7 @@ public final class DeobfuscationWorkspacePanel extends JPanel implements Session
         try {
             Files.createDirectories(defaultFile.getParent());
             Path temporary = defaultFile.resolveSibling(defaultFile.getFileName() + ".tmp");
-            MappingFormats.write(temporary, MappingFormats.Format.JSON, workspace.entries());
+            MappingFormats.write(temporary, MappingFormats.Format.JSON, workspace.entries(), workspace.targetFingerprint());
             try {
                 Files.move(temporary, defaultFile, java.nio.file.StandardCopyOption.ATOMIC_MOVE,
                         java.nio.file.StandardCopyOption.REPLACE_EXISTING);

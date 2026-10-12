@@ -108,6 +108,7 @@ final class AgentServer implements Runnable {
         registry.put(Operation.PING, payload -> WireProtocol.utf8("pong"));
         registry.put(Operation.METRICS, payload -> WireProtocol.utf8(inspector.metrics()));
         registry.put(Operation.CLASSES, payload -> WireProtocol.utf8(inspector.loadedClasses()));
+        registry.put(Operation.TARGET_FINGERPRINT, payload -> WireProtocol.utf8(inspector.targetFingerprint(payload)));
         registry.put(Operation.CLASS_BYTES, inspector::classBytes);
         registry.put(Operation.EXECUTE, payload -> WireProtocol.utf8(SourceExecutor.execute(payload)));
         registry.put(Operation.FIELDS, payload -> WireProtocol.utf8(inspector.staticFields(payload)));

@@ -27,12 +27,38 @@ public final class MappingFormats {
     private MappingFormats() {}
 
     public static void write(Path path, Format format, List<MappingEntry> entries) throws IOException {
+        write(path, format, entries, "");
+    }
+
+    public static void write(Path path, Format format, List<MappingEntry> entries, String fingerprint) throws IOException {
         String value;
         if (format == Format.JSON) value = json(entries);
         else if (format == Format.TINY_V2) value = tiny(entries);
         else if (format == Format.TSRG2) value = tsrg(entries);
         else value = proguard(entries);
+        if (format == Format.JSON && !fingerprint.isEmpty()) {
+            dev.whitedev.jpi.fingerprint.TargetFingerprint.parse(fingerprint);
+            String encoded = java.util.Base64.getEncoder().encodeToString(fingerprint.getBytes(StandardCharsets.UTF_8));
+            value = value.replace("  \"entries\": [", "  \"targetFingerprint\": \"" + encoded + "\",\n  \"entries\": [");
+        }
         Files.writeString(path, value, StandardCharsets.UTF_8);
+    }
+
+    public static String readFingerprint(Path path) throws IOException {
+        if (Files.size(path) > 64L * 1024 * 1024) throw new IOException("Workspace file exceeds 64 MiB");
+        String document = Files.readString(path, StandardCharsets.UTF_8);
+        Matcher matcher = Pattern.compile("\"targetFingerprint\"\\s*:\\s*\"([A-Za-z0-9+/=]*)\"").matcher(document);
+        if (!matcher.find()) {
+            if (Pattern.compile("\"targetFingerprint\"\\s*:").matcher(document).find()) throw new IOException("Invalid workspace target fingerprint encoding");
+            return "";
+        }
+        try {
+            String wire = new String(java.util.Base64.getDecoder().decode(matcher.group(1)), StandardCharsets.UTF_8);
+            dev.whitedev.jpi.fingerprint.TargetFingerprint.parse(wire);
+            return wire;
+        } catch (RuntimeException error) {
+            throw new IOException("Invalid workspace target fingerprint", error);
+        }
     }
 
     public static List<MappingEntry> readJson(Path path) throws IOException {

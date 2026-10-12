@@ -64,6 +64,10 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
 public final class DebuggerPanel extends JPanel implements SessionAware {
+    public List<BreakpointSpec> fingerprintBreakpoints() {
+        DebugSession current = debugger;
+        return current == null ? List.of() : current.breakpoints().snapshot().stream().map(BreakpointManager.BreakpointView::spec).toList();
+    }
     private final RuntimeTimelineStore timeline;
     private final AtomicLong eventIds = new AtomicLong();
     private final JButton launch = Ui.primaryButton("Launch with debugger...");

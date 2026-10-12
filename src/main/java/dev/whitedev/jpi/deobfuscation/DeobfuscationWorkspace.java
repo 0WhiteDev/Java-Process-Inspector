@@ -12,6 +12,15 @@ import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 public final class DeobfuscationWorkspace {
+    private String targetFingerprint = "";
+
+    public synchronized String targetFingerprint() { return targetFingerprint; }
+
+    public synchronized void setTargetFingerprint(String value) {
+        if (!value.isEmpty()) dev.whitedev.jpi.fingerprint.TargetFingerprint.parse(value);
+        targetFingerprint = value;
+        changed();
+    }
     private final Map<String, MappingEntry> entries = new LinkedHashMap<>();
     private final List<Runnable> listeners = new CopyOnWriteArrayList<>();
 

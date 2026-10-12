@@ -25,6 +25,7 @@ import dev.whitedev.jpi.ui.callgraph.CallGraphHeatmapPanel;
 import dev.whitedev.jpi.ui.connection.TunnelAgentDialog;
 import dev.whitedev.jpi.ui.debug.DebuggerPanel;
 import dev.whitedev.jpi.ui.file.FileMonitorPanel;
+import dev.whitedev.jpi.ui.fingerprint.TargetFingerprintPanel;
 import dev.whitedev.jpi.ui.profiler.ProfilerPanel;
 import dev.whitedev.jpi.ui.exceptions.ExceptionAnalyzerPanel;
 import dev.whitedev.jpi.loader.ClassLoaderSnapshot;
@@ -166,6 +167,8 @@ public final class MainFrame extends JFrame {
             selectView("Live tracer");
         });
         DeobfuscationWorkspacePanel deobfuscation = new DeobfuscationWorkspacePanel(mappingWorkspace);
+        TargetFingerprintPanel fingerprint = new TargetFingerprintPanel(
+                mappingWorkspace, debugger::fingerprintBreakpoints, deobfuscation::setFingerprintWarning);
         ExecutorPanel executor = new ExecutorPanel(mappingWorkspace);
         FieldWritesPanel fieldWrites = new FieldWritesPanel(mappingWorkspace, timelineStore);
         ValueTracePanel valueTrace = new ValueTracePanel(mappingWorkspace, timelineStore);
@@ -216,11 +219,12 @@ public final class MainFrame extends JFrame {
         PluginsPanel plugins = new PluginsPanel(pluginManager);
         views = new ArrayList<>(Arrays.asList(overview, timeline, profiler, exceptions, threadAnalyzer, debugger, classes, tracer, callGraph, apiHooks, fileMonitor, xrefs,
                 cfg, differences,
-                investigation, deobfuscation,
+                investigation, deobfuscation, fingerprint,
                 constantSearch, executor, fields, fieldWrites, valueTrace, loaders, environment, network, heapObjects, nativeSymbols,
                 memory, dll, plugins));
 
         addCard("Overview", overview);
+        addCard("Target fingerprint", fingerprint);
         addCard("Runtime timeline", timeline);
         addCard("Profiler", profiler);
         addCard("Exception Analyzer", exceptions);
@@ -429,6 +433,7 @@ public final class MainFrame extends JFrame {
         workspace.setAlignmentX(Component.LEFT_ALIGNMENT);
         sidebar.add(workspace);
         addNavigation(sidebar, "Overview");
+        addNavigation(sidebar, "Target fingerprint");
         addNavigation(sidebar, "Runtime timeline");
         addNavigation(sidebar, "Profiler");
         addNavigation(sidebar, "Exception Analyzer");

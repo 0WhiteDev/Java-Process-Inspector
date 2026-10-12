@@ -155,6 +155,28 @@ The interface uses FlatLaf with a focused sidebar workspace instead of nested ut
 
 ## Features
 
+<details>
+<summary><strong>Target fingerprinting</strong></summary>
+
+Open <strong>Target fingerprint</strong> after attaching. Enter exact binary class names, one per line or comma-separated, and click <strong>Capture / Compare</strong>. The capture shows the main launch class or JAR, Java version, loaded-class count, stable classloader hierarchies, selected SHA-256 bytecode hashes, and a deterministic <code>JPI-...</code> identifier. With an empty selection and no workspace owners, JPI attempts to hash the main class.
+
+Click <strong>Use as workspace baseline</strong> to bind the capture to the deobfuscation workspace. Its JSON export and automatic workspace save retain the baseline and the debugger's current breakpoint specifications. Attaching to another target automatically captures and compares the baseline's selected classes. <strong>Import baseline</strong> loads a fingerprint or workspace JSON without importing its mappings; <strong>Export fingerprint</strong> saves the current capture independently. Importing a mapping workspace with Replace also restores its baseline. Merge preserves an existing baseline.
+
+The comparison includes:
+
+- Percentage of baseline catalog definitions still present, matched by class name and loader-type hierarchy
+- A separate count of selected bytecode hashes that actually match
+- Mapping review when an owning class changed, disappeared from the loaded catalog, or a selected member signature no longer exists
+- Saved/current method and source-line breakpoint location checks
+- Explicit Unverified states for missing bytecode, absent line symbols, wildcard breakpoints, truncated catalogs, and ambiguous loader definitions
+- A warning in Deobfuscation with a link by name to the detailed comparison workspace
+
+Capture hashes at most 128 definitions, capped at 4 MiB per class and 32 MiB total bytecode. Baseline and breakpoint classes are prioritized, followed by explicit selection and mapping owners. Extra mapping owners remain unverified instead of being declared compatible. Catalog capture is capped at 50,000 loaded entries and the response is kept below 8 MiB. Array and primitive classes are excluded from the definition catalog, but remain part of the JVM's total loaded-class count. Member metadata is capped at 1 MiB per selected class. Capture uses JPI's existing class-byte retrieval, which can retransform selected modifiable classes when bytes are not cached.
+
+This is a build-comparison aid, not proof of full binary equivalence. Dynamic class loading, unloading, runtime patches, probes, Java versions, and capture timing can change fingerprints. A missing class may simply not be loaded yet; its breakpoint is reported as Not loaded rather than definitively broken. Classloaders with identical type hierarchies are deliberately treated as ambiguous. Bytecode-index breakpoints require a debugger reconnect to validate their indices. Breakpoint specifications are retained for comparison only and are not installed or triggered automatically. Tiny, TSRG, and ProGuard exports do not carry fingerprint metadata.
+
+</details>
+
 <details open>
 <summary><strong>JVM attach foundation</strong></summary>
 

@@ -45,6 +45,11 @@ class AttachIntegrationIT {
             InspectorSession session = new AttachService(AGENT_JAR).attach(new JvmDescriptor(pid, "attach-smoke-target"));
             try {
                 assertTrue(session.requestText(Operation.METRICS, "").contains("pid=" + pid));
+                var fingerprint = dev.whitedev.jpi.fingerprint.TargetFingerprint.parse(session.requestText(
+                        Operation.TARGET_FINGERPRINT, AttachTarget.class.getName()));
+                assertEquals(AttachTarget.class.getName(), fingerprint.mainClass());
+                assertFalse(fingerprint.javaVersion().isEmpty());
+                assertTrue(fingerprint.definitions().stream().anyMatch(type -> type.name().equals(AttachTarget.class.getName()) && type.inspected()));
                 String threadAnalysis = session.requestText(Operation.THREAD_ANALYZE, "");
                 assertTrue(threadAnalysis.startsWith("M\t"), threadAnalysis);
                 assertTrue(threadAnalysis.contains("\nT\t"), threadAnalysis);

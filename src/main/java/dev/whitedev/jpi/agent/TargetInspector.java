@@ -120,6 +120,11 @@ final class TargetInspector {
         return output.toString();
     }
 
+    String targetFingerprint(String selection) throws Exception {
+        return dev.whitedev.jpi.agent.fingerprint.TargetFingerprintCapture.capture(
+                instrumentation.getAllLoadedClasses(), selection, type -> classBytes(index(type)));
+    }
+
     String classLoaderSnapshot() {
         Class<?>[] loaded = instrumentation.getAllLoadedClasses();
         for (Class<?> type : loaded) index(type);
