@@ -22,7 +22,7 @@ class NativeAgentArtifactTest {
         String sha = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
         var artifact = NativeAgentArtifact.verify(file, sha);
         assertEquals(file.toRealPath(), artifact.library());
-        assertEquals(file + "\n" + sha, artifact.bindingOptions());
+        assertEquals(file.toRealPath() + "\n" + sha, artifact.bindingOptions());
         Files.write(file, new byte[]{3, 2, 1});
         assertThrows(IOException.class, () -> NativeAgentArtifact.verify(file, sha));
         Files.write(file, new byte[0]);

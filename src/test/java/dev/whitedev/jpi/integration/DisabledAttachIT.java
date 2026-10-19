@@ -54,9 +54,9 @@ class DisabledAttachIT {
             }
             assertTrue(target.isAlive());
         } finally { stop(target); }
-        try (ServerSocket released = new ServerSocket()) {
-            released.setReuseAddress(true);
-            released.bind(new java.net.InetSocketAddress("127.0.0.1", port));
+        try (java.net.Socket released = new java.net.Socket()) {
+            assertThrows(java.net.ConnectException.class,
+                    () -> released.connect(new java.net.InetSocketAddress("127.0.0.1", port), 1000));
         }
     }
 
