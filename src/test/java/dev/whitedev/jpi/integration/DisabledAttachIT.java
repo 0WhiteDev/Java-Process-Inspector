@@ -54,10 +54,7 @@ class DisabledAttachIT {
             }
             assertTrue(target.isAlive());
         } finally { stop(target); }
-        try (java.net.Socket released = new java.net.Socket()) {
-            assertThrows(java.net.ConnectException.class,
-                    () -> released.connect(new java.net.InetSocketAddress("127.0.0.1", port), 1000));
-        }
+        assertAgentStopped(target, port);
     }
 
     @Test void noPreloadedAgentProducesActionableFailureWithoutChangingTarget() throws Exception {
@@ -134,7 +131,23 @@ class DisabledAttachIT {
         try (ServerSocket socket = new ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"))) { return socket.getLocalPort(); }
     }
     private static void stop(Process target) throws Exception {
-        target.destroy();
-        if (!target.waitFor(5, TimeUnit.SECONDS)) { target.destroyForcibly(); assertTrue(target.waitFor(5, TimeUnit.SECONDS)); }
+        JvmFixtureCleanup.stop(target);
+    }
+
+    private static void assertAgentStopped(Process target, int port) throws Exception {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        for (;;) {
+            try (java.net.Socket socket = new java.net.Socket()) {
+                socket.connect(new java.net.InetSocketAddress("127.0.0.1", port), 250);
+                socket.setSoTimeout(250);
+                var output = new java.io.DataOutputStream(socket.getOutputStream());
+                output.writeUTF(TOKEN);
+                dev.whitedev.jpi.protocol.WireProtocol.writeRequest(output, Operation.SESSION_INFO, new byte[0]);
+                var response = dev.whitedev.jpi.protocol.WireProtocol.readResponse(new java.io.DataInputStream(socket.getInputStream()));
+                if (!response.success() || !response.text().startsWith("pid=" + target.pid() + "\n")) return;
+            } catch (IOException expected) { return; }
+            if (System.nanoTime() >= deadline) fail("Terminated fixture JVM still serves authenticated requests");
+            Thread.sleep(20);
+        }
     }
 }

@@ -51,7 +51,7 @@ class WindowsInjectionIT {
                 for (int i = 0; i < 10; i++) assertEquals("pong", session.requestText(Operation.PING, ""));
                 assertTrue(target.isAlive());
             } finally { stop(target); }
-        } finally { Files.deleteIfExists(copy); Files.deleteIfExists(directory); }
+        } finally { JvmFixtureCleanup.delete(copy, directory); }
     }
 
     @Test void serviceLoadsAndInitializesTheWindowsBackend() throws Exception {
@@ -78,7 +78,7 @@ class WindowsInjectionIT {
                 new ProcessInjector().inject(Long.toString(target.pid()), agent);
                 assertEquals("pong", session.requestText(Operation.PING, ""));
             } finally { stop(target); }
-        } finally { Files.deleteIfExists(copy); Files.deleteIfExists(directory); }
+        } finally { JvmFixtureCleanup.delete(copy, directory); }
     }
 
     @Test void missingInitializationEntryLeavesTargetResponsive() throws Exception {
@@ -105,7 +105,6 @@ class WindowsInjectionIT {
     }
 
     private static void stop(Process target) throws Exception {
-        target.destroy();
-        if (!target.waitFor(5, TimeUnit.SECONDS)) { target.destroyForcibly(); assertTrue(target.waitFor(5, TimeUnit.SECONDS)); }
+        JvmFixtureCleanup.stop(target);
     }
 }

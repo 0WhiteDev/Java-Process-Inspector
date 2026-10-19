@@ -336,7 +336,7 @@ class NativeBootstrapIT {
                 assertTrue(classpath.startsWith(System.getProperty("jpi.test.classes", "target/test-classes")), classpath);
                 assertTrue(classpath.contains("provisioned agent.jar"), classpath);
             }
-        } finally { Files.deleteIfExists(jar); Files.deleteIfExists(directory); }
+        } finally { JvmFixtureCleanup.delete(jar, directory); }
     }
 
     @Test void rejectsJavaAgentEndpointAsNativeAndKeepsExistingPreloadedApiWorking() throws Exception {
@@ -408,11 +408,10 @@ class NativeBootstrapIT {
         final Process process; final Path errorLog;
         Fixture(Process process, Path errorLog) { this.process = process; this.errorLog = errorLog; }
         public void close() throws Exception {
-            process.destroy();
-            if (!process.waitFor(5, TimeUnit.SECONDS)) { process.destroyForcibly(); assertTrue(process.waitFor(5, TimeUnit.SECONDS)); }
+            JvmFixtureCleanup.stop(process);
             String log = log(errorLog);
             assertFalse(log.contains("WARNING in native method") || log.contains("FATAL ERROR in native method"), log);
-            Files.deleteIfExists(errorLog);
+            JvmFixtureCleanup.delete(errorLog);
         }
     }
 

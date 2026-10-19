@@ -63,12 +63,14 @@ class NativeCaptureIT {
         Path unicodeDirectory = Files.createDirectory(archiveParent.resolve("źródło_測試"));
         try (Fixture fixture = start()) {
             InspectorSession session = fixture.session;
+            assertEquals("warmup", load(session, payload("WarmArchivePreview", "warmup"), 0));
             session.request(Operation.JVMTI_CAPTURE_ARCHIVE_START, unicodeDirectory + "\n67108864");
             byte[] first = payload("TransientDecoded", "first");
             byte[] second = payload("TransientDecoded", "second");
             assertEquals("first", load(session, first, 93));
             long firstSequence = sequenceForBytes(session, session.requestText(Operation.JVMTI_CAPTURE_EVENTS, ""), first);
             assertEquals("second", load(session, second, 17));
+            long secondSequence = sequenceForBytes(session, session.requestText(Operation.JVMTI_CAPTURE_EVENTS, ""), second);
             String encoded = encrypted(first, 93);
             assertEquals("done", session.requestText(Operation.EXECUTE,
                     "public class ArchiveBurst { public static void execute(java.io.PrintStream out) throws Exception { "
@@ -88,9 +90,13 @@ class NativeCaptureIT {
                 if (new ClassReader(Files.readAllBytes(directory.resolve(fields[4]))).getClassName().equals("TransientDecoded")) saved.add(fields);
             }
             assertTrue(saved.size() >= 2, stopped);
-            assertNotEquals(saved.get(0)[4], saved.get(1)[4]);
-            assertArrayEquals(first, Files.readAllBytes(directory.resolve(saved.get(0)[4])));
-            assertArrayEquals(second, Files.readAllBytes(directory.resolve(saved.get(1)[4])));
+            Map<Long, String> files = new HashMap<>();
+            for (String[] row : saved) assertNull(files.put(Long.parseLong(row[0]), row[4]), "Duplicate capture sequence");
+            assertTrue(files.containsKey(firstSequence), stopped);
+            assertTrue(files.containsKey(secondSequence), stopped);
+            assertNotEquals(files.get(firstSequence), files.get(secondSequence));
+            assertArrayEquals(first, Files.readAllBytes(directory.resolve(files.get(firstSequence))), stopped);
+            assertArrayEquals(second, Files.readAllBytes(directory.resolve(files.get(secondSequence))), stopped);
             for (String[] row : saved) assertEquals("TransientDecoded", new ClassReader(Files.readAllBytes(directory.resolve(row[4]))).getClassName());
             assertEquals("pong", session.requestText(Operation.PING, ""));
         }
