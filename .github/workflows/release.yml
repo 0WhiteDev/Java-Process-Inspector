@@ -14,7 +14,11 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  native:
+    uses: ./.github/workflows/native.yml
+
   release:
+    needs: native
     runs-on: windows-latest
     timeout-minutes: 30
 
@@ -51,8 +55,18 @@ jobs:
           "JPI_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "Validated JPI version $version" | Add-Content $env:GITHUB_STEP_SUMMARY
 
+      - name: Clean build output
+        run: mvn --batch-mode --no-transfer-progress clean
+
+      - name: Download verified native backends
+        uses: actions/download-artifact@v4
+        with:
+          pattern: jpi-jvmti-*
+          path: target/native-resources/native
+          merge-multiple: true
+
       - name: Run unit and attach integration tests
-        run: mvn --batch-mode --no-transfer-progress clean verify
+        run: mvn --batch-mode --no-transfer-progress "-Djpi.native.required=true" verify
 
       - name: Validate packaged application
         shell: pwsh
@@ -63,6 +77,16 @@ jobs:
           }
           $entries = @(& jar tf $jar)
           $required = @(
+            "native/windows-x86_64/jpi_jvmti.dll",
+            "native/windows-x86_64/jpi_jvmti.dll.sha256",
+            "native/linux-x86_64/libjpi_jvmti.so",
+            "native/linux-x86_64/libjpi_jvmti.so.sha256",
+            "native/linux-x86_64/libjvmti_agent.so",
+            "native/linux-x86_64/libjvmti_agent.so.sha256",
+            "native/linux-x86_64/libprocess_injector.so",
+            "native/linux-x86_64/libprocess_injector.so.sha256",
+            "dev/whitedev/jpi/attach/ProcessInjector.class",
+            "dev/whitedev/jpi/agent/jvmti/NativeJvmtiBridge.class",
             "META-INF/MANIFEST.MF",
             "dev/whitedev/jpi/JpiApplication.class",
             "dev/whitedev/jpi/agent/InspectorAgent.class",

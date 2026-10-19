@@ -20,6 +20,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class AgentBytecodeCompatibilityTest {
     @Test void packagesAJava8AgentInsideTheJava21Application() throws Exception {
         assertEquals(52, majorVersion(InspectorAgent.class));
+        assertEquals(52, majorVersion(RuntimeAccess.class));
+        assertEquals(52, majorVersion(dev.whitedev.jpi.agent.jvmti.NativeJvmtiBridge.class));
         assertEquals(52, majorVersion(dev.whitedev.jpi.agent.fingerprint.TargetFingerprintCapture.class));
         assertEquals(52, majorVersion(AgentServer.class));
         assertEquals(52, majorVersion(CfgRuntime.class));

@@ -41,7 +41,8 @@ final class BlockDetailsView extends JList<String> {
             }
         });
         getInputMap(WHEN_FOCUSED).put(KeyStroke.getKeyStroke(
-                KeyEvent.VK_C, Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx()), "copy-lines");
+                KeyEvent.VK_C, java.awt.GraphicsEnvironment.isHeadless() ? java.awt.event.InputEvent.CTRL_DOWN_MASK
+                        : Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx()), "copy-lines");
         getActionMap().put("copy-lines", new AbstractAction() {
             @Override public void actionPerformed(ActionEvent event) {
                 copyLines();

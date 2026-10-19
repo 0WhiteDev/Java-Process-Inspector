@@ -3,6 +3,7 @@ package dev.whitedev.jpi.agent.trace;
 import java.io.IOException;
 import java.lang.instrument.ClassDefinition;
 import java.lang.instrument.Instrumentation;
+import dev.whitedev.jpi.agent.RuntimeAccess;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.IdentityHashMap;
@@ -18,7 +19,7 @@ import java.util.concurrent.atomic.AtomicLong;
 public final class TraceManager {
     private static final AtomicLong IDS = new AtomicLong();
 
-    private final Instrumentation instrumentation;
+    private final RuntimeAccess instrumentation;
     private final Map<Class<?>, TracedClass> classes = new IdentityHashMap<Class<?>, TracedClass>();
     private final Map<String, TraceProbe> probes = new LinkedHashMap<String, TraceProbe>();
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(new ThreadFactory() {
@@ -31,6 +32,10 @@ public final class TraceManager {
     });
 
     public TraceManager(Instrumentation instrumentation) {
+        this(RuntimeAccess.instrumentation(instrumentation));
+    }
+
+    public TraceManager(RuntimeAccess instrumentation) {
         this.instrumentation = instrumentation;
     }
 

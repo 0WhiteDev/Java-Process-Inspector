@@ -12,13 +12,15 @@ public final class AgentOptions {
     private final int port;
     private final String token;
     private final int acceptTimeoutMillis;
+    private final boolean reconnect;
 
-    private AgentOptions(Mode mode, InetAddress host, int port, String token, int acceptTimeoutMillis) {
+    private AgentOptions(Mode mode, InetAddress host, int port, String token, int acceptTimeoutMillis, boolean reconnect) {
         this.mode = mode;
         this.host = host;
         this.port = port;
         this.token = token;
         this.acceptTimeoutMillis = acceptTimeoutMillis;
+        this.reconnect = reconnect;
     }
 
     public static AgentOptions parse(String value) {
@@ -41,7 +43,12 @@ public final class AgentOptions {
                     || acceptTimeoutSeconds < 10 || acceptTimeoutSeconds > 3600) {
                 throw new IllegalArgumentException("Invalid agent port or token");
             }
-            return new AgentOptions(mode, address, port, token, acceptTimeoutSeconds * 1000);
+            String reconnect = values.get("reconnect");
+            if (reconnect != null && !"true".equals(reconnect) && !"false".equals(reconnect))
+                throw new IllegalArgumentException("reconnect must be true or false");
+            if ("true".equals(reconnect) && mode != Mode.LISTEN)
+                throw new IllegalArgumentException("Reconnect requires listener mode");
+            return new AgentOptions(mode, address, port, token, acceptTimeoutSeconds * 1000, "true".equals(reconnect));
         } catch (Exception exception) {
             if (exception instanceof IllegalArgumentException) throw (IllegalArgumentException) exception;
             throw new IllegalArgumentException("Invalid agent options", exception);
@@ -69,4 +76,5 @@ public final class AgentOptions {
     public int port() { return port; }
     public String token() { return token; }
     public int acceptTimeoutMillis() { return acceptTimeoutMillis; }
+    public boolean reconnect() { return reconnect; }
 }

@@ -1,6 +1,7 @@
 package dev.whitedev.jpi.agent.loader;
 
 import java.lang.instrument.Instrumentation;
+import dev.whitedev.jpi.agent.RuntimeAccess;
 import java.lang.ref.ReferenceQueue;
 import java.lang.ref.WeakReference;
 import java.net.URL;
@@ -20,6 +21,10 @@ public final class ClassLoaderExplorer {
     private long sequence;
 
     public synchronized String snapshot(Class<?>[] classes, Instrumentation instrumentation) {
+        return snapshotWithRuntime(classes, instrumentation == null ? null : RuntimeAccess.instrumentation(instrumentation));
+    }
+
+    public synchronized String snapshotWithRuntime(Class<?>[] classes, RuntimeAccess instrumentation) {
         long now = System.currentTimeMillis();
         collect(now);
         for (Entry entry : history.values()) {

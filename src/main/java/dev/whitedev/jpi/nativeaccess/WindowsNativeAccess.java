@@ -24,7 +24,7 @@ import java.util.List;
 import java.util.Locale;
 
 public final class WindowsNativeAccess {
-    private static final Kernel32 KERNEL = Kernel32.INSTANCE;
+    private static final Kernel32 KERNEL = Platform.isWindows() ? Kernel32.INSTANCE : null;
     private static final int MAX_RESULTS = 50_000;
     private static final int CHUNK_SIZE = 1024 * 1024;
 

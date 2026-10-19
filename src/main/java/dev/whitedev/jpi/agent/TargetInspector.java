@@ -27,7 +27,7 @@ import org.objectweb.asm.Type;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.lang.instrument.Instrumentation;
+
 import java.lang.instrument.ClassDefinition;
 import java.lang.management.*;
 import java.lang.ref.WeakReference;
@@ -56,7 +56,7 @@ final class TargetInspector {
             "javax.annotation.WillNotClose"
     };
 
-    private final Instrumentation instrumentation;
+    private final RuntimeAccess instrumentation;
     private final ClassRegistry registry;
     private final TraceManager traceManager;
     private final ApiHookManager apiHookManager;
@@ -70,7 +70,7 @@ final class TargetInspector {
     private final ClassLoaderExplorer classLoaderExplorer = new ClassLoaderExplorer();
     private final Map<String, WeakReference<Class<?>>> classIndex = new ConcurrentHashMap<>();
 
-    TargetInspector(Instrumentation instrumentation, ClassRegistry registry) {
+    TargetInspector(RuntimeAccess instrumentation, ClassRegistry registry) {
         this.instrumentation = instrumentation;
         this.registry = registry;
         this.traceManager = new TraceManager(instrumentation);
@@ -84,7 +84,39 @@ final class TargetInspector {
     }
 
     String loadedClasses() {
-        Class<?>[] loaded = instrumentation.getAllLoadedClasses();
+        return loadedClasses(instrumentation.getAllLoadedClasses());
+    }
+
+    String nativeLoadedClasses() throws Exception {
+        return loadedClasses(dev.whitedev.jpi.agent.jvmti.NativeJvmtiBridge.loadedClasses());
+    }
+
+    String bindNativeBackend(String payload) throws Exception {
+        String[] values = payload.split("\n", -1);
+        if (values.length != 2) throw new IOException("Native binding requires an absolute library path and SHA-256");
+        return dev.whitedev.jpi.agent.jvmti.NativeJvmtiBridge.connect(values[0], values[1]);
+    }
+
+    byte[] nativeClassBytes(String identifier) throws Exception {
+        if (identifier.startsWith("b:")) return classBytes(identifier);
+        return dev.whitedev.jpi.agent.jvmti.NativeJvmtiBridge.classBytes(resolveClass(identifier));
+    }
+
+    String nativeHeapStats(String payload) throws Exception {
+        String[] values = payload.split("\n", -1);
+        if (values.length != 2) throw new IOException("Native heap inspection requires a class identifier and instance limit");
+        long limit;
+        try { limit = Long.parseLong(values[1]); }
+        catch (NumberFormatException error) { throw new IOException("Instance limit must be a number", error); }
+        Class<?> target = resolveClass(values[0]);
+        long[] stats = dev.whitedev.jpi.agent.jvmti.NativeJvmtiBridge.heapStats(target, limit);
+        long classObjectSize = dev.whitedev.jpi.agent.jvmti.NativeJvmtiBridge.objectSize(target);
+        return "class=" + target.getName() + "\ninstances=" + stats[0] + "\nshallow_bytes=" + stats[1]
+                + "\nlargest_shallow_bytes=" + stats[2] + "\nclass_object_shallow_bytes=" + classObjectSize
+                + "\ntruncated=" + (stats[3] != 0) + "\n";
+    }
+
+    private String loadedClasses(Class<?>[] loaded) {
         Arrays.sort(loaded, new Comparator<Class<?>>() {
             @Override public int compare(Class<?> left, Class<?> right) {
                 int byName = left.getName().compareTo(right.getName());
@@ -128,7 +160,7 @@ final class TargetInspector {
     String classLoaderSnapshot() {
         Class<?>[] loaded = instrumentation.getAllLoadedClasses();
         for (Class<?> type : loaded) index(type);
-        return classLoaderExplorer.snapshot(loaded, instrumentation);
+        return classLoaderExplorer.snapshotWithRuntime(loaded, instrumentation);
     }
 
     String startExceptionAnalysis(String settings) throws Exception { return exceptionAnalyzer.start(settings); }
@@ -150,6 +182,11 @@ final class TargetInspector {
         Class<?> target = resolveClass(identifier);
         byte[] captured = registry.bytecodeFor(target);
         if (captured != null) return captured;
+        if (instrumentation.isNativeOnly()) {
+            byte[] bytes = dev.whitedev.jpi.agent.jvmti.NativeJvmtiBridge.classBytes(target);
+            registry.captureIfAbsent(target, bytes);
+            return bytes;
+        }
         if (instrumentation.isRetransformClassesSupported() && instrumentation.isModifiableClass(target)) {
             instrumentation.retransformClasses(target);
             captured = registry.bytecodeFor(target);
@@ -646,6 +683,7 @@ final class TargetInspector {
     }
 
     void close() {
+        dev.whitedev.jpi.agent.jvmti.NativeJvmtiBridge.clearCaptureForSession();
         cfgManager.close();
         traceManager.close();
         apiHookManager.close();
@@ -945,7 +983,9 @@ final class TargetInspector {
         byte[] restored = registry.bytecodeFor(target);
         if (restored != null) current = restored;
         ClassSchema.verifyCompatible(current, replacement);
-        instrumentation.redefineClasses(new ClassDefinition(target, replacement));
+        if (dev.whitedev.jpi.agent.jvmti.NativeJvmtiBridge.isBound()) {
+            dev.whitedev.jpi.agent.jvmti.NativeJvmtiBridge.redefineClass(target, replacement);
+        } else instrumentation.redefineClasses(new ClassDefinition(target, replacement));
         registry.recordApplied(target, replacement);
         patchHistory.record(registry.keyFor(target), target.getName(), description, current, replacement);
     }

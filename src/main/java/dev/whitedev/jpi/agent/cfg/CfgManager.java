@@ -3,6 +3,7 @@ package dev.whitedev.jpi.agent.cfg;
 import java.io.IOException;
 import java.lang.instrument.ClassDefinition;
 import java.lang.instrument.Instrumentation;
+import dev.whitedev.jpi.agent.RuntimeAccess;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -13,7 +14,7 @@ import java.util.concurrent.atomic.AtomicLong;
 public final class CfgManager {
     private static final AtomicLong IDS = new AtomicLong();
 
-    private final Instrumentation instrumentation;
+    private final RuntimeAccess instrumentation;
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(new ThreadFactory() {
         @Override public Thread newThread(Runnable task) {
             Thread thread = new Thread(task, "jpi-cfg-expiration");
@@ -25,6 +26,10 @@ public final class CfgManager {
     private Probe active;
 
     public CfgManager(Instrumentation instrumentation) {
+        this(RuntimeAccess.instrumentation(instrumentation));
+    }
+
+    public CfgManager(RuntimeAccess instrumentation) {
         this.instrumentation = instrumentation;
     }
 

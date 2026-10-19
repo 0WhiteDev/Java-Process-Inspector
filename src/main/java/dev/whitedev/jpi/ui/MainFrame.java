@@ -4,11 +4,12 @@ import dev.whitedev.jpi.ui.context.AnalysisTarget;
 import dev.whitedev.jpi.ui.context.ContextAction;
 import dev.whitedev.jpi.ui.context.ContextActions;
 
-import dev.whitedev.jpi.attach.AttachService;
+import dev.whitedev.jpi.attach.ImprovedAttachService;
 import dev.whitedev.jpi.attach.CommandLineTokenizer;
 import dev.whitedev.jpi.attach.InspectorSession;
 import dev.whitedev.jpi.attach.JvmDescriptor;
 import dev.whitedev.jpi.attach.JvmDiscovery;
+import dev.whitedev.jpi.attach.jvmti.NativeAgentArtifact;
 import dev.whitedev.jpi.deobfuscation.DeobfuscationWorkspace;
 import dev.whitedev.jpi.nativeaccess.WindowsNativeAccess;
 import dev.whitedev.jpi.nativeaccess.WindowsNetworkAccess;
@@ -72,9 +73,10 @@ import java.util.Map;
 
 public final class MainFrame extends JFrame {
     private final JvmDiscovery discovery = new JvmDiscovery();
-    private final AttachService attachService = new AttachService();
+    private final ImprovedAttachService attachService = new ImprovedAttachService();
     private final JComboBox<JvmDescriptor> targets = new JComboBox<>();
     private final JButton attach = Ui.primaryButton("Attach");
+    private final JButton nativeAttach = Ui.secondaryButton("Native attach...");
     private final JButton launchEarly = Ui.secondaryButton("Launch with early agent...");
     private final JButton manualEarly = Ui.secondaryButton("Manual agent...");
     private final JButton tunnelAgent = Ui.secondaryButton("Tunnel agent...");
@@ -217,11 +219,15 @@ public final class MainFrame extends JFrame {
         DllPanel dll = new DllPanel(windows);
         NativeSymbolsPanel nativeSymbols = new NativeSymbolsPanel();
         PluginsPanel plugins = new PluginsPanel(pluginManager);
+        dev.whitedev.jpi.ui.jvmti.NativeJvmtiPanel nativeJvmti = new dev.whitedev.jpi.ui.jvmti.NativeJvmtiPanel(attachService, () -> {
+            classes.useNativeBackend();
+            selectView("Loaded classes");
+        });
         views = new ArrayList<>(Arrays.asList(overview, timeline, profiler, exceptions, threadAnalyzer, debugger, classes, tracer, callGraph, apiHooks, fileMonitor, xrefs,
                 cfg, differences,
                 investigation, deobfuscation, fingerprint,
                 constantSearch, executor, fields, fieldWrites, valueTrace, loaders, environment, network, heapObjects, nativeSymbols,
-                memory, dll, plugins));
+                memory, dll, plugins, nativeJvmti));
 
         addCard("Overview", overview);
         addCard("Target fingerprint", fingerprint);
@@ -248,6 +254,7 @@ public final class MainFrame extends JFrame {
         addCard("Trace value", valueTrace);
         addCard("Heap objects", heapObjects);
         addCard("Native symbols", nativeSymbols);
+        addCard("Native JVMTI", nativeJvmti);
         addCard("VM environment", environment);
         addCard("Network activity", network);
         addCard("Memory scanner", memory);
@@ -265,6 +272,7 @@ public final class MainFrame extends JFrame {
         setContentPane(root);
 
         attach.addActionListener(e -> connect());
+        nativeAttach.addActionListener(e -> connectNative());
         launchEarly.addActionListener(e -> launchWithEarlyAgent());
         manualEarly.addActionListener(e -> prepareManualEarlyAgent());
         tunnelAgent.addActionListener(e -> connectTunnel());
@@ -468,6 +476,7 @@ public final class MainFrame extends JFrame {
         sidebar.add(advanced);
         addNavigation(sidebar, "Heap objects");
         addNavigation(sidebar, "Native symbols");
+        addNavigation(sidebar, "Native JVMTI");
         addNavigation(sidebar, "Memory scanner");
         addNavigation(sidebar, "DLL loader");
         addNavigation(sidebar, "Plugins");
@@ -634,6 +643,7 @@ public final class MainFrame extends JFrame {
         actions.add(manualEarly);
         actions.add(launchEarly);
         actions.add(attach);
+        actions.add(nativeAttach);
         actions.add(disconnect);
         selector.add(actions, BorderLayout.EAST);
         bar.add(top, BorderLayout.NORTH);
@@ -667,6 +677,25 @@ public final class MainFrame extends JFrame {
         });
     }
 
+    private void connectNative() {
+        JvmDescriptor selected = (JvmDescriptor) targets.getSelectedItem();
+        String pid = JOptionPane.showInputDialog(this, "PID of the local JVM to inspect",
+                selected == null ? "" : selected.id());
+        if (pid == null || pid.isBlank()) return;
+        JvmDescriptor target = new JvmDescriptor(pid.trim(), "Native JVM " + pid.trim());
+        attach.setEnabled(false);
+        nativeAttach.setEnabled(false);
+        targets.setEnabled(false);
+        setStatus("Connecting natively...", Ui.WARNING, Ui.SURFACE_LIGHT);
+        Async.run(() -> attachService.attachNative(target), connected -> {
+            setSession(connected);
+            setStatus("Native  |  PID " + target.id(), Ui.SUCCESS, new Color(22, 62, 52));
+        }, error -> {
+            setSession(null);
+            Ui.error(this, error);
+        });
+    }
+
     private void launchWithEarlyAgent() {
         JFileChooser chooser = new JFileChooser();
         chooser.setDialogTitle("Select the executable JAR to launch with JPI before main()");
@@ -674,13 +703,18 @@ public final class MainFrame extends JFrame {
         final File targetJar = chooser.getSelectedFile();
         JTextField vmArguments = new JTextField();
         JTextField applicationArguments = new JTextField();
+        JCheckBox nativeBackend = new JCheckBox("Start bundled native JVMTI backend before main()");
+        nativeBackend.setOpaque(false);
         vmArguments.putClientProperty("JTextField.placeholderText", "-Xmx2g -Dexample=value");
         applicationArguments.putClientProperty("JTextField.placeholderText", "--profile analysis");
-        JPanel form = new JPanel(new GridLayout(4, 1, 0, 6));
-        form.add(new JLabel("Optional JVM arguments"));
-        form.add(vmArguments);
-        form.add(new JLabel("Optional application arguments"));
-        form.add(applicationArguments);
+        JPanel form = new JPanel(new BorderLayout(0, 8));
+        JPanel fields = new JPanel(new GridLayout(4, 1, 0, 6));
+        fields.add(new JLabel("Optional JVM arguments"));
+        fields.add(vmArguments);
+        fields.add(new JLabel("Optional application arguments"));
+        fields.add(applicationArguments);
+        form.add(fields, BorderLayout.CENTER);
+        form.add(nativeBackend, BorderLayout.SOUTH);
         if (JOptionPane.showConfirmDialog(this, form, "Launch with early JPI agent",
                 JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE) != JOptionPane.OK_OPTION) return;
         final List<String> vmArgs;
@@ -692,13 +726,18 @@ public final class MainFrame extends JFrame {
             Ui.error(this, error);
             return;
         }
+        boolean useNative = nativeBackend.isSelected();
         attach.setEnabled(false);
         launchEarly.setEnabled(false);
         targets.setEnabled(false);
         setStatus("Launching before main()...", Ui.WARNING, Ui.SURFACE_LIGHT);
-        Async.run(() -> attachService.launch(targetJar, vmArgs, appArgs), result -> {
+        Async.run(() -> {
+            NativeAgentArtifact artifact = useNative ? NativeAgentArtifact.extractBundled() : null;
+            return attachService.launch(targetJar, vmArgs, appArgs, artifact);
+        }, result -> {
             setSession(result.session());
-            setStatus("Attached early  |  PID " + result.session().target().id(),
+            setStatus((useNative ? "Attached early with JVMTI" : "Attached early")
+                            + "  |  PID " + result.session().target().id(),
                     Ui.SUCCESS, new Color(60, 60, 60));
             status.setToolTipText("Target output: " + result.logFile().getAbsolutePath());
         }, error -> {
@@ -709,7 +748,7 @@ public final class MainFrame extends JFrame {
     }
 
     private void prepareManualEarlyAgent() {
-        final AttachService.PreparedAgentSession prepared;
+        final ImprovedAttachService.PreparedAgentSession prepared;
         try {
             prepared = attachService.prepareEarlyAgent();
         } catch (Exception error) {
@@ -760,11 +799,12 @@ public final class MainFrame extends JFrame {
         manualEarly.setEnabled(false);
         tunnelAgent.setEnabled(false);
         targets.setEnabled(false);
-        setStatus("Connecting through tunnel...", Ui.WARNING, Ui.SURFACE_LIGHT);
-        Async.run(() -> attachService.connectTunnel(request.localPort(), request.token(), request.pid(),
-                request.displayName()), connected -> {
+        setStatus(request.localPreloaded() ? "Connecting to preloaded agent..." : "Connecting through tunnel...", Ui.WARNING, Ui.SURFACE_LIGHT);
+        Async.run(() -> request.localPreloaded()
+                ? attachService.connectPreloadedAgent(request.localPort(), request.token(), new dev.whitedev.jpi.attach.JvmDescriptor(request.pid(), request.displayName()))
+                : attachService.connectTunnel(request.localPort(), request.token(), request.pid(), request.displayName()), connected -> {
             setSession(connected);
-            setStatus("Attached through tunnel  |  PID " + connected.target().id(),
+            setStatus((request.localPreloaded() ? "Attached through preloaded agent  |  PID " : "Attached through tunnel  |  PID ") + connected.target().id(),
                     Ui.SUCCESS, new Color(60, 60, 60));
         }, error -> {
             setSession(null);
@@ -788,6 +828,7 @@ public final class MainFrame extends JFrame {
         for (SessionAware view : pluginViews) view.setSession(value);
         boolean connected = value != null;
         attach.setEnabled(!connected);
+        nativeAttach.setEnabled(!connected && dev.whitedev.jpi.attach.ProcessInjector.isSupported());
         launchEarly.setEnabled(!connected);
         manualEarly.setEnabled(!connected);
         tunnelAgent.setEnabled(!connected);

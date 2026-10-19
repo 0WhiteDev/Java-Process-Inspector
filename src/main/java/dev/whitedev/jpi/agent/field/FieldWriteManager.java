@@ -3,6 +3,7 @@ package dev.whitedev.jpi.agent.field;
 import java.io.IOException;
 import java.lang.instrument.ClassDefinition;
 import java.lang.instrument.Instrumentation;
+import dev.whitedev.jpi.agent.RuntimeAccess;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -15,7 +16,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 public final class FieldWriteManager {
     private static final AtomicLong IDS = new AtomicLong();
-    private final Instrumentation instrumentation;
+    private final RuntimeAccess instrumentation;
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(new ThreadFactory() {
         @Override public Thread newThread(Runnable task) {
             Thread thread = new Thread(task, "jpi-field-write-expiration");
@@ -27,6 +28,10 @@ public final class FieldWriteManager {
     private ActiveProbe active;
 
     public FieldWriteManager(Instrumentation instrumentation) {
+        this(RuntimeAccess.instrumentation(instrumentation));
+    }
+
+    public FieldWriteManager(RuntimeAccess instrumentation) {
         this.instrumentation = instrumentation;
     }
 

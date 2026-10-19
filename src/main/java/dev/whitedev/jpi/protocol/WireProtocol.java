@@ -18,7 +18,9 @@ public final class WireProtocol {
 
     public static Request readRequest(DataInputStream in) throws IOException {
         validateHeader(in);
-        Operation operation = Operation.fromCode(in.readUnsignedByte());
+        int code = in.readUnsignedByte();
+        if (code >= Operation.values().length) throw new IOException("Unknown JPI operation: " + code);
+        Operation operation = Operation.fromCode(code);
         return new Request(operation, readPayload(in));
     }
 

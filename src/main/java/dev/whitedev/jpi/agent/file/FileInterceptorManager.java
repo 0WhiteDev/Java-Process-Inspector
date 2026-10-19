@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.lang.instrument.ClassDefinition;
 import java.lang.instrument.Instrumentation;
+import dev.whitedev.jpi.agent.RuntimeAccess;
 import java.nio.charset.StandardCharsets;
 import java.net.URL;
 import java.util.ArrayList;
@@ -23,13 +24,17 @@ public final class FileInterceptorManager {
     private static final int MAX_SCANNED = 50000;
     private static final long MAX_SCAN_NANOS = 15_000_000_000L;
     private static final long MAX_BYTES = 128L * 1024L * 1024L;
-    private final Instrumentation instrumentation;
+    private final RuntimeAccess instrumentation;
     private final HookClassRegistry registry;
     private final URL agentLocation;
     private final Map<Class<?>, byte[]> transformed = new IdentityHashMap<Class<?>, byte[]>();
     private String summary = "File Monitor is stopped";
 
     public FileInterceptorManager(Instrumentation instrumentation, HookClassRegistry registry) {
+        this(RuntimeAccess.instrumentation(instrumentation), registry);
+    }
+
+    public FileInterceptorManager(RuntimeAccess instrumentation, HookClassRegistry registry) {
         this.instrumentation = instrumentation;
         this.registry = registry;
         this.agentLocation = location(FileInterceptorRuntime.class);

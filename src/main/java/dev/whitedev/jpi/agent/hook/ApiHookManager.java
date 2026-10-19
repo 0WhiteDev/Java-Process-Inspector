@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.lang.instrument.ClassDefinition;
 import java.lang.instrument.Instrumentation;
+import dev.whitedev.jpi.agent.RuntimeAccess;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -23,7 +24,7 @@ public final class ApiHookManager {
     private static final long MAX_SCAN_NANOS = 15_000_000_000L;
     private static final long MAX_PLANNED_BYTES = 128L * 1024L * 1024L;
 
-    private final Instrumentation instrumentation;
+    private final RuntimeAccess instrumentation;
     private final HookClassRegistry registry;
     private final Map<Class<?>, HookedClass> hooked = new IdentityHashMap<Class<?>, HookedClass>();
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(new ThreadFactory() {
@@ -38,6 +39,10 @@ public final class ApiHookManager {
     private String summary = "No API hook profile is active";
 
     public ApiHookManager(Instrumentation instrumentation, HookClassRegistry registry) {
+        this(RuntimeAccess.instrumentation(instrumentation), registry);
+    }
+
+    public ApiHookManager(RuntimeAccess instrumentation, HookClassRegistry registry) {
         this.instrumentation = instrumentation;
         this.registry = registry;
     }

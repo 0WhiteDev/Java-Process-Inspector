@@ -1,0 +1,60 @@
+name: Native JVMTI
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - "src/**"
+      - "pom.xml"
+      - ".github/workflows/native.yml"
+  pull_request:
+    branches: [main, master]
+    paths:
+      - "src/**"
+      - "pom.xml"
+      - ".github/workflows/native.yml"
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  native:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+        java: [21, 25]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+          cache: maven
+      - name: Compile native agent
+        run: cmake -S src/native -B target/native-build -DCMAKE_BUILD_TYPE=Release -DJPI_BUILD_TEST_FIXTURES=ON
+      - name: Build native agent
+        run: cmake --build target/native-build --config Release
+      - name: Verify Linux recovery against owned child processes
+        if: runner.os == 'Linux'
+        run: ctest --test-dir target/native-build --output-on-failure --output-junit "${{ github.workspace }}/target/recovery.xml"
+      - name: Verify native startup, attach, bytecode capture, and loading policy
+        run: mvn --batch-mode --no-transfer-progress "-Dtest=ProcessInjectorTest,NativeAgentArtifactTest,AgentBytecodeCompatibilityTest,AgentCommandRegistryTest,AgentOptionsTest,AttachRestrictionTest,JvmAgentPolicyTest,NativeJvmtiPanelTest,InspectorSessionRoutingTest" "-Dit.test=NativeJvmtiIT,LinuxInjectionIT,WindowsInjectionIT,DisabledAttachIT,NativeCaptureIT,NativeBootstrapIT,AgentPolicyIT" "-Djpi.native.required=true" verify
+      - uses: actions/upload-artifact@v4
+        if: matrix.java == 21
+        with:
+          name: jpi-jvmti-${{ matrix.os }}
+          path: target/native-resources/native/
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: jvmti-tests-${{ matrix.os }}-${{ matrix.java }}
+          path: |
+            target/surefire-reports/
+            target/failsafe-reports/
+            target/recovery.xml

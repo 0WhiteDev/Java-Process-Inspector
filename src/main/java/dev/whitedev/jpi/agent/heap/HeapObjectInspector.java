@@ -1,6 +1,7 @@
 package dev.whitedev.jpi.agent.heap;
 
 import java.lang.instrument.Instrumentation;
+import dev.whitedev.jpi.agent.RuntimeAccess;
 import java.lang.ref.WeakReference;
 import java.lang.reflect.Array;
 import java.lang.reflect.Field;
@@ -23,11 +24,15 @@ public final class HeapObjectInspector {
     private static final int MAX_SCAN_FIELDS_PER_OBJECT = 1000;
     private static final int MAX_OUTGOING_REFERENCES = 512;
 
-    private final Instrumentation instrumentation;
+    private final RuntimeAccess instrumentation;
     private final LinkedHashMap<Long, ObjectHandle> handles = new LinkedHashMap<Long, ObjectHandle>();
     private long nextId;
 
     public HeapObjectInspector(Instrumentation instrumentation) {
+        this(RuntimeAccess.instrumentation(instrumentation));
+    }
+
+    public HeapObjectInspector(RuntimeAccess instrumentation) {
         this.instrumentation = instrumentation;
     }
 

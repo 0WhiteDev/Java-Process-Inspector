@@ -19,55 +19,90 @@ import java.util.Map;
 
 final class AgentServer implements Runnable {
     private final AgentOptions options;
-    private final TargetInspector inspector;
+    private TargetInspector inspector;
+    private final RuntimeAccess instrumentation;
+    private final ClassRegistry classRegistry;
     private final Map<Operation, AgentCommand> commands;
     private volatile Socket socket;
     private volatile ServerSocket listener;
     private volatile boolean closed;
 
     AgentServer(AgentOptions options, Instrumentation instrumentation, ClassRegistry classRegistry) {
+        this(options, RuntimeAccess.instrumentation(instrumentation), classRegistry);
+    }
+
+    AgentServer(AgentOptions options, RuntimeAccess instrumentation, ClassRegistry classRegistry) {
         this.options = options;
+        this.instrumentation = instrumentation;
+        this.classRegistry = classRegistry;
         this.inspector = new TargetInspector(instrumentation, classRegistry);
         this.commands = buildCommands();
     }
 
-    void prepare() throws IOException {
+    synchronized void prepare() throws IOException {
+        if (closed) throw new IOException("Agent server is closed");
         if (options.mode() != AgentOptions.Mode.LISTEN || listener != null) return;
         ServerSocket server = new ServerSocket();
         server.setReuseAddress(false);
-        server.bind(new InetSocketAddress(options.host(), options.port()), 1);
-        server.setSoTimeout(options.acceptTimeoutMillis());
-        listener = server;
+        try {
+            server.bind(new InetSocketAddress(options.host(), options.port()), 1);
+            server.setSoTimeout(options.acceptTimeoutMillis());
+            listener = server;
+        } catch (IOException error) { server.close(); throw error; }
     }
 
     @Override
     public void run() {
         try {
-            Socket connection = openConnection();
-            connection.setTcpNoDelay(true);
-            connection.setSoTimeout(15_000);
-            socket = connection;
-            DataOutputStream output = new DataOutputStream(connection.getOutputStream());
-            DataInputStream input = new DataInputStream(connection.getInputStream());
-            authenticate(input, output);
-            connection.setSoTimeout(0);
             while (!closed) {
-                WireProtocol.Request request = WireProtocol.readRequest(input);
-                boolean disconnect = request.operation() == Operation.DISCONNECT;
-                try {
-                    byte[] response = dispatch(request);
-                    WireProtocol.writeResponse(output, true, response);
-                } catch (Throwable throwable) {
-                    WireProtocol.writeResponse(output, false, WireProtocol.utf8(errorMessage(throwable)));
+                Socket connection = openConnection();
+                try { serve(connection); }
+                catch (EOFException ignored) { }
+                catch (IOException error) {
+                    if (!closed) System.err.println("[JPI agent] Connection ended: " + error.getMessage());
+                } finally {
+                    try { connection.close(); } catch (IOException ignored) { }
+                    socket = null;
                 }
-                if (disconnect) break;
+                if (!options.reconnect()) break;
+                resetInspection();
             }
-        } catch (EOFException ignored) {
         } catch (IOException exception) {
-            if (!closed) System.err.println("[JPI agent] Session ended: " + exception.getMessage());
+            if (!closed) System.err.println("[JPI agent] Listener ended: " + exception.getMessage());
         } finally {
-            close();
+            try { close(); }
+            finally { InspectorAgent.serverStopped(this); }
         }
+    }
+
+    private void serve(Socket connection) throws IOException {
+        synchronized (this) {
+            if (closed) { connection.close(); return; }
+            socket = connection;
+        }
+        connection.setTcpNoDelay(true);
+        connection.setSoTimeout(15_000);
+        DataOutputStream output = new DataOutputStream(connection.getOutputStream());
+        DataInputStream input = new DataInputStream(connection.getInputStream());
+        authenticate(input, output);
+        connection.setSoTimeout(0);
+        while (!closed) {
+            WireProtocol.Request request = WireProtocol.readRequest(input);
+            boolean disconnect = request.operation() == Operation.DISCONNECT;
+            try {
+                byte[] response = dispatch(request);
+                WireProtocol.writeResponse(output, true, response);
+            } catch (Throwable throwable) {
+                WireProtocol.writeResponse(output, false, WireProtocol.utf8(errorMessage(throwable)));
+            }
+            if (disconnect) break;
+        }
+    }
+
+    private synchronized void resetInspection() {
+        if (closed) return;
+        inspector.close();
+        inspector = new TargetInspector(instrumentation, classRegistry);
     }
 
     private Socket openConnection() throws IOException {
@@ -75,12 +110,7 @@ final class AgentServer implements Runnable {
         prepare();
         ServerSocket server = listener;
         if (server == null) throw new IOException("Agent listener is unavailable");
-        try {
-            return server.accept();
-        } finally {
-            listener = null;
-            try { server.close(); } catch (IOException ignored) {}
-        }
+        return server.accept();
     }
 
     private void authenticate(DataInputStream input, DataOutputStream output) throws IOException {
@@ -96,7 +126,8 @@ final class AgentServer implements Runnable {
         }
     }
 
-    private byte[] dispatch(WireProtocol.Request request) throws Exception {
+    private synchronized byte[] dispatch(WireProtocol.Request request) throws Exception {
+        if (closed) throw new IOException("Agent server is closed");
         String payload = WireProtocol.text(request.payload());
         AgentCommand command = commands.get(request.operation());
         if (command == null) throw new IllegalArgumentException("Unsupported operation: " + request.operation());
@@ -106,9 +137,39 @@ final class AgentServer implements Runnable {
     private Map<Operation, AgentCommand> buildCommands() {
         Map<Operation, AgentCommand> registry = new EnumMap<>(Operation.class);
         registry.put(Operation.PING, payload -> WireProtocol.utf8("pong"));
+        registry.put(Operation.SESSION_INFO, payload -> WireProtocol.utf8(
+                "pid=" + java.lang.management.ManagementFactory.getRuntimeMXBean().getName().split("@", 2)[0]
+                + "\nattach_disabled=" + booleanVmOption("DisableAttachMechanism")
+                + "\ndynamic_agent_loading=" + booleanVmOption("EnableDynamicAgentLoading")
+                + "\ncommunication=" + (instrumentation.isNativeOnly() ? "native-bootstrap" : "java-agent")
+                + "\nruntime=" + (instrumentation.isNativeOnly() ? "JVMTI" : "Instrumentation") + "\n"));
         registry.put(Operation.METRICS, payload -> WireProtocol.utf8(inspector.metrics()));
         registry.put(Operation.CLASSES, payload -> WireProtocol.utf8(inspector.loadedClasses()));
         registry.put(Operation.TARGET_FINGERPRINT, payload -> WireProtocol.utf8(inspector.targetFingerprint(payload)));
+        registry.put(Operation.JVMTI_BIND, payload -> WireProtocol.utf8(inspector.bindNativeBackend(payload)));
+        registry.put(Operation.JVMTI_STATUS, payload -> WireProtocol.utf8(dev.whitedev.jpi.agent.jvmti.NativeJvmtiBridge.status()));
+        registry.put(Operation.JVMTI_CLASSES, payload -> WireProtocol.utf8(inspector.nativeLoadedClasses()));
+        registry.put(Operation.JVMTI_CLASS_BYTES, inspector::nativeClassBytes);
+        registry.put(Operation.JVMTI_HEAP_STATS, payload -> WireProtocol.utf8(inspector.nativeHeapStats(payload)));
+        registry.put(Operation.JVMTI_CAPTURE_START, payload -> {
+            dev.whitedev.jpi.agent.jvmti.NativeJvmtiBridge.startCapture();
+            return WireProtocol.utf8(dev.whitedev.jpi.agent.jvmti.NativeJvmtiBridge.captureEvents());
+        });
+        registry.put(Operation.JVMTI_CAPTURE_STOP, payload -> {
+            dev.whitedev.jpi.agent.jvmti.NativeJvmtiBridge.stopCapture();
+            return WireProtocol.utf8(dev.whitedev.jpi.agent.jvmti.NativeJvmtiBridge.captureEvents());
+        });
+        registry.put(Operation.JVMTI_CAPTURE_EVENTS, payload -> WireProtocol.utf8(dev.whitedev.jpi.agent.jvmti.NativeJvmtiBridge.captureEvents()));
+        registry.put(Operation.JVMTI_CAPTURE_ARCHIVE_START, payload -> {
+            String[] fields = payload.split("\n", -1);
+            if (fields.length != 2) throw new IOException("Archive start requires a target directory and byte limit");
+            dev.whitedev.jpi.agent.jvmti.NativeJvmtiBridge.startCaptureArchive(fields[0], Long.parseLong(fields[1]));
+            return WireProtocol.utf8(dev.whitedev.jpi.agent.jvmti.NativeJvmtiBridge.captureEvents());
+        });
+        registry.put(Operation.JVMTI_CAPTURE_BYTES, payload -> dev.whitedev.jpi.agent.jvmti.NativeJvmtiBridge.captureBytes(Long.parseLong(payload.trim())));
+        registry.put(Operation.MEMORY_REGIONS, payload -> WireProtocol.utf8(dev.whitedev.jpi.agent.jvmti.NativeJvmtiBridge.memoryRegions()));
+        registry.put(Operation.MEMORY_READ, dev.whitedev.jpi.agent.jvmti.RawMemoryCommand::read);
+        registry.put(Operation.MEMORY_PATCH, payload -> WireProtocol.utf8(dev.whitedev.jpi.agent.jvmti.RawMemoryCommand.patch(payload)));
         registry.put(Operation.CLASS_BYTES, inspector::classBytes);
         registry.put(Operation.EXECUTE, payload -> WireProtocol.utf8(SourceExecutor.execute(payload)));
         registry.put(Operation.FIELDS, payload -> WireProtocol.utf8(inspector.staticFields(payload)));
@@ -181,15 +242,30 @@ final class AgentServer implements Runnable {
         return throwable.getClass().getName() + (message == null ? "" : ": " + message);
     }
 
-    void close() {
+    private static String booleanVmOption(String name) {
+        try {
+            Class<?> type = Class.forName("com.sun.management.HotSpotDiagnosticMXBean");
+            Object bean = java.lang.management.ManagementFactory.class.getMethod("getPlatformMXBean", Class.class).invoke(null, type);
+            Object option = type.getMethod("getVMOption", String.class).invoke(bean, name);
+            return String.valueOf(option.getClass().getMethod("getValue").invoke(option));
+        } catch (ReflectiveOperationException | RuntimeException ignored) { }
+        String disabled = "unknown";
+        for (String argument : java.lang.management.ManagementFactory.getRuntimeMXBean().getInputArguments()) {
+            if (("-XX:+" + name).equals(argument)) disabled = "true";
+            if (("-XX:-" + name).equals(argument)) disabled = "false";
+        }
+        return disabled;
+    }
+
+    synchronized void close() {
         if (closed) return;
         closed = true;
-        inspector.close();
         ServerSocket currentListener = listener;
         listener = null;
         if (currentListener != null) try { currentListener.close(); } catch (IOException ignored) {}
         Socket current = socket;
         socket = null;
         if (current != null) try { current.close(); } catch (IOException ignored) {}
+        inspector.close();
     }
 }

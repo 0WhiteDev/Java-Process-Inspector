@@ -4,6 +4,13 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class AgentOptionsTest {
+    @Test void reconnectIsExplicitAndOnlyAvailableForListeners() {
+        String base = "host=127.0.0.1;port=43123;token=1234567890abcdef";
+        assertFalse(AgentOptions.parse(base).reconnect());
+        assertTrue(AgentOptions.parse(base + ";mode=listen;reconnect=true").reconnect());
+        assertThrows(IllegalArgumentException.class, () -> AgentOptions.parse(base + ";reconnect=true"));
+        assertThrows(IllegalArgumentException.class, () -> AgentOptions.parse(base + ";mode=listen;reconnect=yes"));
+    }
     @Test void acceptsAuthenticatedLoopbackEndpoint() {
         AgentOptions options = AgentOptions.parse("host=127.0.0.1;port=43123;token=1234567890abcdef");
         assertEquals(43123, options.port());

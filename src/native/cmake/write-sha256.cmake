@@ -1,0 +1,2 @@
+file(SHA256 "${JPI_LIBRARY}" JPI_HASH)
+file(WRITE "${JPI_LIBRARY}.sha256" "${JPI_HASH}\n")

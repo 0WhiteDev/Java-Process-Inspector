@@ -58,7 +58,13 @@ java -jar target/jpi.jar
 
 `mvn verify` runs unit tests and a real end-to-end attach test against a temporary child JVM.
 
+Native sources are in [`src/native`](src/native). See the [native README](src/native/README.md) for the layout, build steps and Linux recovery tests.
+
 ### Attach to a JVM
+
+For a running JVM with Attach disabled, use **Native attach...** and enter its PID.
+This explicit Windows/Linux x86_64 path requires the bundled native build and OS
+permission to instrument the process.
 
 1. Start JPI from `target/jpi.jar`.
 2. Select an attachable JVM in the top bar and click **Attach**.
@@ -71,7 +77,7 @@ The shaded JAR intentionally contains two bytecode levels. Desktop and GUI class
 
 ### Applications that disable late attach
 
-When you control application startup, use **Launch with early agent...** and select its executable JAR. JPI starts it with `-javaagent:jpi.jar`, installs class tracking before `main()`, and opens the authenticated session automatically. This supported mode works when a JVM intentionally disables late Attach API.
+When you control application startup, use **Launch with early agent...** and select its executable JAR. JPI starts it with `-javaagent:jpi.jar`, installs class tracking before `main()`, and opens the authenticated session automatically. This supported mode works when a JVM intentionally disables late Attach API. Select **Start bundled native JVMTI backend before main()** to load and bind the optional native class-inspection backend at startup, including when dynamic agent loading is disabled. After connecting, open **Native JVMTI** and refresh capabilities before browsing with that backend.
 
 For IDEs, Gradle, application servers, native launchers, or non-executable class paths, use **Manual agent...**. JPI generates a one-use authenticated `-javaagent` argument, copies it to the clipboard, and waits up to two minutes for the target to start. Supplying the optional PID also enables the native memory and network views.
 
@@ -154,6 +160,19 @@ This message commonly appears when a Java 21 agent is loaded into a target runni
 The interface uses FlatLaf with a focused sidebar workspace instead of nested utility windows. Java sources use RSyntaxTextArea for syntax highlighting, line numbers, folding, occurrence marking, and bracket matching. All slow operations run outside Swing's event-dispatch thread.
 
 ## Features
+
+<details>
+<summary><strong>Optional native JVMTI backend</strong></summary>
+
+Open <strong>Native JVMTI</strong> under Advanced to load a trusted, SHA-256-verified native backend through the JVM's supported agent API, or bind a library already started with <code>-agentpath</code>. Inspect its real capabilities, then click <strong>Browse with JVMTI</strong>. Loaded classes provides an explicit <strong>Instrumentation / JVMTI</strong> selector for enumeration, decompilation input, and class dumps. Once bound, class patch activation and rollback use JVMTI <code>RedefineClasses</code> while retaining schema validation and patch history. The native panel can also aggregate bounded instance counts and shallow byte sizes for a selected class. Its <strong>Raw memory</strong> tab uses a common Windows/Linux engine to list regions, read bytes, conditionally patch writable data and undo the last patch. Each transfer is limited to 1 MiB, application threads keep running, so memory patches are not atomic. Instrumentation remains available for the rest of the inspection and tracing features.
+
+The optional C++17 agent uses <code>Agent_OnLoad</code>/<code>Agent_OnAttach</code>, <code>GetLoadedClasses</code>, and bounded <code>ClassFileLoadHook</code> capture. The <strong>Class interception</strong> tab starts continuous observation, reports evictions and exports captured class bytes, one-shot retransformation remains available. Disconnect stops the stream and clears its buffer. Automatic saving writes numbered class files and a manifest in a new target-side directory, using a bounded background queue and a configurable class-data quota. Stop and disconnect drain the queue. Check archive counters for dropped events or filesystem errors. Native code can crash a target; loading is confirmed explicitly and the library remains resident until JVM exit. A matching checksum is not publisher authentication.
+
+Windows/Linux native resources are built separately with CMake and embedded in release JARs. Java-only builds need no native compiler. Default dynamic loading uses <code>VirtualMachine.loadAgentPath</code>, which follows the JVM's Attach API and agent loading policy, the compatible Java-agent connection remains available when native loading fails. If dynamic agent loading is disabled, startup loading with <code>-agentpath</code> remains supported. For controlled Windows/Linux x86_64 JVMs, <strong>Load with native injection</strong> or <code>ImprovedAttachService.enableNativeBackendWithInjection</code> explicitly selects the JNI injector with Attach API fallback. Windows uses <code>CreateRemoteThread</code> and <code>LoadLibraryW</code>, then a separate initialization thread; Linux uses ptrace and a pthread worker. Both discover the target JVM and explicitly invoke <code>Agent_OnAttach</code> after loading the library. Native attach can bootstrap the existing authenticated protocol directly through JVMTI without a Java agent. Tunnel sessions bind an already loaded library using its target-side path and hash.
+
+For an already-running JVM with <code>-XX:+DisableAttachMechanism</code>, connect to an owner-provisioned startup listener with <code>connectPreloadedAgent</code>. Optional <code>reconnect=true</code> permits later reconnection using the existing token and endpoint. This Java-agent transport works on Windows, Linux and macOS, startup native libraries additionally enable JVMTI on supported native platforms. An owner-provisioned native agent can also start this protocol without <code>-javaagent</code>. For an unprepared Windows/Linux x86_64 JVM, use <strong>Native attach...</strong> and enter its PID. This explicit OS injection path can initialize communication with Attach disabled when the operating system permits access.
+
+</details>
 
 <details>
 <summary><strong>Target fingerprinting</strong></summary>
@@ -921,16 +940,6 @@ flowchart LR
 | `dev.whitedev.jpi.ui.nativeview` | Native symbols plus Windows network, memory, and DLL views |
 | `dev.whitedev.jpi.ui.plugins` | Plugin installation, reload, diagnostics, and exporter UI |
 
-### Why there is no C++ directory anymore
-
-The old repository committed C++ sources and opaque prebuilt JNI DLLs that could drift apart. JPI v2 removes that delivery problem:
-
-- JVM attachment uses the supported Attach and Instrumentation APIs.
-- Windows APIs use versioned JNA dependencies included in `jpi.jar`.
-- There is no injector EXE, JNI header coupling, compiler runtime, or manually refreshed native binary in source control.
-
-The release is reproducible and has one application artifact to build, verify, and distribute.
-
 ## Protocol and security model
 
 In the default attach mode, the controller binds an ephemeral loopback listener before loading the agent. Agent options contain the endpoint and a random one-use token, and the first agent message authenticates the session. In the opt-in tunneled mode, the direction is reversed: the agent binds a user-selected loopback port and authenticates the desktop client with the same one-use token. Both modes reject non-loopback bind and connection addresses. Every frame has a magic value, version, operation code, and bounded payload length. There is no wildcard bind, discovery file, default password, or unauthenticated remote service.
@@ -963,14 +972,14 @@ The late-attach integration test starts and aggregates a real JFR CPU and alloca
 
 The release workflow runs on Windows with Java 21 when a semantic version tag is pushed. It rejects snapshot versions and tags that do not exactly match **pom.xml**, runs all unit and attach integration tests, validates the shaded JAR contents, creates a versioned JAR and SHA-256 file, builds a changelog from commits since the previous tag, and publishes a GitHub Release.
 
-For JPI v2.1.0:
+For JPI v2.2.0:
 
 <pre><code>mvn clean verify
 git add -A
-git commit -m "Release JPI v2.1.0"
+git commit -m "Release JPI v2.2.0"
 git push origin main
-git tag -a v2.1.0 -m "JPI v2.1.0"
-git push origin v2.1.0</code></pre>
+git tag -a v2.1.0 -m "JPI v2.2.0"
+git push origin v2.2.0</code></pre>
 
 A manual run of the Release workflow builds downloadable workflow artifacts without publishing a GitHub Release.
 

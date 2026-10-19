@@ -1,9 +1,10 @@
 package dev.whitedev.jpi.ui.connection;
 
-import dev.whitedev.jpi.attach.AttachService;
+import dev.whitedev.jpi.attach.ImprovedAttachService;
 import dev.whitedev.jpi.ui.Ui;
 
 import javax.swing.JButton;
+import javax.swing.JCheckBox;
 import javax.swing.JDialog;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
@@ -26,26 +27,29 @@ import java.awt.Toolkit;
 import java.awt.datatransfer.StringSelection;
 
 public final class TunnelAgentDialog extends JDialog {
-    private final AttachService service;
+    private final ImprovedAttachService service;
     private final JTextField remoteJar = new JTextField("jpi.jar");
     private final JTextField remotePid = new JTextField();
     private final JTextField sshTarget = new JTextField();
     private final JTextField displayName = new JTextField("Remote JVM");
+    private final JTextField authToken = new JTextField();
+    private final JCheckBox persistent = new JCheckBox("Allow reconnect (startup listener)");
+    private final JCheckBox localPreloaded = new JCheckBox("Local preloaded agent (verify PID)");
     private final JSpinner agentPort = new JSpinner(new SpinnerNumberModel(43123, 1, 65535, 1));
     private final JSpinner localPort = new JSpinner(new SpinnerNumberModel(43123, 1, 65535, 1));
     private final JSpinner timeout = new JSpinner(new SpinnerNumberModel(900, 10, 3600, 30));
     private final JTextArea earlyArgument = output();
     private final JTextArea lateAttachCommand = output();
     private final JTextArea sshCommand = output();
-    private AttachService.PreparedTunnelAgent prepared;
+    private ImprovedAttachService.PreparedTunnelAgent prepared;
     private ConnectionRequest result;
 
-    private TunnelAgentDialog(JFrame owner, AttachService service) {
+    private TunnelAgentDialog(JFrame owner, ImprovedAttachService service) {
         super(owner, "Connect through tunnel", true);
         this.service = service;
         setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
-        setMinimumSize(new Dimension(860, 650));
-        setSize(930, 720);
+        setMinimumSize(new Dimension(860, 750));
+        setSize(980, 820);
         setLocationRelativeTo(owner);
 
         JPanel root = new JPanel(new BorderLayout(0, 14));
@@ -65,13 +69,15 @@ public final class TunnelAgentDialog extends JDialog {
         remoteJar.getDocument().addDocumentListener(update);
         remotePid.getDocument().addDocumentListener(update);
         sshTarget.getDocument().addDocumentListener(update);
+        authToken.getDocument().addDocumentListener(update);
+        persistent.addActionListener(event -> refreshCommands());
         agentPort.addChangeListener(event -> regenerate());
         localPort.addChangeListener(event -> refreshCommands());
         timeout.addChangeListener(event -> regenerate());
         regenerate();
     }
 
-    public static ConnectionRequest showDialog(JFrame owner, AttachService service) {
+    public static ConnectionRequest showDialog(JFrame owner, ImprovedAttachService service) {
         TunnelAgentDialog dialog = new TunnelAgentDialog(owner, service);
         dialog.setVisible(true);
         return dialog.result;
@@ -105,15 +111,22 @@ public final class TunnelAgentDialog extends JDialog {
         constraints.weightx = 1;
         panel.add(ports, constraints);
 
-        addCommand(panel, constraints, 5, "Option A: start target with this JVM argument", earlyArgument,
+        JPanel modes = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        modes.setOpaque(false);
+        modes.add(persistent);
+        modes.add(localPreloaded);
+        constraints.gridy = 5;
+        panel.add(modes, constraints);
+        add(panel, constraints, 6, "Authentication token", authToken, "Use the existing token to reconnect");
+        addCommand(panel, constraints, 7, "Option A: start target with this JVM argument", earlyArgument,
                 button("Copy argument", earlyArgument));
-        addCommand(panel, constraints, 6, "Option B: late attach from the target machine", lateAttachCommand,
+        addCommand(panel, constraints, 8, "Option B: late attach from the target machine", lateAttachCommand,
                 button("Copy remote command", lateAttachCommand));
-        addCommand(panel, constraints, 7, "Run this on the desktop machine", sshCommand,
+        addCommand(panel, constraints, 9, "Run this on the desktop machine", sshCommand,
                 button("Copy SSH command", sshCommand));
         JLabel warning = new JLabel("The agent binds only to target loopback. Do not replace 127.0.0.1 with a public interface.");
         warning.setForeground(Ui.WARNING);
-        constraints.gridy = 8;
+        constraints.gridy = 10;
         panel.add(warning, constraints);
         return panel;
     }
@@ -121,7 +134,7 @@ public final class TunnelAgentDialog extends JDialog {
     private JPanel actions() {
         JPanel panel = new JPanel(new BorderLayout());
         panel.setOpaque(false);
-        JLabel hint = new JLabel("Start the agent and tunnel first. Connect consumes the one-use token.");
+        JLabel hint = new JLabel("Use a preloaded listener when Attach is disabled. Local connections need no tunnel.");
         hint.setForeground(Ui.MUTED);
         panel.add(hint, BorderLayout.WEST);
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
@@ -143,7 +156,10 @@ public final class TunnelAgentDialog extends JDialog {
         try {
             int port = ((Number) localPort.getValue()).intValue();
             String pid = remotePid.getText().trim();
-            result = new ConnectionRequest(port, prepared.token(), pid, displayName.getText().trim());
+            String token = authToken.getText().trim();
+            service.prepareTunnelAgent(((Number) agentPort.getValue()).intValue(), token, ((Number) timeout.getValue()).intValue());
+            if (localPreloaded.isSelected() && !pid.matches("[1-9][0-9]*")) throw new IllegalArgumentException("Local preloaded connections require a target PID");
+            result = new ConnectionRequest(port, token, pid, displayName.getText().trim(), localPreloaded.isSelected());
             dispose();
         } catch (RuntimeException error) {
             Ui.error(this, error);
@@ -153,11 +169,18 @@ public final class TunnelAgentDialog extends JDialog {
     private void regenerate() {
         prepared = service.prepareTunnelAgent(((Number) agentPort.getValue()).intValue(),
                 ((Number) timeout.getValue()).intValue());
+        authToken.setText(prepared.token());
         refreshCommands();
     }
 
     private void refreshCommands() {
         if (prepared == null) return;
+        try {
+            int port = ((Number) agentPort.getValue()).intValue();
+            int seconds = ((Number) timeout.getValue()).intValue();
+            prepared = persistent.isSelected() ? service.preparePreloadedAgent(port, authToken.getText().trim(), seconds)
+                    : service.prepareTunnelAgent(port, authToken.getText().trim(), seconds);
+        } catch (IllegalArgumentException error) { return; }
         String jar = remoteJar.getText().trim().isEmpty() ? "jpi.jar" : remoteJar.getText().trim();
         String rawArgument = "-javaagent:" + jar + "=" + prepared.options();
         earlyArgument.setText(quoteAgentArgument(rawArgument));
@@ -228,5 +251,9 @@ public final class TunnelAgentDialog extends JDialog {
         return '"' + value.replace("\"", "\\\"") + '"';
     }
 
-    public record ConnectionRequest(int localPort, String token, String pid, String displayName) {}
+    public record ConnectionRequest(int localPort, String token, String pid, String displayName, boolean localPreloaded) {
+        public ConnectionRequest(int localPort, String token, String pid, String displayName) {
+            this(localPort, token, pid, displayName, false);
+        }
+    }
 }

@@ -84,6 +84,9 @@ public final class ClassesPanel extends JPanel implements SessionAware {
     private final JButton nextClassPage = Ui.secondaryButton("Next");
     private final JLabel metadata = new JLabel("No class selected");
     private final JButton reload = Ui.secondaryButton("Reload");
+    private final JComboBox<String> backend = new JComboBox<>(new String[]{"Instrumentation", "JVMTI"});
+    private volatile boolean nativeBackend;
+    private long inventoryGeneration;
     private final JButton decompile = Ui.primaryButton("Decompile");
     private final JButton applySource = Ui.primaryButton("Apply source");
     private final JButton rollback = Ui.secondaryButton("Rollback original");
@@ -208,6 +211,18 @@ public final class ClassesPanel extends JPanel implements SessionAware {
         refreshEvents.addActionListener(e -> refreshEvents());
         pluginTools.addActionListener(event -> runPluginTool());
         actions.add(live);
+        actions.add(new JLabel("Backend"));
+        actions.add(backend);
+        backend.setToolTipText("JVMTI requires the optional native backend to be bound in Native JVMTI");
+        backend.addActionListener(event -> {
+            nativeBackend = backend.getSelectedIndex() == 1;
+            inventoryGeneration++;
+            decompileGeneration++;
+            methodLoadGeneration++;
+            methodClassId = null;
+            reloading = false;
+            reload(true);
+        });
         actions.add(refreshEvents);
         actions.add(reload);
         actions.add(dump);
@@ -305,6 +320,9 @@ public final class ClassesPanel extends JPanel implements SessionAware {
 
     @Override public void setSession(InspectorSession session) {
         this.session = session;
+        inventoryGeneration++;
+        reloading = false;
+        if (backend.getSelectedIndex() != 0) backend.setSelectedIndex(0);
         methodClassId = null;
         methodBodyLoading = false;
         methodBodyReady = false;
@@ -351,22 +369,32 @@ public final class ClassesPanel extends JPanel implements SessionAware {
         final InspectorSession current = session;
         if (current == null || reloading) return;
         reloading = true;
+        long epoch = ++inventoryGeneration;
+        Operation operation = inventoryOperation();
         reload.setEnabled(false);
         if (showLoading && allClasses.isEmpty()) classCount.setText("Loading...");
-        Async.run(() -> parseClassInventory(current.requestText(Operation.CLASSES, "")), inventory -> {
+        Async.run(() -> parseClassInventory(current.requestText(operation, "")), inventory -> {
+            if (session != current || epoch != inventoryGeneration) return;
             allClasses = inventory.classes;
             capturedClassCount = inventory.captured;
             filter(true, () -> {
+                if (session != current || epoch != inventoryGeneration) return;
                 reloading = false;
                 if (list.getSelectedValue() == null) updateSelectionMetadata();
                 reload.setEnabled(true);
             });
         }, error -> {
+            if (session != current || epoch != inventoryGeneration) return;
             reloading = false;
             reload.setEnabled(true);
             if (showLoading) Ui.error(this, error);
         });
     }
+
+    private Operation inventoryOperation() { return nativeBackend ? Operation.JVMTI_CLASSES : Operation.CLASSES; }
+    private Operation bytecodeOperation() { return nativeBackend ? Operation.JVMTI_CLASS_BYTES : Operation.CLASS_BYTES; }
+
+    public void useNativeBackend() { backend.setSelectedIndex(1); }
 
     private static ClassInventory parseClassInventory(String value) {
         List<LoadedClassInfo> parsed = new ArrayList<>();
@@ -555,7 +583,7 @@ public final class ClassesPanel extends JPanel implements SessionAware {
         String descriptor = method == null ? "" : method.descriptor;
         pluginTools.setEnabled(false);
         Async.run(() -> {
-            byte[] bytecode = current.request(Operation.CLASS_BYTES, selected.id);
+            byte[] bytecode = current.request(bytecodeOperation(), selected.id);
             BytecodeTarget target = new BytecodeTarget(selected.id, selected.name, bytecode, methodName, descriptor);
             if (tool.analyzer != null) return PluginToolResult.analysis(tool.analyzer.analyze(target));
             return PluginToolResult.suggestions(tool.deobfuscator.suggest(target));
@@ -650,7 +678,7 @@ public final class ClassesPanel extends JPanel implements SessionAware {
         String view = mode == SourceMode.MAPPED_READ_ONLY ? "mapped read-only" : "original editable";
         source.setText("Reading bytecode and decompiling " + selected.name + " as " + view + " with " + engine + "...");
         Async.run(() -> {
-            byte[] bytecode = current.request(Operation.CLASS_BYTES, selected.id);
+            byte[] bytecode = current.request(bytecodeOperation(), selected.id);
             byte[] displayBytecode = mode == SourceMode.MAPPED_READ_ONLY
                     ? DisplayBytecodeRemapper.remap(bytecode, mappingWorkspace) : bytecode;
             String displayName = mode == SourceMode.MAPPED_READ_ONLY
@@ -853,7 +881,7 @@ public final class ClassesPanel extends JPanel implements SessionAware {
         refreshMethodPatchState();
         methodBody.setText("Loading current method implementation...");
         Async.run(() -> {
-            byte[] bytecode = current.request(Operation.CLASS_BYTES, selectedId);
+            byte[] bytecode = current.request(bytecodeOperation(), selectedId);
             String decompiled = decompilerService.decompileMethod(
                     engine, selected.name, method.name, method.descriptor, bytecode);
             return MethodSourceExtractor.extract(decompiled, method.name, method.descriptor);
@@ -947,7 +975,7 @@ public final class ClassesPanel extends JPanel implements SessionAware {
         InspectorSession current = session;
         if (current == null || identifier == null || className == null) return;
         search.setText(className);
-        Async.run(() -> parseClassInventory(current.requestText(Operation.CLASSES, "")), inventory -> {
+        Async.run(() -> parseClassInventory(current.requestText(inventoryOperation(), "")), inventory -> {
             if (session != current) return;
             allClasses = inventory.classes;
             capturedClassCount = inventory.captured;
@@ -1252,7 +1280,7 @@ public final class ClassesPanel extends JPanel implements SessionAware {
         if (chooser.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) return;
         final File destination = chooser.getSelectedFile();
         Async.run(() -> {
-            Files.write(destination.toPath(), current.request(Operation.CLASS_BYTES, selected.id));
+            Files.write(destination.toPath(), current.request(bytecodeOperation(), selected.id));
             return destination;
         }, file -> JOptionPane.showMessageDialog(this, "Saved " + file), error -> Ui.error(this, error));
     }
@@ -1284,7 +1312,7 @@ public final class ClassesPanel extends JPanel implements SessionAware {
                             safeName.replace('.', File.separatorChar) + suffix + ".class");
                     File parent = file.getParentFile();
                     if (parent != null) Files.createDirectories(parent.toPath());
-                    Files.write(file.toPath(), current.request(Operation.CLASS_BYTES, info.id));
+                    Files.write(file.toPath(), current.request(bytecodeOperation(), info.id));
                     saved++;
                 } catch (Exception ignored) {
                     failed++;
