@@ -1,5 +1,9 @@
 package dev.whitedev.jpi.agent;
 
+import dev.whitedev.jpi.agent.fingerprint.TargetFingerprintCapture;
+import dev.whitedev.jpi.agent.jvmti.NativeJvmtiBridge;
+import java.nio.charset.StandardCharsets;
+
 import dev.whitedev.jpi.agent.analysis.ConstantPoolSearch;
 import dev.whitedev.jpi.agent.analysis.DeobfuscationInventory;
 import dev.whitedev.jpi.agent.analysis.FieldWriteAnalyzer;
@@ -88,18 +92,18 @@ final class TargetInspector {
     }
 
     String nativeLoadedClasses() throws Exception {
-        return loadedClasses(dev.whitedev.jpi.agent.jvmti.NativeJvmtiBridge.loadedClasses());
+        return loadedClasses(NativeJvmtiBridge.loadedClasses());
     }
 
     String bindNativeBackend(String payload) throws Exception {
         String[] values = payload.split("\n", -1);
         if (values.length != 2) throw new IOException("Native binding requires an absolute library path and SHA-256");
-        return dev.whitedev.jpi.agent.jvmti.NativeJvmtiBridge.connect(values[0], values[1]);
+        return NativeJvmtiBridge.connect(values[0], values[1]);
     }
 
     byte[] nativeClassBytes(String identifier) throws Exception {
         if (identifier.startsWith("b:")) return classBytes(identifier);
-        return dev.whitedev.jpi.agent.jvmti.NativeJvmtiBridge.classBytes(resolveClass(identifier));
+        return NativeJvmtiBridge.classBytes(resolveClass(identifier));
     }
 
     String nativeHeapStats(String payload) throws Exception {
@@ -109,8 +113,8 @@ final class TargetInspector {
         try { limit = Long.parseLong(values[1]); }
         catch (NumberFormatException error) { throw new IOException("Instance limit must be a number", error); }
         Class<?> target = resolveClass(values[0]);
-        long[] stats = dev.whitedev.jpi.agent.jvmti.NativeJvmtiBridge.heapStats(target, limit);
-        long classObjectSize = dev.whitedev.jpi.agent.jvmti.NativeJvmtiBridge.objectSize(target);
+        long[] stats = NativeJvmtiBridge.heapStats(target, limit);
+        long classObjectSize = NativeJvmtiBridge.objectSize(target);
         return "class=" + target.getName() + "\ninstances=" + stats[0] + "\nshallow_bytes=" + stats[1]
                 + "\nlargest_shallow_bytes=" + stats[2] + "\nclass_object_shallow_bytes=" + classObjectSize
                 + "\ntruncated=" + (stats[3] != 0) + "\n";
@@ -153,7 +157,7 @@ final class TargetInspector {
     }
 
     String targetFingerprint(String selection) throws Exception {
-        return dev.whitedev.jpi.agent.fingerprint.TargetFingerprintCapture.capture(
+        return TargetFingerprintCapture.capture(
                 instrumentation.getAllLoadedClasses(), selection, type -> classBytes(index(type)));
     }
 
@@ -183,7 +187,7 @@ final class TargetInspector {
         byte[] captured = registry.bytecodeFor(target);
         if (captured != null) return captured;
         if (instrumentation.isNativeOnly()) {
-            byte[] bytes = dev.whitedev.jpi.agent.jvmti.NativeJvmtiBridge.classBytes(target);
+            byte[] bytes = NativeJvmtiBridge.classBytes(target);
             registry.captureIfAbsent(target, bytes);
             return bytes;
         }
@@ -683,7 +687,7 @@ final class TargetInspector {
     }
 
     void close() {
-        dev.whitedev.jpi.agent.jvmti.NativeJvmtiBridge.clearCaptureForSession();
+        NativeJvmtiBridge.clearCaptureForSession();
         cfgManager.close();
         traceManager.close();
         apiHookManager.close();
@@ -866,6 +870,10 @@ final class TargetInspector {
         return threadAnalyzer.snapshot();
     }
 
+    String threadSnapshot() {
+        return threadAnalyzer.snapshot(false);
+    }
+
     String clearThreadAnalysis() {
         return threadAnalyzer.clear();
     }
@@ -949,7 +957,7 @@ final class TargetInspector {
 
     private static String encoded(String value) {
         if (value == null || value.isEmpty()) return "";
-        return Base64.getEncoder().encodeToString(value.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        return Base64.getEncoder().encodeToString(value.getBytes(StandardCharsets.UTF_8));
     }
 
     private Class<?> resolveClass(String identifier) throws ClassNotFoundException {
@@ -983,8 +991,8 @@ final class TargetInspector {
         byte[] restored = registry.bytecodeFor(target);
         if (restored != null) current = restored;
         ClassSchema.verifyCompatible(current, replacement);
-        if (dev.whitedev.jpi.agent.jvmti.NativeJvmtiBridge.isBound()) {
-            dev.whitedev.jpi.agent.jvmti.NativeJvmtiBridge.redefineClass(target, replacement);
+        if (NativeJvmtiBridge.isBound()) {
+            NativeJvmtiBridge.redefineClass(target, replacement);
         } else instrumentation.redefineClasses(new ClassDefinition(target, replacement));
         registry.recordApplied(target, replacement);
         patchHistory.record(registry.keyFor(target), target.getName(), description, current, replacement);

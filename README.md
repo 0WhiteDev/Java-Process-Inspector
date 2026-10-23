@@ -37,6 +37,10 @@ The controller stays outside the inspected JVM. A small agent uses the Java Inst
 
 ## Quick Start
 
+### AI clients through MCP
+
+Configure your MCP client to run `java -jar /absolute/path/jpi.jar --mcp`, then select and attach a target in the JPI window opened by the client. The **AI / MCP** panel shows STDIO server status and recent calls. The server exposes 14 analysis tools and `jpi://session`, with canonical definition IDs, bounded results, session-change checks, and a local audit log. It cannot attach, execute target code, patch classes, change fields, load agents, or access raw memory. See the [MCP setup and tool reference](docs/mcp.md) for client configuration and limits.
+
 ### Requirements
 
 | Component | Required | Notes                                                                            |

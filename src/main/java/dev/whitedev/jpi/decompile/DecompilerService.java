@@ -1,5 +1,11 @@
 package dev.whitedev.jpi.decompile;
 
+import java.net.URISyntaxException;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+
 import dev.whitedev.jpi.plugin.api.decompile.DecompilationRequest;
 
 import java.io.*;
@@ -73,6 +79,7 @@ public final class DecompilerService {
     private String cfr(File classFile, String methodName) throws IOException, InterruptedException {
         List<String> command = new ArrayList<>();
         command.add(javaExecutable());
+        command.add("-Xmx256m");
         command.add("-jar");
         command.add(resources(DecompilerEngine.CFR).getFirst().getAbsolutePath());
         command.add(classFile.getAbsolutePath());
@@ -88,6 +95,7 @@ public final class DecompilerService {
     private String vineflower(File classFile) throws IOException, InterruptedException {
         List<String> command = new ArrayList<>();
         command.add(javaExecutable());
+        command.add("-Xmx256m");
         command.add("-jar");
         command.add(resources(DecompilerEngine.VINEFLOWER).getFirst().getAbsolutePath());
         command.add("-s");
@@ -100,7 +108,16 @@ public final class DecompilerService {
         return output;
     }
 
-    private String procyon(File classFile) throws IOException {
+    private String procyon(File classFile) throws IOException, InterruptedException {
+        try {
+            String classPath = new File(DecompilerService.class.getProtectionDomain().getCodeSource().getLocation().toURI()).getAbsolutePath();
+            return run(List.of(javaExecutable(), "-Xmx256m", "-cp", classPath, ProcyonWorker.class.getName(), classFile.getAbsolutePath()), "Procyon");
+        } catch (URISyntaxException error) {
+            throw new IOException("Could not resolve the local decompiler classpath", error);
+        }
+    }
+
+    String procyonInProcess(File classFile) throws IOException {
         List<File> files = resources(DecompilerEngine.PROCYON);
         URL[] urls = files.stream().map(File::toURI).map(uri -> {
             try {
@@ -151,10 +168,22 @@ public final class DecompilerService {
 
     private static String run(List<String> command, String name) throws IOException, InterruptedException {
         Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
-        String output = read(process.getInputStream());
-        int exit = process.waitFor();
-        if (exit != 0) throw new IOException(name + " exited with code " + exit + System.lineSeparator() + output);
-        return output;
+        FutureTask<String> reader = new FutureTask<>(() -> read(process.getInputStream()));
+        Thread.ofVirtual().name("jpi-decompiler-output").start(reader);
+        try {
+            if (!process.waitFor(30, TimeUnit.SECONDS)) throw new IOException(name + " exceeded its 30 second timeout");
+            String output = reader.get(2, TimeUnit.SECONDS);
+            if (process.exitValue() != 0) throw new IOException(name + " exited with code " + process.exitValue() + System.lineSeparator() + output);
+            return output;
+        } catch (ExecutionException error) {
+            throw new IOException(name + " output could not be read", error.getCause());
+        } catch (TimeoutException error) {
+            throw new IOException(name + " output did not close", error);
+        } finally {
+            if (process.isAlive()) process.destroyForcibly();
+            reader.cancel(true);
+            process.getInputStream().close();
+        }
     }
 
     private static String javaExecutable() {
@@ -169,10 +198,14 @@ public final class DecompilerService {
     }
 
     private static String read(InputStream input) throws IOException {
-        BufferedReader reader = new BufferedReader(new InputStreamReader(input, StandardCharsets.UTF_8));
+        Reader reader = new InputStreamReader(input, StandardCharsets.UTF_8);
         StringBuilder out = new StringBuilder();
-        String line;
-        while ((line = reader.readLine()) != null) out.append(line).append((char) 10);
+        char[] buffer = new char[8192];
+        int count;
+        while ((count = reader.read(buffer)) != -1) {
+            if (out.length() + count > 8 * 1024 * 1024) throw new IOException("Decompiler output exceeds 8 MiB");
+            out.append(buffer, 0, count);
+        }
         return out.toString();
     }
 }

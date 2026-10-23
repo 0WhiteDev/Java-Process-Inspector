@@ -1,5 +1,12 @@
 package dev.whitedev.jpi.ui;
 
+import dev.whitedev.jpi.attach.ProcessInjector;
+import dev.whitedev.jpi.investigation.InvestigationTarget;
+import dev.whitedev.jpi.protocol.Operation;
+import dev.whitedev.jpi.ui.jvmti.NativeJvmtiPanel;
+import java.util.function.Consumer;
+
+import dev.whitedev.jpi.mcp.JpiMcpRuntime;
 import dev.whitedev.jpi.ui.context.AnalysisTarget;
 import dev.whitedev.jpi.ui.context.ContextAction;
 import dev.whitedev.jpi.ui.context.ContextActions;
@@ -27,6 +34,7 @@ import dev.whitedev.jpi.ui.connection.TunnelAgentDialog;
 import dev.whitedev.jpi.ui.debug.DebuggerPanel;
 import dev.whitedev.jpi.ui.file.FileMonitorPanel;
 import dev.whitedev.jpi.ui.fingerprint.TargetFingerprintPanel;
+import dev.whitedev.jpi.ui.mcp.McpPanel;
 import dev.whitedev.jpi.ui.profiler.ProfilerPanel;
 import dev.whitedev.jpi.ui.exceptions.ExceptionAnalyzerPanel;
 import dev.whitedev.jpi.loader.ClassLoaderSnapshot;
@@ -92,6 +100,7 @@ public final class MainFrame extends JFrame {
     private final JPanel advancedPluginNavigation = new JPanel();
     private final PluginManager pluginManager;
     private final RuntimeTimelineStore timelineStore = new RuntimeTimelineStore();
+    private final JpiMcpRuntime mcp;
     private InspectorSession session;
 
     public MainFrame() {
@@ -99,8 +108,13 @@ public final class MainFrame extends JFrame {
     }
 
     public MainFrame(PluginManager pluginManager) {
+        this(pluginManager, new JpiMcpRuntime());
+    }
+
+    public MainFrame(PluginManager pluginManager, JpiMcpRuntime mcp) {
         super("Java Process Inspector");
         this.pluginManager = pluginManager;
+        this.mcp = mcp;
         setIconImage(new FlatSVGIcon("assets/logo.svg", 64, 64).getImage());
         setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
         setMinimumSize(new Dimension(1024, 700));
@@ -219,7 +233,7 @@ public final class MainFrame extends JFrame {
         DllPanel dll = new DllPanel(windows);
         NativeSymbolsPanel nativeSymbols = new NativeSymbolsPanel();
         PluginsPanel plugins = new PluginsPanel(pluginManager);
-        dev.whitedev.jpi.ui.jvmti.NativeJvmtiPanel nativeJvmti = new dev.whitedev.jpi.ui.jvmti.NativeJvmtiPanel(attachService, () -> {
+        NativeJvmtiPanel nativeJvmti = new NativeJvmtiPanel(attachService, () -> {
             classes.useNativeBackend();
             selectView("Loaded classes");
         });
@@ -260,6 +274,7 @@ public final class MainFrame extends JFrame {
         addCard("Memory scanner", memory);
         addCard("DLL loader", dll);
         addCard("Plugins", plugins);
+        addCard("AI / MCP", new McpPanel(mcp));
 
         JPanel content = new JPanel(new BorderLayout(0, 12));
         content.setBorder(new EmptyBorder(14, 16, 16, 16));
@@ -282,6 +297,7 @@ public final class MainFrame extends JFrame {
                 disconnect();
                 debugger.close();
                 pluginManager.close();
+                mcp.close();
             }
         });
         pluginManager.extensions().addListener(() -> SwingUtilities.invokeLater(this::syncPluginTabs));
@@ -307,7 +323,7 @@ public final class MainFrame extends JFrame {
         if (current == null) return;
         var location = selection.location();
         Async.run(() -> ClassLoaderSnapshot.parse(current.requestText(
-                dev.whitedev.jpi.protocol.Operation.CLASSLOADER_SNAPSHOT, "")), snapshot -> {
+                Operation.CLASSLOADER_SNAPSHOT, "")), snapshot -> {
             if (session != current) return;
             var definitions = snapshot.definitions().stream().filter(definition ->
                     definition.name().equals(location.owner()) && "definition".equals(definition.kind())).toList();
@@ -367,7 +383,7 @@ public final class MainFrame extends JFrame {
             }
             case INVESTIGATE -> {
                 if (target.kind() == AnalysisTarget.Kind.METHOD)
-                    investigation.investigateMethod(new dev.whitedev.jpi.investigation.InvestigationTarget(
+                    investigation.investigateMethod(new InvestigationTarget(
                             target.identifier(), target.owner(), target.member(), target.descriptor(), "", 100, 0));
                 else investigation.investigate(target.query());
                 selectView("Investigation");
@@ -376,7 +392,7 @@ public final class MainFrame extends JFrame {
     }
 
     private void resolveContextDefinition(AnalysisTarget target,
-            java.util.function.Consumer<AnalysisTarget> ready) {
+            Consumer<AnalysisTarget> ready) {
         if (!target.identifier().isEmpty() && !target.identifier().equals(target.owner())) {
             ready.accept(target);
             return;
@@ -384,7 +400,7 @@ public final class MainFrame extends JFrame {
         InspectorSession current = session;
         if (current == null) return;
         Async.run(() -> ClassLoaderSnapshot.parse(current.requestText(
-                dev.whitedev.jpi.protocol.Operation.CLASSLOADER_SNAPSHOT, "")), snapshot -> {
+                Operation.CLASSLOADER_SNAPSHOT, "")), snapshot -> {
             if (session != current) return;
             var definitions = snapshot.definitions().stream().filter(definition ->
                     definition.name().equals(target.owner()) && "definition".equals(definition.kind())).toList();
@@ -480,6 +496,7 @@ public final class MainFrame extends JFrame {
         addNavigation(sidebar, "Memory scanner");
         addNavigation(sidebar, "DLL loader");
         addNavigation(sidebar, "Plugins");
+        addNavigation(sidebar, "AI / MCP");
         configurePluginNavigation(advancedPluginNavigation);
         sidebar.add(advancedPluginNavigation);
         sidebar.add(Box.createVerticalGlue());
@@ -801,7 +818,7 @@ public final class MainFrame extends JFrame {
         targets.setEnabled(false);
         setStatus(request.localPreloaded() ? "Connecting to preloaded agent..." : "Connecting through tunnel...", Ui.WARNING, Ui.SURFACE_LIGHT);
         Async.run(() -> request.localPreloaded()
-                ? attachService.connectPreloadedAgent(request.localPort(), request.token(), new dev.whitedev.jpi.attach.JvmDescriptor(request.pid(), request.displayName()))
+                ? attachService.connectPreloadedAgent(request.localPort(), request.token(), new JvmDescriptor(request.pid(), request.displayName()))
                 : attachService.connectTunnel(request.localPort(), request.token(), request.pid(), request.displayName()), connected -> {
             setSession(connected);
             setStatus((request.localPreloaded() ? "Attached through preloaded agent  |  PID " : "Attached through tunnel  |  PID ") + connected.target().id(),
@@ -822,13 +839,14 @@ public final class MainFrame extends JFrame {
 
     private void setSession(InspectorSession value) {
         session = value;
+        mcp.sessions().setSession(value);
         timelineStore.beginSession(value == null ? "" : value.target().id());
         pluginManager.setSession(value);
         for (SessionAware view : views) view.setSession(value);
         for (SessionAware view : pluginViews) view.setSession(value);
         boolean connected = value != null;
         attach.setEnabled(!connected);
-        nativeAttach.setEnabled(!connected && dev.whitedev.jpi.attach.ProcessInjector.isSupported());
+        nativeAttach.setEnabled(!connected && ProcessInjector.isSupported());
         launchEarly.setEnabled(!connected);
         manualEarly.setEnabled(!connected);
         tunnelAgent.setEnabled(!connected);

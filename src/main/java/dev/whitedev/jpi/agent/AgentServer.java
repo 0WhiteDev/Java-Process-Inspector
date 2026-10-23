@@ -1,5 +1,9 @@
 package dev.whitedev.jpi.agent;
 
+import dev.whitedev.jpi.agent.jvmti.NativeJvmtiBridge;
+import dev.whitedev.jpi.agent.jvmti.RawMemoryCommand;
+import java.lang.management.ManagementFactory;
+
 import dev.whitedev.jpi.agent.patch.SourceExecutor;
 import dev.whitedev.jpi.protocol.Operation;
 import dev.whitedev.jpi.protocol.WireProtocol;
@@ -138,7 +142,7 @@ final class AgentServer implements Runnable {
         Map<Operation, AgentCommand> registry = new EnumMap<>(Operation.class);
         registry.put(Operation.PING, payload -> WireProtocol.utf8("pong"));
         registry.put(Operation.SESSION_INFO, payload -> WireProtocol.utf8(
-                "pid=" + java.lang.management.ManagementFactory.getRuntimeMXBean().getName().split("@", 2)[0]
+                "pid=" + ManagementFactory.getRuntimeMXBean().getName().split("@", 2)[0]
                 + "\nattach_disabled=" + booleanVmOption("DisableAttachMechanism")
                 + "\ndynamic_agent_loading=" + booleanVmOption("EnableDynamicAgentLoading")
                 + "\ncommunication=" + (instrumentation.isNativeOnly() ? "native-bootstrap" : "java-agent")
@@ -147,34 +151,35 @@ final class AgentServer implements Runnable {
         registry.put(Operation.CLASSES, payload -> WireProtocol.utf8(inspector.loadedClasses()));
         registry.put(Operation.TARGET_FINGERPRINT, payload -> WireProtocol.utf8(inspector.targetFingerprint(payload)));
         registry.put(Operation.JVMTI_BIND, payload -> WireProtocol.utf8(inspector.bindNativeBackend(payload)));
-        registry.put(Operation.JVMTI_STATUS, payload -> WireProtocol.utf8(dev.whitedev.jpi.agent.jvmti.NativeJvmtiBridge.status()));
+        registry.put(Operation.JVMTI_STATUS, payload -> WireProtocol.utf8(NativeJvmtiBridge.status()));
         registry.put(Operation.JVMTI_CLASSES, payload -> WireProtocol.utf8(inspector.nativeLoadedClasses()));
         registry.put(Operation.JVMTI_CLASS_BYTES, inspector::nativeClassBytes);
         registry.put(Operation.JVMTI_HEAP_STATS, payload -> WireProtocol.utf8(inspector.nativeHeapStats(payload)));
         registry.put(Operation.JVMTI_CAPTURE_START, payload -> {
-            dev.whitedev.jpi.agent.jvmti.NativeJvmtiBridge.startCapture();
-            return WireProtocol.utf8(dev.whitedev.jpi.agent.jvmti.NativeJvmtiBridge.captureEvents());
+            NativeJvmtiBridge.startCapture();
+            return WireProtocol.utf8(NativeJvmtiBridge.captureEvents());
         });
         registry.put(Operation.JVMTI_CAPTURE_STOP, payload -> {
-            dev.whitedev.jpi.agent.jvmti.NativeJvmtiBridge.stopCapture();
-            return WireProtocol.utf8(dev.whitedev.jpi.agent.jvmti.NativeJvmtiBridge.captureEvents());
+            NativeJvmtiBridge.stopCapture();
+            return WireProtocol.utf8(NativeJvmtiBridge.captureEvents());
         });
-        registry.put(Operation.JVMTI_CAPTURE_EVENTS, payload -> WireProtocol.utf8(dev.whitedev.jpi.agent.jvmti.NativeJvmtiBridge.captureEvents()));
+        registry.put(Operation.JVMTI_CAPTURE_EVENTS, payload -> WireProtocol.utf8(NativeJvmtiBridge.captureEvents()));
         registry.put(Operation.JVMTI_CAPTURE_ARCHIVE_START, payload -> {
             String[] fields = payload.split("\n", -1);
             if (fields.length != 2) throw new IOException("Archive start requires a target directory and byte limit");
-            dev.whitedev.jpi.agent.jvmti.NativeJvmtiBridge.startCaptureArchive(fields[0], Long.parseLong(fields[1]));
-            return WireProtocol.utf8(dev.whitedev.jpi.agent.jvmti.NativeJvmtiBridge.captureEvents());
+            NativeJvmtiBridge.startCaptureArchive(fields[0], Long.parseLong(fields[1]));
+            return WireProtocol.utf8(NativeJvmtiBridge.captureEvents());
         });
-        registry.put(Operation.JVMTI_CAPTURE_BYTES, payload -> dev.whitedev.jpi.agent.jvmti.NativeJvmtiBridge.captureBytes(Long.parseLong(payload.trim())));
-        registry.put(Operation.MEMORY_REGIONS, payload -> WireProtocol.utf8(dev.whitedev.jpi.agent.jvmti.NativeJvmtiBridge.memoryRegions()));
-        registry.put(Operation.MEMORY_READ, dev.whitedev.jpi.agent.jvmti.RawMemoryCommand::read);
-        registry.put(Operation.MEMORY_PATCH, payload -> WireProtocol.utf8(dev.whitedev.jpi.agent.jvmti.RawMemoryCommand.patch(payload)));
+        registry.put(Operation.JVMTI_CAPTURE_BYTES, payload -> NativeJvmtiBridge.captureBytes(Long.parseLong(payload.trim())));
+        registry.put(Operation.MEMORY_REGIONS, payload -> WireProtocol.utf8(NativeJvmtiBridge.memoryRegions()));
+        registry.put(Operation.MEMORY_READ, RawMemoryCommand::read);
+        registry.put(Operation.MEMORY_PATCH, payload -> WireProtocol.utf8(RawMemoryCommand.patch(payload)));
         registry.put(Operation.CLASS_BYTES, inspector::classBytes);
         registry.put(Operation.EXECUTE, payload -> WireProtocol.utf8(SourceExecutor.execute(payload)));
         registry.put(Operation.FIELDS, payload -> WireProtocol.utf8(inspector.staticFields(payload)));
         registry.put(Operation.THREAD_DUMP, payload -> WireProtocol.utf8(inspector.threadDump()));
         registry.put(Operation.THREAD_ANALYZE, payload -> WireProtocol.utf8(inspector.analyzeThreads()));
+        registry.put(Operation.THREAD_SNAPSHOT, payload -> WireProtocol.utf8(inspector.threadSnapshot()));
         registry.put(Operation.THREAD_ANALYZER_CLEAR, payload -> WireProtocol.utf8(inspector.clearThreadAnalysis()));
         registry.put(Operation.CLASS_EVENTS, payload -> WireProtocol.utf8(inspector.classEvents()));
         registry.put(Operation.ENVIRONMENT, payload -> WireProtocol.utf8(inspector.environment()));
@@ -245,12 +250,12 @@ final class AgentServer implements Runnable {
     private static String booleanVmOption(String name) {
         try {
             Class<?> type = Class.forName("com.sun.management.HotSpotDiagnosticMXBean");
-            Object bean = java.lang.management.ManagementFactory.class.getMethod("getPlatformMXBean", Class.class).invoke(null, type);
+            Object bean = ManagementFactory.class.getMethod("getPlatformMXBean", Class.class).invoke(null, type);
             Object option = type.getMethod("getVMOption", String.class).invoke(bean, name);
             return String.valueOf(option.getClass().getMethod("getValue").invoke(option));
         } catch (ReflectiveOperationException | RuntimeException ignored) { }
         String disabled = "unknown";
-        for (String argument : java.lang.management.ManagementFactory.getRuntimeMXBean().getInputArguments()) {
+        for (String argument : ManagementFactory.getRuntimeMXBean().getInputArguments()) {
             if (("-XX:+" + name).equals(argument)) disabled = "true";
             if (("-XX:-" + name).equals(argument)) disabled = "false";
         }

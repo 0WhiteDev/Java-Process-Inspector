@@ -38,7 +38,11 @@ public final class ThreadAnalyzer {
     }
 
     public synchronized String snapshot() {
-        enableMetrics();
+        return snapshot(true);
+    }
+
+    public synchronized String snapshot(boolean enableMonitoring) {
+        if (enableMonitoring) enableMetrics();
         long now = System.currentTimeMillis();
         long interval = previousCapture == 0L ? 0L : Math.max(1L, now - previousCapture);
         previousCapture = now;
