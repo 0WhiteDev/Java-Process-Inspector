@@ -4,7 +4,15 @@ import dev.whitedev.jpi.attach.ProcessInjector;
 import dev.whitedev.jpi.investigation.InvestigationTarget;
 import dev.whitedev.jpi.protocol.Operation;
 import dev.whitedev.jpi.ui.jvmti.NativeJvmtiPanel;
+import dev.whitedev.jpi.ui.search.SearchEverythingPanel;
+import dev.whitedev.jpi.ui.commands.CommandContext;
+import dev.whitedev.jpi.ui.commands.CommandRegistry;
+import dev.whitedev.jpi.ui.commands.CommandPaletteDialog;
+import dev.whitedev.jpi.ui.commands.CommandShortcuts;
+import dev.whitedev.jpi.ui.commands.WorkspaceCommand;
 import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.Supplier;
 
 import dev.whitedev.jpi.mcp.JpiMcpRuntime;
 import dev.whitedev.jpi.ui.context.AnalysisTarget;
@@ -101,6 +109,13 @@ public final class MainFrame extends JFrame {
     private final PluginManager pluginManager;
     private final RuntimeTimelineStore timelineStore = new RuntimeTimelineStore();
     private final JpiMcpRuntime mcp;
+    private final SearchEverythingPanel searchEverything;
+    private final CommandRegistry commands = new CommandRegistry();
+    private final JLabel commandStatus = new JLabel("Ctrl+P Commands | Ctrl+Shift+F Search");
+    private CommandPaletteDialog commandPalette;
+    private CommandShortcuts commandShortcuts;
+    private Supplier<Object> debuggerConnection = () -> null;
+    private String activeView = "Overview";
     private InspectorSession session;
 
     public MainFrame() {
@@ -218,6 +233,9 @@ public final class MainFrame extends JFrame {
             }
         });
         classes.setContextActions(contextActions);
+        debugger.setContextActions(contextActions);
+        differences.setContextActions(contextActions);
+        exceptions.setContextActions(contextActions);
         xrefs.setContextActions(contextActions);
         tracer.setContextActions(contextActions);
         callGraph.setContextActions(contextActions);
@@ -237,13 +255,39 @@ public final class MainFrame extends JFrame {
             classes.useNativeBackend();
             selectView("Loaded classes");
         });
+        searchEverything = new SearchEverythingPanel(mappingWorkspace, timelineStore, exceptions::snapshotForSearch, hit -> {
+            switch (hit.category()) {
+                case CLASSES, STRINGS -> {
+                    classes.selectDefinition(hit.classId(), hit.className());
+                    selectView("Loaded classes");
+                }
+                case METHODS, FIELDS -> {
+                    xrefs.selectTarget(hit.classId(), hit.className(), hit.member(), hit.descriptor());
+                    selectView("Xrefs");
+                }
+                case MAPPINGS, NOTES -> {
+                    deobfuscation.selectEntry(hit.value());
+                    selectView("Deobfuscation");
+                }
+                case TIMELINE, NETWORK -> {
+                    timeline.selectEvent(hit.value());
+                    selectView("Runtime timeline");
+                }
+                case EXCEPTIONS -> {
+                    exceptions.selectType(hit.value());
+                    selectView("Exception Analyzer");
+                }
+            }
+        });
+        searchEverything.setContextActions(contextActions);
         views = new ArrayList<>(Arrays.asList(overview, timeline, profiler, exceptions, threadAnalyzer, debugger, classes, tracer, callGraph, apiHooks, fileMonitor, xrefs,
                 cfg, differences,
                 investigation, deobfuscation, fingerprint,
                 constantSearch, executor, fields, fieldWrites, valueTrace, loaders, environment, network, heapObjects, nativeSymbols,
-                memory, dll, plugins, nativeJvmti));
+                memory, dll, plugins, nativeJvmti, searchEverything));
 
         addCard("Overview", overview);
+        addCard("Search Everything", searchEverything);
         addCard("Target fingerprint", fingerprint);
         addCard("Runtime timeline", timeline);
         addCard("Profiler", profiler);
@@ -280,11 +324,19 @@ public final class MainFrame extends JFrame {
         content.setBorder(new EmptyBorder(14, 16, 16, 16));
         content.add(connectionBar(), BorderLayout.NORTH);
         content.add(cards, BorderLayout.CENTER);
+        commandStatus.setForeground(Ui.MUTED);
+        content.add(commandStatus, BorderLayout.SOUTH);
 
         JPanel root = new JPanel(new BorderLayout());
         root.add(sidebar(), BorderLayout.WEST);
         root.add(content, BorderLayout.CENTER);
         setContentPane(root);
+        configureCommands(contextActions, tracer, cfg, differences, fieldWrites, debugger, callGraph);
+        commandPalette = new CommandPaletteDialog(this, commands);
+        commandShortcuts = new CommandShortcuts(this, commands, command -> {
+            String reason = commands.execute(command, commandContext());
+            commandStatus.setText(reason.isEmpty() ? command.title() : reason);
+        });
 
         attach.addActionListener(e -> connect());
         nativeAttach.addActionListener(e -> connectNative());
@@ -298,6 +350,9 @@ public final class MainFrame extends JFrame {
                 debugger.close();
                 pluginManager.close();
                 mcp.close();
+                searchEverything.close();
+                if (commandShortcuts != null) commandShortcuts.close();
+                if (commandPalette != null) commandPalette.dispose();
             }
         });
         pluginManager.extensions().addListener(() -> SwingUtilities.invokeLater(this::syncPluginTabs));
@@ -457,6 +512,8 @@ public final class MainFrame extends JFrame {
         workspace.setAlignmentX(Component.LEFT_ALIGNMENT);
         sidebar.add(workspace);
         addNavigation(sidebar, "Overview");
+        addNavigation(sidebar, "Command Palette");
+        addNavigation(sidebar, "Search Everything");
         addNavigation(sidebar, "Target fingerprint");
         addNavigation(sidebar, "Runtime timeline");
         addNavigation(sidebar, "Profiler");
@@ -601,6 +658,7 @@ public final class MainFrame extends JFrame {
         advancedPluginNavigation.revalidate();
         cards.revalidate();
         cards.repaint();
+        refreshViewCommands();
     }
 
     private static String uniqueTabName(String requested, String pluginId, Set<String> names) {
@@ -612,7 +670,126 @@ public final class MainFrame extends JFrame {
         return result;
     }
 
+    private CommandContext commandContext() {
+        AnalysisTarget selected = null;
+        for (Component component : cards.getComponents()) if (component.isVisible() && component instanceof JComponent view) {
+            selected = ContextActions.selection(getFocusOwner(), view);
+            break;
+        }
+        return new CommandContext(session, selected, activeView, debuggerConnection.get());
+    }
+
+    private void configureCommands(ContextActions contextActions, LiveTracerPanel tracer, BytecodeCfgPanel cfg,
+                                   DifferenceTracingPanel differences, FieldWritesPanel writes,
+                                   DebuggerPanel debugger, CallGraphHeatmapPanel graph) {
+        debuggerConnection = debugger::connectionIdentity;
+        addCommand("palette", "Command palette", "commands actions navigate", "Ctrl+P", context -> "",
+                context -> commandPalette.open(context));
+        addCommand("search", "Search Everything", "global classes methods fields strings mappings notes", "Ctrl+Shift+F", context -> "",
+                context -> selectView("Search Everything"));
+        addCommand("trace.method", "Trace selected method", "live probe arguments return exception", "Ctrl+T",
+                context -> firstReason(selectionReason(context, AnalysisTarget.Kind.METHOD, true), tracer.canStartProbe() ? "" : "A probe is being installed"),
+                context -> resolveCommandTarget(context, target -> {
+                    selectView("Live tracer");
+                    tracer.traceTarget(target.identifier(), target.owner(), target.member(), target.descriptor());
+                }));
+        addCommand("trace.field", "Trace field writes", "watch PUTFIELD PUTSTATIC changes", "",
+                context -> firstReason(selectionReason(context, AnalysisTarget.Kind.FIELD, true), writes.canStartTrace() ? "" : "Field write analysis is busy"),
+                context -> resolveCommandTarget(context, target -> {
+                    selectView("Field writes");
+                    writes.traceField(target.identifier(), target.owner(), target.member(), target.descriptor());
+                }));
+        addCommand("trace.difference", "Start difference trace (baseline)", "record compare runs branches", "",
+                context -> firstReason(selectionReason(context, AnalysisTarget.Kind.METHOD, true), differences.canStartRecording() ? "" : "Difference tracing is busy"),
+                context -> resolveCommandTarget(context, target -> {
+                    selectView("Difference tracing");
+                    differences.recordBaseline(target.identifier(), target.owner(), target.member(), target.descriptor());
+                }));
+        addCommand("trace.cfg", "Trace CFG blocks", "control flow branches coverage", "",
+                context -> firstReason(selectionReason(context, AnalysisTarget.Kind.METHOD, true), cfg.canStartBlockTrace() ? "" : "CFG analysis or tracing is busy"),
+                context -> resolveCommandTarget(context, target -> {
+                    selectView("Bytecode CFG");
+                    cfg.traceTarget(target.identifier(), target.owner(), target.member(), target.descriptor());
+                }));
+        addCommand("xrefs", "Open selected symbol Xrefs", "references callers callees usages", "Ctrl+Alt+X",
+                context -> selectionReason(context, null, true),
+                context -> contextActions.execute(ContextAction.STATIC_USAGES, context.target()));
+        addCommand("graph", "Open call graph", "heatmap runtime counts callers", "Ctrl+G", context -> "", context -> {
+            AnalysisTarget target = context.target();
+            graph.filterTarget(target == null ? "" : target.owner() + (target.member().isBlank() ? "" : "." + target.member()));
+            selectView("Call graph");
+        });
+        addCommand("identifier", "Copy qualified JVM identifier", "copy original descriptor symbol", "Ctrl+Shift+C",
+                context -> context.target() == null || context.target().qualifiedJvmIdentifier().isBlank() ? "Select a JVM class, method, or field" : "",
+                context -> contextActions.execute(ContextAction.COPY_JVM_IDENTIFIER, context.target()));
+        addCommand("debug.breakpoint", "Toggle method breakpoint", "debug add remove JDWP", "Ctrl+B",
+                context -> firstReason(selectionReason(context, AnalysisTarget.Kind.METHOD, false),
+                        debugReason(context, debugger), debugger.canToggleMethodBreakpoint() ? "" : "Breakpoint update is busy"),
+                context -> debugger.toggleMethodBreakpoint(context.target()));
+        addCommand("debug.into", "Step into", "debug JDWP", "F7",
+                context -> firstReason(debugReason(context, debugger), debugger.canStep() ? "" : "Suspend the debugger and select a thread"),
+                context -> debugger.stepInto());
+        addCommand("debug.over", "Step over", "debug JDWP", "F8",
+                context -> firstReason(debugReason(context, debugger), debugger.canStep() ? "" : "Suspend the debugger and select a thread"),
+                context -> debugger.stepOver());
+        addCommand("debug.out", "Step out", "debug JDWP", "Shift+F8",
+                context -> firstReason(debugReason(context, debugger), debugger.canStep() ? "" : "Suspend the debugger and select a thread"),
+                context -> debugger.stepOut());
+        addCommand("debug.continue", "Continue execution", "resume debug JDWP", "F9",
+                context -> firstReason(debugReason(context, debugger), debugger.canContinue() ? "" : "The debugger is not suspended"),
+                context -> debugger.continueExecution());
+        refreshViewCommands();
+    }
+
+    private void refreshViewCommands() {
+        commands.removePrefix("view.");
+        for (String name : navigation.keySet()) {
+            if (name.equals("Command Palette") || name.equals("Search Everything") || name.equals("Call graph")) continue;
+            addCommand("view." + name, "Open " + name, "view navigate workspace", "", context -> "", context -> selectView(name));
+        }
+    }
+
+    private void addCommand(String id, String title, String keywords, String shortcut,
+                            Function<CommandContext, String> unavailable, Consumer<CommandContext> action) {
+        KeyStroke key = shortcut.isBlank() ? null : KeyStroke.getKeyStroke(shortcut.replace("Ctrl", "ctrl")
+                .replace("Shift", "shift").replace("Alt", "alt").replace('+', ' '));
+        commands.add(new WorkspaceCommand(id, title, keywords, shortcut, key, unavailable, action));
+    }
+
+    private String selectionReason(CommandContext context, AnalysisTarget.Kind kind, boolean attached) {
+        if (attached && (context.session() == null || context.session() != session)) return "Attach a JVM and select a target in the current session";
+        AnalysisTarget target = context.target();
+        if (target == null) return kind == null ? "Select a JVM symbol" : "Select a " + kind.name().toLowerCase() + " in the active view";
+        if (kind != null && target.kind() != kind) return "Select a " + kind.name().toLowerCase() + " in the active view";
+        if (target.kind() == AnalysisTarget.Kind.CONSTANT) return "Select a class, method, or field";
+        if (target.owner().isBlank() || kind == AnalysisTarget.Kind.METHOD && !target.descriptor().startsWith("(")) return "The selection has no exact JVM signature";
+        return "";
+    }
+
+    private static String debugReason(CommandContext context, DebuggerPanel debugger) {
+        return context.debuggerIdentity() == null || context.debuggerIdentity() != debugger.connectionIdentity()
+                ? "Connect JDWP for the current debugging session" : "";
+    }
+
+    private static String firstReason(String... reasons) {
+        for (String reason : reasons) if (!reason.isEmpty()) return reason;
+        return "";
+    }
+
+    private void resolveCommandTarget(CommandContext context, Consumer<AnalysisTarget> action) {
+        if (context.session() != session || session == null) return;
+        resolveContextDefinition(context.target(), target -> {
+            if (context.session() == session) action.accept(target);
+        });
+    }
+
     private void selectView(String name) {
+        if (name.equals("Command Palette")) {
+            if (commandPalette != null) commandPalette.open(commandContext());
+            return;
+        }
+        activeView = name;
+        if (name.equals("Search Everything")) SwingUtilities.invokeLater(searchEverything::focusSearch);
         cardLayout.show(cards, name);
         for (Map.Entry<String, JButton> entry : navigation.entrySet()) {
             boolean selected = entry.getKey().equals(name);

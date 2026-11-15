@@ -149,6 +149,7 @@ final class AgentServer implements Runnable {
                 + "\nruntime=" + (instrumentation.isNativeOnly() ? "JVMTI" : "Instrumentation") + "\n"));
         registry.put(Operation.METRICS, payload -> WireProtocol.utf8(inspector.metrics()));
         registry.put(Operation.CLASSES, payload -> WireProtocol.utf8(inspector.loadedClasses()));
+        registry.put(Operation.SEARCH_EVERYTHING, payload -> WireProtocol.utf8(inspector.searchEverything(payload)));
         registry.put(Operation.TARGET_FINGERPRINT, payload -> WireProtocol.utf8(inspector.targetFingerprint(payload)));
         registry.put(Operation.JVMTI_BIND, payload -> WireProtocol.utf8(inspector.bindNativeBackend(payload)));
         registry.put(Operation.JVMTI_STATUS, payload -> WireProtocol.utf8(NativeJvmtiBridge.status()));

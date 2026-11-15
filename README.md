@@ -37,6 +37,14 @@ The controller stays outside the inspected JVM. A small agent uses the Java Inst
 
 ## Quick Start
 
+### Search Everything
+
+Press **Ctrl+Shift+F** or open **Search Everything** in the sidebar to search classes, methods, fields, literal strings, mappings, timeline events, workspace notes, recorded network events, and existing exceptions from one view. Results preserve classloader-specific IDs and open the corresponding analysis view. Searches run in the background with per-category limits and report partial coverage. See the [Search Everything guide](docs/search-everything.md) for navigation and scan limits.
+
+### Command palette and keyboard workflow
+
+Press **Ctrl+P** to find commands and navigate views without using the sidebar. Contextual actions use the symbol selected in the active view, show why an action is unavailable, and recheck the session before executing. Shortcuts include **Ctrl+T** for method tracing, **Ctrl+B** for method breakpoints, **Ctrl+G** for Call graph, **Ctrl+Alt+X** for Xrefs, and **F7 / F8 / Shift+F8 / F9** for debugger control. Symbol menus and **Ctrl+Shift+C** copy original qualified JVM identifiers. See the [keyboard workflow guide](docs/keyboard-workflow.md) for requirements and trace behavior.
+
 ### AI clients through MCP
 
 Configure your MCP client to run `java -jar /absolute/path/jpi.jar --mcp`, then select and attach a target in the JPI window opened by the client. The **AI / MCP** panel shows STDIO server status and recent calls. The server exposes 14 analysis tools and `jpi://session`, with canonical definition IDs, bounded results, session-change checks, and a local audit log. It cannot attach, execute target code, patch classes, change fields, load agents, or access raw memory. See the [MCP setup and tool reference](docs/mcp.md) for client configuration and limits.

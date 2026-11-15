@@ -23,4 +23,12 @@ public record AnalysisTarget(Kind kind, String identifier, String owner, String 
     public String query() {
         return kind == Kind.CONSTANT ? value : owner + (member.isEmpty() ? "" : "." + member);
     }
+
+    public String qualifiedJvmIdentifier() {
+        if (owner.isBlank()) return "";
+        String type = owner.replace('.', '/');
+        if (member.isBlank()) return type;
+        if (descriptor.isBlank()) return "";
+        return type + "." + member + (descriptor.startsWith("(") ? "" : ":") + descriptor;
+    }
 }

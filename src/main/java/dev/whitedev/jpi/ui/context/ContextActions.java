@@ -6,11 +6,19 @@ import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.Point;
+import java.awt.Component;
+import java.awt.Toolkit;
+import java.awt.datatransfer.StringSelection;
+import dev.whitedev.jpi.ui.Ui;
 import java.util.function.BiConsumer;
 import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
+import java.util.function.Consumer;
+import javax.swing.event.PopupMenuEvent;
+import javax.swing.event.PopupMenuListener;
 
 public final class ContextActions {
+    private static final String SELECTION = "jpi.analysis.selection";
     private final BooleanSupplier connected;
     private final BiConsumer<ContextAction, AnalysisTarget> handler;
 
@@ -24,13 +32,58 @@ public final class ContextActions {
         for (ContextAction action : ContextAction.values()) {
             if (!action.supports(target)) continue;
             JMenuItem item = new JMenuItem(action.label());
-            item.setEnabled(connected.getAsBoolean());
-            item.addActionListener(event -> {
-                if (connected.getAsBoolean()) handler.accept(action, target);
-            });
+            item.setEnabled(action == ContextAction.COPY_JVM_IDENTIFIER || connected.getAsBoolean());
+            item.addActionListener(event -> execute(action, target));
             menu.add(item);
         }
         return menu;
+    }
+
+    public void execute(ContextAction action, AnalysisTarget target) {
+        if (!action.supports(target)) return;
+        if (action == ContextAction.COPY_JVM_IDENTIFIER) {
+            try { Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(target.qualifiedJvmIdentifier()), null); }
+            catch (RuntimeException error) { Ui.error(null, error); }
+        } else if (connected.getAsBoolean()) handler.accept(action, target);
+    }
+
+    public static void bindSelection(JComponent component, Supplier<AnalysisTarget> selection) { component.putClientProperty(SELECTION, selection); }
+
+    public void appendToPopup(JPopupMenu popup, Supplier<AnalysisTarget> selection) {
+        JMenu actions = new JMenu("JPI actions");
+        popup.addSeparator();
+        popup.add(actions);
+        popup.addPopupMenuListener(new PopupMenuListener() {
+            @Override public void popupMenuWillBecomeVisible(PopupMenuEvent event) {
+                actions.removeAll();
+                JPopupMenu available = menu(selection.get());
+                while (available.getComponentCount() > 0) actions.add(available.getComponent(0));
+                actions.setEnabled(actions.getMenuComponentCount() > 0);
+            }
+            @Override public void popupMenuWillBecomeInvisible(PopupMenuEvent event) {}
+            @Override public void popupMenuCanceled(PopupMenuEvent event) {}
+        });
+    }
+
+    public static AnalysisTarget selection(Component focused, JComponent activeView) {
+        if (focused != null && SwingUtilities.isDescendingFrom(focused, activeView)) {
+            for (Component current = focused; current != null; current = current.getParent()) {
+                if (current instanceof JComponent component && component.getClientProperty(SELECTION) instanceof Supplier<?> supplier)
+                    return supplier.get() instanceof AnalysisTarget target ? target : null;
+                if (current == activeView) break;
+            }
+        }
+        return selectedIn(activeView);
+    }
+
+    private static AnalysisTarget selectedIn(JComponent component) {
+        if (component.getClientProperty(SELECTION) instanceof Supplier<?> supplier)
+            return supplier.get() instanceof AnalysisTarget target ? target : null;
+        for (Component child : component.getComponents()) if (child instanceof JComponent candidate && child.isVisible()) {
+            AnalysisTarget target = selectedIn(candidate);
+            if (target != null) return target;
+        }
+        return null;
     }
 
     public void install(JComponent source, Supplier<AnalysisTarget> selection) {
@@ -38,7 +91,8 @@ public final class ContextActions {
     }
 
     public void install(JComponent source, Supplier<AnalysisTarget> selection,
-                        java.util.function.Consumer<Point> selectPoint) {
+                        Consumer<Point> selectPoint) {
+        bindSelection(source, selection);
         source.addMouseListener(new MouseAdapter() {
             @Override public void mousePressed(MouseEvent event) { show(event); }
             @Override public void mouseReleased(MouseEvent event) { show(event); }

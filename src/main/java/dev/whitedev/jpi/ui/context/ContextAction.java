@@ -9,7 +9,8 @@ public enum ContextAction {
     CFG("Open CFG"),
     BREAKPOINT("Add breakpoint"),
     WATCH_WRITES("Watch writes"),
-    INVESTIGATE("Investigate");
+    INVESTIGATE("Investigate"),
+    COPY_JVM_IDENTIFIER("Copy qualified JVM identifier");
 
     private final String label;
 
@@ -24,6 +25,7 @@ public enum ContextAction {
     public boolean supports(AnalysisTarget target) {
         if (target == null) return false;
         return switch (this) {
+            case COPY_JVM_IDENTIFIER -> !target.qualifiedJvmIdentifier().isEmpty();
             case INVESTIGATE -> !target.query().isBlank();
             case STATIC_USAGES -> target.kind() != AnalysisTarget.Kind.METHOD
                     || target.descriptor().startsWith("(");

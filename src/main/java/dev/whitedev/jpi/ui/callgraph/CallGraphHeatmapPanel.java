@@ -40,6 +40,7 @@ import java.util.Comparator;
 import java.util.List;
 
 public final class CallGraphHeatmapPanel extends JPanel implements SessionAware {
+    public void filterTarget(String value) { search.setText(value); refresh(); }
     private final DeobfuscationWorkspace workspace;
     private final CallGraphCanvas graph;
     private final JTextField search = new JTextField();

@@ -145,6 +145,21 @@ public final class RuntimeTimelinePanel extends JPanel implements SessionAware {
         }
     }
 
+    public void selectEvent(String key) {
+        live.setSelected(false);
+        filter.setText("");
+        source.setSelectedIndex(0);
+        correlatedOnly.setSelected(false);
+        refresh();
+        for (int row = 0; row < visible.size(); row++) if (visible.get(row).event().key().equals(key)) {
+            table.setRowSelectionInterval(row, row);
+            table.scrollRectToVisible(table.getCellRect(row, 0, true));
+            showSelected();
+            return;
+        }
+        status.setText("This event is no longer in the bounded timeline");
+    }
+
     private void queueRefresh() {
         Runnable update = () -> {
             if (live.isSelected()) refreshTimer.restart();

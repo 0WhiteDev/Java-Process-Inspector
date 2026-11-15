@@ -70,6 +70,7 @@ public final class ClassesPanel extends JPanel implements SessionAware {
     private final JTextArea bytecodeHex = Ui.outputArea();
     private final RSyntaxTextArea methodBody = CodeEditors.javaEditor(true);
     private final JComboBox<MethodInfo> methodSelector = new JComboBox<>();
+    private final JTabbedPane tabs = new JTabbedPane();
     private final JButton patchMethod = Ui.primaryButton("Apply method body");
     private final JButton traceMethod = Ui.secondaryButton("Trace method");
     private final JButton showXrefs = Ui.secondaryButton("Xrefs");
@@ -265,7 +266,6 @@ public final class ClassesPanel extends JPanel implements SessionAware {
         bytecodeHex.setEditable(true);
         bytecodeHex.setText("Decompile a selected class to load its bytecode.");
         methodBody.setText("Select a method to create a replacement body.");
-        JTabbedPane tabs = new JTabbedPane();
         tabs.addTab("Decompiled source", CodeEditors.scrollPane(source));
         tabs.addTab("Method patch", methodPatchPanel());
         tabs.addTab("Raw bytecode", rawBytecodePanel());
@@ -842,6 +842,21 @@ public final class ClassesPanel extends JPanel implements SessionAware {
     }
 
     public void setContextActions(ContextActions actions) {
+        ContextActions.bindSelection(this, () -> {
+            LoadedClassInfo selected = list.getSelectedValue();
+            MethodInfo method = (MethodInfo) methodSelector.getSelectedItem();
+            if (selected != null && tabs.getSelectedIndex() == 1 && method != null && selected.id.equals(methodClassId))
+                return AnalysisTarget.method(selected.id, selected.name, method.name, method.descriptor);
+            return selected == null ? null : AnalysisTarget.type(selected.id, selected.name);
+        });
+        ContextActions.bindSelection(source, () -> {
+            LoadedClassInfo selected = list.getSelectedValue();
+            return selected == null ? null : AnalysisTarget.type(selected.id, selected.name);
+        });
+        actions.appendToPopup(source.getPopupMenu(), () -> {
+            LoadedClassInfo selected = list.getSelectedValue();
+            return selected == null ? null : AnalysisTarget.type(selected.id, selected.name);
+        });
         actions.install(list, () -> {
             LoadedClassInfo selected = list.getSelectedValue();
             return selected == null ? null : AnalysisTarget.type(selected.id, selected.name);
@@ -853,6 +868,7 @@ public final class ClassesPanel extends JPanel implements SessionAware {
             return AnalysisTarget.method(selected.id, selected.name, method.name, method.descriptor);
         };
         actions.install(methodSelector, target);
+        ContextActions.bindSelection(methodBody, target);
         JMenu analysis = new JMenu("Analysis");
         JPopupMenu editorMenu = methodBody.getPopupMenu();
         editorMenu.addSeparator();

@@ -56,6 +56,20 @@ public final class FieldWritesPanel extends JPanel implements SessionAware {
     private final Map<Long, WriteEvent> captured = new LinkedHashMap<>();
     private final Timer pollTimer = new Timer(750, event -> poll());
     private InspectorSession session;
+    private String selectedDefinition = "";
+    private String selectedOwner = "";
+
+    public boolean canStartTrace() { return session != null && !loading; }
+
+    public void traceField(String identifier, String className, String name, String fieldDescriptor) {
+        if (!canStartTrace()) return;
+        selectedDefinition = identifier;
+        selectedOwner = className;
+        owner.setText(className);
+        field.setText(name);
+        descriptor.setText(fieldDescriptor);
+        start();
+    }
     private boolean polling;
     private boolean loading;
     private Consumer<String> traceValueAction;
@@ -154,6 +168,8 @@ public final class FieldWritesPanel extends JPanel implements SessionAware {
     }
 
     public void selectField(String owner, String fieldName, String fieldDescriptor) {
+        selectedDefinition = "";
+        selectedOwner = owner;
         this.owner.setText(owner);
         field.setText(fieldName);
         descriptor.setText(fieldDescriptor);
@@ -162,6 +178,8 @@ public final class FieldWritesPanel extends JPanel implements SessionAware {
     }
 
     public void setContextActions(ContextActions actions) {
+        ContextActions.bindSelection(this, () -> owner.getText().isBlank() || field.getText().isBlank() ? null
+                : AnalysisTarget.field(selectedDefinition, owner.getText(), field.getText(), descriptor.getText()));
         actions.install(sites, () -> {
             int row = sites.getSelectedRow();
             return row < 0 ? null : siteTargets.get(sites.convertRowIndexToModel(row));
@@ -177,6 +195,8 @@ public final class FieldWritesPanel extends JPanel implements SessionAware {
     }
 
     @Override public void setSession(InspectorSession session) {
+        selectedDefinition = "";
+        selectedOwner = "";
         this.session = session;
         polling = false;
         loading = false;
@@ -365,7 +385,9 @@ public final class FieldWritesPanel extends JPanel implements SessionAware {
     }
 
     private String targetPayload() {
-        return workspace.translateSource(owner.getText().trim()).source() + "\n" + field.getText().trim();
+        String type = owner.getText().trim();
+        return (type.equals(selectedOwner) && !selectedDefinition.isEmpty() ? selectedDefinition
+                : workspace.translateSource(type).source()) + "\n" + field.getText().trim();
     }
 
     private String displayWriter(WriteEvent event) {

@@ -358,6 +358,20 @@ public final class DeobfuscationWorkspacePanel extends JPanel implements Session
                 + (query.structured() ? "  |  structured filter" : ""));
     }
 
+    public void selectEntry(String key) {
+        filter.setText("");
+        kindFilter.setSelectedIndex(0);
+        refreshRows();
+        for (int row = 0; row < model.getRowCount(); row++) if (model.entry(row).key().equals(key)) {
+            int view = table.convertRowIndexToView(row);
+            table.setRowSelectionInterval(view, view);
+            table.scrollRectToVisible(table.getCellRect(view, 0, true));
+            table.requestFocusInWindow();
+            return;
+        }
+        status.setText("This mapping or note is no longer in the workspace");
+    }
+
     public void setContextActions(ContextActions actions) {
         actions.install(table, () -> {
             int row = table.getSelectedRow();

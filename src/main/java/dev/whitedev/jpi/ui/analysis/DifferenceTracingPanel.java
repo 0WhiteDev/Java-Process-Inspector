@@ -10,6 +10,8 @@ import dev.whitedev.jpi.protocol.Operation;
 import dev.whitedev.jpi.ui.Async;
 import dev.whitedev.jpi.ui.SessionAware;
 import dev.whitedev.jpi.ui.Ui;
+import dev.whitedev.jpi.ui.context.AnalysisTarget;
+import dev.whitedev.jpi.ui.context.ContextActions;
 import dev.whitedev.jpi.ui.timeline.RuntimeTimelineStore;
 import dev.whitedev.jpi.ui.timeline.TimelineEvent;
 import dev.whitedev.jpi.ui.timeline.TimelineSource;
@@ -45,6 +47,20 @@ import java.util.List;
 import java.util.Set;
 
 public final class DifferenceTracingPanel extends JPanel implements SessionAware {
+    public void setContextActions(ContextActions actions) {
+        ContextActions.bindSelection(this, () -> classIdentifier.isEmpty() ? null
+                : AnalysisTarget.method(classIdentifier, actualClass, actualMethod, actualDescriptor));
+        actions.install(methodName, () -> classIdentifier.isEmpty() ? null
+                : AnalysisTarget.method(classIdentifier, actualClass, actualMethod, actualDescriptor));
+    }
+    public boolean canStartRecording() { return session != null && capture == null && !preparing && !comparing; }
+
+    public void recordBaseline(String identifier, String owner, String method, String descriptor) {
+        if (!canStartRecording()) return;
+        selectTarget(identifier, owner, method, descriptor);
+        branches.setSelected(true);
+        start(true);
+    }
     private final DeobfuscationWorkspace workspace;
     private final RuntimeTimelineStore timeline;
     private final DifferenceAnalyzer analyzer = new DifferenceAnalyzer();

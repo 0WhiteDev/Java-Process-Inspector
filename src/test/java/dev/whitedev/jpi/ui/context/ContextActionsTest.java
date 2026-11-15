@@ -14,6 +14,35 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.junit.jupiter.api.Assertions.*;
 
 class ContextActionsTest {
+    @Test void formatsOriginalJvmIdentifiersWithoutUsingAliasesOrLosingDescriptors() {
+        assertEquals("com/foo/Auth.validate(Ljava/lang/String;)Z",
+                AnalysisTarget.method("c:1", "com.foo.Auth", "validate", "(Ljava/lang/String;)Z").qualifiedJvmIdentifier());
+        assertEquals("com/foo/Auth.token:Ljava/lang/String;",
+                AnalysisTarget.field("c:1", "com.foo.Auth", "token", "Ljava/lang/String;").qualifiedJvmIdentifier());
+        assertEquals("com/foo/Auth", AnalysisTarget.type("c:1", "com.foo.Auth").qualifiedJvmIdentifier());
+        assertEquals("", AnalysisTarget.constant("auth").qualifiedJvmIdentifier());
+        assertEquals("", AnalysisTarget.method("c:1", "com.foo.Auth", "validate", "").qualifiedJvmIdentifier());
+    }
+
+    @Test void resolvesTheFocusedSelectionBeforeViewDefaultsAndDoesNotReuseAnEmptySelection() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            JPanel root = new JPanel();
+            JTextField editor = new JTextField();
+            JTable table = new JTable();
+            root.add(editor);
+            root.add(table);
+            AnalysisTarget method = AnalysisTarget.method("c:1", "a.b", "a", "()V");
+            AnalysisTarget field = AnalysisTarget.field("c:2", "x.y", "value", "I");
+            ContextActions.bindSelection(root, () -> method);
+            ContextActions.bindSelection(table, () -> field);
+            assertSame(field, ContextActions.selection(table, root));
+            assertSame(method, ContextActions.selection(editor, root));
+            assertSame(method, ContextActions.selection(new JButton(), root));
+            ContextActions.bindSelection(editor, () -> null);
+            assertNull(ContextActions.selection(editor, root));
+        });
+    }
+
     @Test void exposesOnlyActionsSupportedByTheSelectedSymbol() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
             ContextActions actions = new ContextActions(() -> true, (action, target) -> { });
@@ -21,9 +50,9 @@ class ContextActionsTest {
             assertTrue(method.containsAll(List.of("Find static usages", "Find runtime usages", "Trace callers",
                     "Trace callees", "Open CFG", "Add breakpoint", "Investigate")));
             assertFalse(method.contains("Watch writes"));
-            assertEquals(List.of("Find static usages", "Watch writes", "Investigate"),
+            assertEquals(List.of("Find static usages", "Watch writes", "Investigate", "Copy qualified JVM identifier"),
                     labels(actions.menu(AnalysisTarget.field("c:1", "a.b", "value", "I"))));
-            assertEquals(List.of("Find static usages", "Find runtime usages", "Investigate"),
+            assertEquals(List.of("Find static usages", "Find runtime usages", "Investigate", "Copy qualified JVM identifier"),
                     labels(actions.menu(AnalysisTarget.type("c:1", "a.b"))));
             assertEquals(List.of("Find static usages", "Investigate"),
                     labels(actions.menu(AnalysisTarget.constant("https://example.test"))));
@@ -55,7 +84,10 @@ class ContextActionsTest {
             attached.set(false);
             item.doClick();
             assertFalse(called.get());
-            for (var component : actions.menu(target).getComponents()) assertFalse(component.isEnabled());
+            for (var component : actions.menu(target).getComponents()) {
+                JMenuItem command = (JMenuItem) component;
+                assertEquals(command.getText().equals("Copy qualified JVM identifier"), command.isEnabled());
+            }
         });
     }
 

@@ -2,6 +2,7 @@ package dev.whitedev.jpi.agent;
 
 import dev.whitedev.jpi.agent.fingerprint.TargetFingerprintCapture;
 import dev.whitedev.jpi.agent.jvmti.NativeJvmtiBridge;
+import dev.whitedev.jpi.agent.search.TargetSearch;
 import java.nio.charset.StandardCharsets;
 
 import dev.whitedev.jpi.agent.analysis.ConstantPoolSearch;
@@ -937,6 +938,14 @@ final class TargetInspector {
     private byte[] availableBytes(Class<?> type) {
         byte[] bytecode = registry.bytecodeFor(type);
         return bytecode == null ? resourceBytes(type) : bytecode;
+    }
+
+    String searchEverything(String query) throws IOException {
+        return TargetSearch.search(instrumentation.getAllLoadedClasses(), query, new TargetSearch.Source() {
+            @Override public String identifier(Class<?> type) { return index(type); }
+            @Override public String loader(Class<?> type) { return ClassRegistry.loaderLabel(type.getClassLoader()); }
+            @Override public byte[] bytes(Class<?> type) { return availableBytes(type); }
+        });
     }
 
     private String index(Class<?> type) {

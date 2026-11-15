@@ -138,6 +138,16 @@ public final class BytecodeCfgPanel extends JPanel implements SessionAware {
     }
 
     public void selectTarget(String identifier, String owner, String method, String methodDescriptor) {
+        selectTarget(identifier, owner, method, methodDescriptor, false);
+    }
+
+    public boolean canStartBlockTrace() { return session != null && !traceActive && !analyzing; }
+
+    public void traceTarget(String identifier, String owner, String method, String descriptor) {
+        if (canStartBlockTrace()) selectTarget(identifier, owner, method, descriptor, true);
+    }
+
+    private void selectTarget(String identifier, String owner, String method, String methodDescriptor, boolean traceAfterAnalysis) {
         Runnable select = () -> {
             classIdentifier = identifier;
             actualClassName = owner;
@@ -156,7 +166,7 @@ public final class BytecodeCfgPanel extends JPanel implements SessionAware {
             status.setForeground(Ui.MUTED);
             status.setText("Ready to analyze " + owner + "." + method + methodDescriptor);
             updateButtons();
-            analyze();
+            analyze(traceAfterAnalysis);
         };
         if (traceActive && session != null && !probeId.isEmpty()) stopTrace(select);
         else select.run();
@@ -173,6 +183,7 @@ public final class BytecodeCfgPanel extends JPanel implements SessionAware {
                 classIdentifier.isEmpty() ? null : AnalysisTarget.method(
                         classIdentifier, actualClassName, actualMethodName, actualDescriptor);
         actions.install(graph, target);
+        ContextActions.bindSelection(this, target);
         actions.install(methodName, target);
     }
 
@@ -199,6 +210,10 @@ public final class BytecodeCfgPanel extends JPanel implements SessionAware {
     }
 
     private void analyze() {
+        analyze(false);
+    }
+
+    private void analyze(boolean traceAfterAnalysis) {
         InspectorSession current = session;
         if (current == null || classIdentifier.isEmpty() || analyzing) return;
         analyzing = true;
@@ -225,6 +240,7 @@ public final class BytecodeCfgPanel extends JPanel implements SessionAware {
             }
             analyzing = false;
             updateButtons();
+            if (traceAfterAnalysis && model != null) startTrace();
         }, error -> {
             if (session != current || requestGeneration != generation) return;
             analyzing = false;

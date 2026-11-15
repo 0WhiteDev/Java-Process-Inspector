@@ -6,6 +6,8 @@ import dev.whitedev.jpi.protocol.Operation;
 import dev.whitedev.jpi.ui.Async;
 import dev.whitedev.jpi.ui.SessionAware;
 import dev.whitedev.jpi.ui.Ui;
+import dev.whitedev.jpi.ui.context.AnalysisTarget;
+import dev.whitedev.jpi.ui.context.ContextActions;
 
 import javax.swing.JButton;
 import javax.swing.JLabel;
@@ -33,6 +35,13 @@ import java.util.List;
 import java.util.function.BiConsumer;
 
 public final class ExceptionAnalyzerPanel extends JPanel implements SessionAware {
+    public void setContextActions(ContextActions actions) {
+        actions.install(types, () -> selectedType().isBlank() ? null : AnalysisTarget.type("", selectedType()));
+        actions.install(locations, () -> {
+            ExceptionSnapshot.Location location = selectedLocation();
+            return location == null ? null : AnalysisTarget.method("", location.owner(), location.method(), location.descriptor());
+        });
+    }
     private final DefaultTableModel typesModel = model("Exception", "Window events", "Session total", "First seen", "Last seen", "Threads");
     private final DefaultTableModel locationsModel = model("Events", "Class", "Method", "Descriptor", "Line");
     private final JTable types = new JTable(typesModel);
@@ -55,6 +64,17 @@ public final class ExceptionAnalyzerPanel extends JPanel implements SessionAware
     private List<ExceptionSnapshot.Location> selectedLocations = List.of();
     private boolean loading;
     private boolean rendering;
+    private String requestedType;
+
+    public ExceptionSnapshot snapshotForSearch() { return snapshot; }
+
+    public void selectType(String type) {
+        requestedType = type;
+        filter.setText(type);
+        if (snapshot != null) render(snapshot);
+        requestedType = type;
+        request(Operation.EXCEPTION_SNAPSHOT);
+    }
 
     public ExceptionAnalyzerPanel(BiConsumer<String, Selection> navigation) {
         super(new BorderLayout(0, 10));
@@ -123,6 +143,7 @@ public final class ExceptionAnalyzerPanel extends JPanel implements SessionAware
         timer.stop();
         session = value;
         snapshot = null;
+        requestedType = null;
         loading = false;
         typesModel.setRowCount(0);
         locationsModel.setRowCount(0);
@@ -160,7 +181,8 @@ public final class ExceptionAnalyzerPanel extends JPanel implements SessionAware
     }
 
     private void render(ExceptionSnapshot value) {
-        String selectedType = selectedType();
+        String selectedType = requestedType == null ? selectedType() : requestedType;
+        requestedType = null;
         ExceptionSnapshot.Location selected = selectedLocation();
         snapshot = value;
         rendering = true;

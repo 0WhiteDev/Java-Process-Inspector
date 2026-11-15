@@ -17,6 +17,8 @@ import dev.whitedev.jpi.ui.Async;
 import dev.whitedev.jpi.ui.CodeEditors;
 import dev.whitedev.jpi.ui.SessionAware;
 import dev.whitedev.jpi.ui.Ui;
+import dev.whitedev.jpi.ui.context.AnalysisTarget;
+import dev.whitedev.jpi.ui.context.ContextActions;
 import dev.whitedev.jpi.ui.timeline.RuntimeTimelineStore;
 import dev.whitedev.jpi.ui.timeline.TimelineEvent;
 import dev.whitedev.jpi.ui.timeline.TimelineSource;
@@ -64,6 +66,57 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
 public final class DebuggerPanel extends JPanel implements SessionAware {
+    private boolean togglingBreakpoint;
+
+    public Object connectionIdentity() { return debugger; }
+    public boolean canToggleMethodBreakpoint() { return debugger != null && debugger.state() != DebugState.DISCONNECTED && !togglingBreakpoint; }
+    public boolean canStep() { return stepInto.isEnabled() && threads.getSelectedValue() != null; }
+    public boolean canContinue() { return resume.isEnabled(); }
+    public void stepInto() { if (canStep()) step(StepManager.Depth.INTO); }
+    public void stepOver() { if (canStep()) step(StepManager.Depth.OVER); }
+    public void stepOut() { if (canStep()) step(StepManager.Depth.OUT); }
+    public void continueExecution() { if (canContinue()) resume.doClick(); }
+
+    public void toggleMethodBreakpoint(AnalysisTarget target) {
+        if (!canToggleMethodBreakpoint()) return;
+        DebugSession current = debugger;
+        togglingBreakpoint = true;
+        Async.run(() -> {
+            var existing = current.breakpoints().snapshot().stream().filter(view -> view.spec().type() == BreakpointSpec.Type.METHOD
+                    && view.spec().className().equals(target.owner()) && view.spec().methodName().equals(target.member())
+                    && view.spec().descriptor().equals(target.descriptor())).toList();
+            if (existing.isEmpty()) current.breakpoints().add(new BreakpointSpec(target.owner(), target.member(), target.descriptor(),
+                    null, null, BreakpointSpec.Type.METHOD, BreakpointSpec.SuspendPolicy.THREAD, true));
+            else for (var view : existing) current.breakpoints().remove(view.id());
+            return existing.isEmpty() ? "Method breakpoint added" : "Method breakpoint removed";
+        }, result -> {
+            if (debugger != current) return;
+            togglingBreakpoint = false;
+            state.setText(result + ": " + target.qualifiedJvmIdentifier());
+            refreshBreakpoints();
+        }, error -> {
+            if (debugger != current) return;
+            togglingBreakpoint = false;
+            Ui.error(this, error);
+        });
+    }
+
+    public void setContextActions(ContextActions actions) {
+        ContextActions.bindSelection(this, this::selectedFrameTarget);
+        actions.install(frames, this::selectedFrameTarget);
+        actions.install(breakpointTable, () -> {
+            BreakpointManager.BreakpointView selected = selectedBreakpoint();
+            if (selected == null) return null;
+            BreakpointSpec spec = selected.spec();
+            return spec.methodName().isBlank() || spec.descriptor().isBlank() ? AnalysisTarget.type("", spec.className())
+                    : AnalysisTarget.method("", spec.className(), spec.methodName(), spec.descriptor());
+        });
+    }
+
+    private AnalysisTarget selectedFrameTarget() {
+        StackFrameManager.FrameView frame = frames.getSelectedValue();
+        return frame == null ? null : AnalysisTarget.method("", frame.className(), frame.methodName(), frame.descriptor());
+    }
     public List<BreakpointSpec> fingerprintBreakpoints() {
         DebugSession current = debugger;
         return current == null ? List.of() : current.breakpoints().snapshot().stream().map(BreakpointManager.BreakpointView::spec).toList();
@@ -468,6 +521,7 @@ public final class DebuggerPanel extends JPanel implements SessionAware {
     }
 
     private void opened(DebugSession session) {
+        togglingBreakpoint = false;
         debugger = session;
         session.addListener(new DebugSession.Listener() {
             @Override public void onState(DebugState value) {

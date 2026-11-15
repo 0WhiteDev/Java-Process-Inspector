@@ -134,6 +134,10 @@ public final class XrefsPanel extends JPanel implements SessionAware {
     }
 
     public void setContextActions(ContextActions actions) {
+        ContextActions.bindSelection(this, () -> classIdentifier.isBlank() ? null : method.getText().isBlank()
+                ? AnalysisTarget.type(classIdentifier, actualClassName) : descriptor.getText().startsWith("(")
+                ? AnalysisTarget.method(classIdentifier, actualClassName, method.getText(), descriptor.getText())
+                : AnalysisTarget.field(classIdentifier, actualClassName, method.getText(), descriptor.getText()));
         calledBy.install(actions);
         calls.install(actions);
         data.install(actions);

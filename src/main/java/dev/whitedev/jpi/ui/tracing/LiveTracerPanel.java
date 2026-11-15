@@ -37,6 +37,15 @@ import java.util.List;
 import java.util.Map;
 
 public final class LiveTracerPanel extends JPanel implements SessionAware {
+    private boolean installing;
+
+    public boolean canStartProbe() { return session != null && !installing; }
+
+    public void traceTarget(String identifier, String owner, String method, String descriptor) {
+        if (!canStartProbe()) return;
+        selectTarget(identifier, owner, method, descriptor);
+        startProbe();
+    }
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm:ss.SSS")
             .withZone(ZoneId.systemDefault());
     private static final int MAX_LOCAL_EVENTS = 10_000;
@@ -213,7 +222,7 @@ public final class LiveTracerPanel extends JPanel implements SessionAware {
         methods.addItem(method);
         methods.setSelectedItem(method);
         status.setText("Ready to trace " + mappedClass + "." + mappedMethod + descriptor);
-        start.setEnabled(session != null);
+        start.setEnabled(session != null && !installing);
         debugNextCall.setEnabled(debugger != null);
     }
 
@@ -224,6 +233,7 @@ public final class LiveTracerPanel extends JPanel implements SessionAware {
     }
 
     @Override public void setSession(InspectorSession session) {
+        installing = false;
         this.session = session;
         loadingMethods = false;
         polling = false;
@@ -367,6 +377,7 @@ public final class LiveTracerPanel extends JPanel implements SessionAware {
     }
 
     private void startProbe() {
+        if (installing) return;
         InspectorSession current = session;
         TraceMethod method = (TraceMethod) methods.getSelectedItem();
         String identifier = classIdentifier.getText().trim();
@@ -375,15 +386,19 @@ public final class LiveTracerPanel extends JPanel implements SessionAware {
             return;
         }
         start.setEnabled(false);
+        installing = true;
         status.setText("Installing probe...");
         String payload = identifier + "\n" + method.name + "\n" + method.descriptor + "\n" + settings();
         Async.run(() -> current.requestText(Operation.TRACE_START, payload), response -> {
             if (session != current) return;
+            installing = false;
             status.setForeground(Ui.SUCCESS);
             status.setText(response.contains("\t") ? response.substring(response.indexOf('\t') + 1) : response);
             start.setEnabled(true);
             poll();
         }, error -> {
+            if (session != current) return;
+            installing = false;
             status.setForeground(Ui.WARNING);
             status.setText("Probe installation failed");
             start.setEnabled(true);
@@ -619,6 +634,11 @@ public final class LiveTracerPanel extends JPanel implements SessionAware {
     }
 
     public void setContextActions(ContextActions actions) {
+        ContextActions.bindSelection(this, () -> {
+            TraceMethod method = (TraceMethod) methods.getSelectedItem();
+            return method == null || classIdentifier.getText().isBlank() ? null : AnalysisTarget.method(
+                    classIdentifier.getText(), currentClassName, method.name, method.descriptor);
+        });
         unifiedContext = true;
         actions.install(events, () -> {
             int row = events.getSelectedRow();
