@@ -3,6 +3,8 @@ package dev.whitedev.jpi.agent;
 import dev.whitedev.jpi.protocol.Operation;
 import org.junit.jupiter.api.Test;
 
+import java.lang.instrument.Instrumentation;
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.EnumSet;
@@ -28,11 +30,11 @@ class AgentCommandRegistryTest {
     }
 
     private AgentServer createMinimalServer() throws Exception {
-        java.lang.reflect.Constructor<AgentServer> ctor =
+        Constructor<AgentServer> ctor =
                 AgentServer.class.getDeclaredConstructor(
-                        dev.whitedev.jpi.agent.AgentOptions.class,
-                        java.lang.instrument.Instrumentation.class,
-                        dev.whitedev.jpi.agent.ClassRegistry.class);
+                        AgentOptions.class,
+                        Instrumentation.class,
+                        ClassRegistry.class);
         ctor.setAccessible(true);
         return ctor.newInstance(null, null, null);
     }
@@ -65,7 +67,7 @@ class AgentCommandRegistryTest {
         AgentServer server = createMinimalServer();
         Map<Operation, AgentCommand> map = registry(server);
 
-        AgentCommand add    = map.get(Operation.FILE_RULE_ADD);
+        AgentCommand add = map.get(Operation.FILE_RULE_ADD);
         AgentCommand update = map.get(Operation.FILE_RULE_UPDATE);
 
         assertNotNull(add);

@@ -79,7 +79,8 @@ public final class ThreadAnalyzer {
         int ended = markEnded(live, now);
         prune();
         Collections.sort(current, new Comparator<CurrentThread>() {
-            @Override public int compare(CurrentThread left, CurrentThread right) {
+            @Override
+            public int compare(CurrentThread left, CurrentThread right) {
                 int cpu = Long.compare(right.cpuDelta, left.cpuDelta);
                 return cpu != 0 ? cpu : left.name.compareToIgnoreCase(right.name);
             }

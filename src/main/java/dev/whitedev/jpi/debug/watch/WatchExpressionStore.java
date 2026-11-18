@@ -14,13 +14,17 @@ import java.util.List;
 public final class WatchExpressionStore {
     private final Path path;
 
-    public WatchExpressionStore(Path path) { this.path = path.toAbsolutePath(); }
+    public WatchExpressionStore(Path path) {
+        this.path = path.toAbsolutePath();
+    }
 
     public static WatchExpressionStore defaultStore() {
         return new WatchExpressionStore(Path.of(System.getProperty("user.home"), ".jpi", "watches.txt"));
     }
 
-    public Path path() { return path; }
+    public Path path() {
+        return path;
+    }
 
     public List<String> load() throws IOException {
         if (!Files.exists(path)) return List.of();
@@ -28,8 +32,11 @@ public final class WatchExpressionStore {
         List<String> values = new ArrayList<>();
         for (String line : Files.readAllLines(path, StandardCharsets.UTF_8)) {
             if (line.isBlank()) continue;
-            try { values.add(new String(Base64.getDecoder().decode(line), StandardCharsets.UTF_8)); }
-            catch (IllegalArgumentException error) { throw new IOException("Invalid watch list encoding", error); }
+            try {
+                values.add(new String(Base64.getDecoder().decode(line), StandardCharsets.UTF_8));
+            } catch (IllegalArgumentException error) {
+                throw new IOException("Invalid watch list encoding", error);
+            }
         }
         return validate(values);
     }
@@ -41,9 +48,14 @@ public final class WatchExpressionStore {
         try {
             List<String> lines = validated.stream().map(value -> Base64.getEncoder().encodeToString(value.getBytes(StandardCharsets.UTF_8))).toList();
             Files.write(temporary, lines, StandardCharsets.UTF_8);
-            try { Files.move(temporary, path, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING); }
-            catch (AtomicMoveNotSupportedException error) { Files.move(temporary, path, StandardCopyOption.REPLACE_EXISTING); }
-        } finally { Files.deleteIfExists(temporary); }
+            try {
+                Files.move(temporary, path, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+            } catch (AtomicMoveNotSupportedException error) {
+                Files.move(temporary, path, StandardCopyOption.REPLACE_EXISTING);
+            }
+        } finally {
+            Files.deleteIfExists(temporary);
+        }
     }
 
     public static List<String> validate(List<String> values) throws IOException {

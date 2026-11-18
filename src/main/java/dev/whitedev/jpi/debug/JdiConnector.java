@@ -9,6 +9,7 @@ import com.sun.jdi.connect.LaunchingConnector;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.List;
 import java.util.Map;
 
@@ -87,7 +88,7 @@ public final class JdiConnector {
     private static void drain(InputStream input, String name) {
         Thread thread = new Thread(() -> {
             try (input) {
-                input.transferTo(java.io.OutputStream.nullOutputStream());
+                input.transferTo(OutputStream.nullOutputStream());
             } catch (IOException ignored) {
             }
         }, name);

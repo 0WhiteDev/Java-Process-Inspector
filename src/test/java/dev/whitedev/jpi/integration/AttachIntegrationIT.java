@@ -1,41 +1,49 @@
 package dev.whitedev.jpi.integration;
 
+import dev.whitedev.jpi.agent.patch.PatchHistory;
+import dev.whitedev.jpi.analysis.patch.PatchEntry;
 import dev.whitedev.jpi.attach.AttachService;
 import dev.whitedev.jpi.attach.InspectorSession;
 import dev.whitedev.jpi.attach.JvmDescriptor;
 import dev.whitedev.jpi.attach.LaunchResult;
-import dev.whitedev.jpi.protocol.Operation;
+import dev.whitedev.jpi.exceptions.ExceptionSnapshot;
 import dev.whitedev.jpi.export.SessionSnapshotExporter;
-import dev.whitedev.jpi.investigation.InvestigationAnalyzer;
-import dev.whitedev.jpi.investigation.InvestigationReport;
-import dev.whitedev.jpi.investigation.assistant.InvestigationAssistant;
-import java.time.Duration;
 import dev.whitedev.jpi.file.FileDecision;
 import dev.whitedev.jpi.file.FileOperation;
 import dev.whitedev.jpi.file.FileProtocolCodec;
 import dev.whitedev.jpi.file.FileRule;
+import dev.whitedev.jpi.fingerprint.TargetFingerprint;
+import dev.whitedev.jpi.investigation.InvestigationAnalyzer;
+import dev.whitedev.jpi.investigation.InvestigationReport;
+import dev.whitedev.jpi.investigation.assistant.InvestigationAssistant;
+import dev.whitedev.jpi.loader.ClassLoaderSnapshot;
+import dev.whitedev.jpi.protocol.Operation;
 import org.junit.jupiter.api.Test;
+
 import java.io.*;
 import java.net.InetAddress;
 import java.net.ServerSocket;
-import java.util.concurrent.TimeUnit;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Collections;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.Collections;
+import java.util.concurrent.TimeUnit;
 import java.util.jar.Attributes;
 import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
 import java.util.jar.Manifest;
 import java.util.zip.ZipFile;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 class AttachIntegrationIT {
     private static final File AGENT_JAR = new File(System.getProperty("jpi.agent.jar", "target/jpi.jar"));
     private static final String TEST_CLASSES = System.getProperty("jpi.test.classes", "target/test-classes");
 
-    @Test void packagedAgentAttachesAndInspectsARealChildJvm() throws Exception {
+    @Test
+    void packagedAgentAttachesAndInspectsARealChildJvm() throws Exception {
         String java = new File(new File(System.getProperty("java.home"), "bin"), isWindows() ? "java.exe" : "java").getAbsolutePath();
         Process target = new ProcessBuilder(java, "-cp", TEST_CLASSES, AttachTarget.class.getName()).redirectErrorStream(true).start();
         try {
@@ -45,7 +53,7 @@ class AttachIntegrationIT {
             InspectorSession session = new AttachService(AGENT_JAR).attach(new JvmDescriptor(pid, "attach-smoke-target"));
             try {
                 assertTrue(session.requestText(Operation.METRICS, "").contains("pid=" + pid));
-                var fingerprint = dev.whitedev.jpi.fingerprint.TargetFingerprint.parse(session.requestText(
+                var fingerprint = TargetFingerprint.parse(session.requestText(
                         Operation.TARGET_FINGERPRINT, AttachTarget.class.getName()));
                 assertEquals(AttachTarget.class.getName(), fingerprint.mainClass());
                 assertFalse(fingerprint.javaVersion().isEmpty());
@@ -72,10 +80,10 @@ class AttachIntegrationIT {
                 session.requestText(Operation.EXCEPTION_START, "durationSeconds=30");
                 String exceptionWork = "public class ExceptionWork { public static void emit() { throw new IllegalStateException(\"analysis fixture\"); } public static void execute(java.io.PrintStream out) { for (int i = 0; i < 3; i++) { try { emit(); } catch (IllegalStateException expected) { } } out.print(true); } }";
                 assertEquals("true", session.requestText(Operation.EXECUTE, exceptionWork));
-                dev.whitedev.jpi.exceptions.ExceptionSnapshot exceptionSnapshot = null;
+                ExceptionSnapshot exceptionSnapshot = null;
                 boolean foundException = false;
                 for (int attempt = 0; attempt < 200; attempt++) {
-                    exceptionSnapshot = dev.whitedev.jpi.exceptions.ExceptionSnapshot.parse(
+                    exceptionSnapshot = ExceptionSnapshot.parse(
                             session.requestText(Operation.EXCEPTION_SNAPSHOT, "30"));
                     foundException = exceptionSnapshot.entries().stream().anyMatch(entry ->
                             entry.type().equals("java.lang.IllegalStateException") && entry.total() >= 3
@@ -86,13 +94,13 @@ class AttachIntegrationIT {
                 }
                 assertTrue(foundException, String.valueOf(exceptionSnapshot));
                 session.requestText(Operation.EXCEPTION_CLEAR, "");
-                assertTrue(dev.whitedev.jpi.exceptions.ExceptionSnapshot.parse(
+                assertTrue(ExceptionSnapshot.parse(
                         session.requestText(Operation.EXCEPTION_SNAPSHOT, "30")).entries().isEmpty());
-                assertEquals("stopped", dev.whitedev.jpi.exceptions.ExceptionSnapshot.parse(
+                assertEquals("stopped", ExceptionSnapshot.parse(
                         session.requestText(Operation.EXCEPTION_STOP, "")).state());
                 String loadedClasses = session.requestText(Operation.CLASSES, "");
                 assertTrue(loadedClasses.contains(AttachTarget.class.getName()));
-                var loaderSnapshot = dev.whitedev.jpi.loader.ClassLoaderSnapshot.parse(session.requestText(Operation.CLASSLOADER_SNAPSHOT, ""));
+                var loaderSnapshot = ClassLoaderSnapshot.parse(session.requestText(Operation.CLASSLOADER_SNAPSHOT, ""));
                 var targetDefinition = loaderSnapshot.definitions().stream()
                         .filter(definition -> definition.name().equals(AttachTarget.class.getName())).findFirst().orElseThrow();
                 assertTrue(loaderSnapshot.loaders().stream().anyMatch(loader -> loader.id().equals(targetDefinition.loaderId())));
@@ -246,7 +254,8 @@ class AttachIntegrationIT {
                 assertFalse(outgoing.contains("R\tSTATIC\tCALLED_BY\t"));
                 var automatic = new InvestigationAssistant(session::requestText,
                         new InvestigationAssistant.Limits(1, 3, 1, 20, 30, Duration.ofSeconds(15)))
-                        .run("before", progress -> { }, () -> false);
+                        .run("before", progress -> {
+                        }, () -> false);
                 assertTrue(automatic.investigation().entryPoints().stream().anyMatch(entry ->
                         "runtimeValue".equals(entry.methodName()) && entry.runtimeHits() > 0));
                 assertFalse(automatic.probes().isEmpty());
@@ -266,15 +275,15 @@ class AttachIntegrationIT {
                 assertTrue(session.requestText(Operation.PATCH_METHOD, methodPatch).contains("Patched"));
                 assertEquals("method-patched", session.requestText(Operation.EXECUTE, probe));
                 byte[] patchedBytecode = session.request(Operation.CLASS_BYTES, classId);
-                var patchEntry = dev.whitedev.jpi.analysis.patch.PatchEntry.parse(session.requestText(Operation.PATCH_HISTORY, classId)).getFirst();
+                var patchEntry = PatchEntry.parse(session.requestText(Operation.PATCH_HISTORY, classId)).getFirst();
                 assertArrayEquals(beforePatch, session.request(Operation.CLASS_VERSION, classId + "\nbefore:" + patchEntry.id()));
                 assertArrayEquals(patchedBytecode, session.request(Operation.CLASS_VERSION, classId + "\nafter:" + patchEntry.id()));
                 assertThrows(IOException.class, () -> session.requestText(Operation.ROLLBACK_PATCH, classId + "\n" + patchEntry.id() + "\ninvalid"));
                 assertEquals("method-patched", session.requestText(Operation.EXECUTE, probe));
                 assertTrue(session.requestText(Operation.ROLLBACK_PATCH, classId + "\n" + patchEntry.id() + "\n"
-                        + dev.whitedev.jpi.agent.patch.PatchHistory.sha256(patchedBytecode)).contains("Restored"));
+                        + PatchHistory.sha256(patchedBytecode)).contains("Restored"));
                 assertEquals("before", session.requestText(Operation.EXECUTE, probe));
-                assertEquals(2, dev.whitedev.jpi.analysis.patch.PatchEntry.parse(session.requestText(Operation.PATCH_HISTORY, classId)).size());
+                assertEquals(2, PatchEntry.parse(session.requestText(Operation.PATCH_HISTORY, classId)).size());
                 assertTrue(session.requestText(Operation.ROLLBACK_CLASS, classId).contains("Restored"));
                 assertEquals("before", session.requestText(Operation.EXECUTE, probe));
                 String rawPatch = classId + "\n" + Base64.getEncoder().encodeToString(patchedBytecode);
@@ -291,10 +300,10 @@ class AttachIntegrationIT {
                 assertTrue(session.requestText(Operation.ROLLBACK_CLASS, classId).contains("Restored"));
                 assertEquals("4", session.requestText(Operation.EXECUTE, lambdaProbe));
                 String replacement = "package dev.whitedev.jpi.integration; import java.lang.management.ManagementFactory; public final class AttachTarget { public static volatile String marker = \"jpi-smoke-target\"; public static void setMarker(String value) { marker = value; } public static String runtimeValue() { return \"after\"; } public static byte[] digest(byte[] input) throws Exception { return java.security.MessageDigest.getInstance(\"SHA-256\").digest(input); } public static int lambdaValue(int input) { java.util.function.IntUnaryOperator operation = value -> value + 1; return operation.applyAsInt(input); } public static int branchValue(int input) { if (input < 0) return -1; return input % 2 == 0 ? input * 2 : input + 1; } public static byte[] fileRoundTrip(String path, byte[] value) throws Exception { java.nio.file.Path target = java.nio.file.Paths.get(path); java.nio.file.Files.write(target, value); return java.nio.file.Files.readAllBytes(target); } public static boolean fileDelete(String path) throws Exception { return java.nio.file.Files.deleteIfExists(java.nio.file.Paths.get(path)); } public static void main(String[] args) throws Exception { System.out.println(ManagementFactory.getRuntimeMXBean().getName().split(\"@\", 2)[0]); System.out.flush(); while (true) Thread.sleep(1000); } }";
-                int historySize = dev.whitedev.jpi.analysis.patch.PatchEntry.parse(session.requestText(Operation.PATCH_HISTORY, classId)).size();
+                int historySize = PatchEntry.parse(session.requestText(Operation.PATCH_HISTORY, classId)).size();
                 assertTrue(session.request(Operation.PREVIEW_SOURCE, classId + "\n" + replacement).length > 0);
                 assertEquals("before", session.requestText(Operation.EXECUTE, probe));
-                assertEquals(historySize, dev.whitedev.jpi.analysis.patch.PatchEntry.parse(session.requestText(Operation.PATCH_HISTORY, classId)).size());
+                assertEquals(historySize, PatchEntry.parse(session.requestText(Operation.PATCH_HISTORY, classId)).size());
                 assertTrue(session.requestText(Operation.REDEFINE_SOURCE, classId + "\n" + replacement).contains("Redefined"));
                 assertEquals("after", session.requestText(Operation.EXECUTE, probe));
                 assertTrue(session.requestText(Operation.ROLLBACK_CLASS, classId).contains("Restored"));
@@ -308,14 +317,17 @@ class AttachIntegrationIT {
                     assertNotNull(zip.getEntry("thread-analysis.tsv"));
                     assertNotNull(zip.getEntry("classloaders.tsv"));
                 }
-            } finally { session.close(); }
+            } finally {
+                session.close();
+            }
         } finally {
             target.destroy();
             if (!target.waitFor(3, TimeUnit.SECONDS)) target.destroyForcibly();
         }
     }
 
-    @Test void earlyAgentCapturesApplicationClassBeforeMain() throws Exception {
+    @Test
+    void earlyAgentCapturesApplicationClassBeforeMain() throws Exception {
         File fixture = executableFixtureJar();
         LaunchResult launch = new AttachService(AGENT_JAR).launch(
                 fixture, Collections.emptyList(), Collections.emptyList());
@@ -336,7 +348,8 @@ class AttachIntegrationIT {
         }
     }
 
-    @Test void listeningAgentDumpsClassesThroughAForwardedLoopbackEndpoint() throws Exception {
+    @Test
+    void listeningAgentDumpsClassesThroughAForwardedLoopbackEndpoint() throws Exception {
         String java = new File(new File(System.getProperty("java.home"), "bin"),
                 isWindows() ? "java.exe" : "java").getAbsolutePath();
         Process target = new ProcessBuilder(java, "-cp", TEST_CLASSES, AttachTarget.class.getName())
@@ -361,7 +374,7 @@ class AttachIntegrationIT {
                         .findFirst().orElseThrow();
                 byte[] bytecode = session.request(Operation.CLASS_BYTES, classLine.split("\t", -1)[0]);
                 assertTrue(bytecode.length > 4);
-                assertArrayEquals(new byte[] {(byte) 0xca, (byte) 0xfe, (byte) 0xba, (byte) 0xbe},
+                assertArrayEquals(new byte[]{(byte) 0xca, (byte) 0xfe, (byte) 0xba, (byte) 0xbe},
                         Arrays.copyOf(bytecode, 4));
             } finally {
                 session.close();
@@ -372,7 +385,8 @@ class AttachIntegrationIT {
         }
     }
 
-    @Test void manualEarlyAgentSupportsCustomLaunchCommands() throws Exception {
+    @Test
+    void manualEarlyAgentSupportsCustomLaunchCommands() throws Exception {
         File fixture = executableFixtureJar();
         AttachService.PreparedAgentSession prepared = new AttachService(AGENT_JAR).prepareEarlyAgent();
         String java = new File(new File(System.getProperty("java.home"), "bin"), isWindows() ? "java.exe" : "java").getAbsolutePath();
@@ -387,7 +401,9 @@ class AttachIntegrationIT {
             try {
                 assertTrue(session.requestText(Operation.CLASS_EVENTS, "").contains(AttachTarget.class.getName()));
                 assertTrue(session.requestText(Operation.METRICS, "").contains("pid=" + target.pid()));
-            } finally { session.close(); }
+            } finally {
+                session.close();
+            }
         } finally {
             prepared.close();
             target.destroy();
@@ -412,5 +428,7 @@ class AttachIntegrationIT {
         return jar;
     }
 
-    private static boolean isWindows() { return System.getProperty("os.name").toLowerCase().contains("win"); }
+    private static boolean isWindows() {
+        return System.getProperty("os.name").toLowerCase().contains("win");
+    }
 }

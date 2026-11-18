@@ -1,15 +1,10 @@
 package dev.whitedev.jpi.decompile;
 
-import java.net.URISyntaxException;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.FutureTask;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
-
 import dev.whitedev.jpi.plugin.api.decompile.DecompilationRequest;
 
 import java.io.*;
 import java.lang.reflect.InvocationTargetException;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.charset.StandardCharsets;
@@ -20,6 +15,10 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 public final class DecompilerService {
     private final Map<DecompilerEngine, List<File>> extracted = new EnumMap<>(DecompilerEngine.class);
@@ -173,7 +172,8 @@ public final class DecompilerService {
         try {
             if (!process.waitFor(30, TimeUnit.SECONDS)) throw new IOException(name + " exceeded its 30 second timeout");
             String output = reader.get(2, TimeUnit.SECONDS);
-            if (process.exitValue() != 0) throw new IOException(name + " exited with code " + process.exitValue() + System.lineSeparator() + output);
+            if (process.exitValue() != 0)
+                throw new IOException(name + " exited with code " + process.exitValue() + System.lineSeparator() + output);
             return output;
         } catch (ExecutionException error) {
             throw new IOException(name + " output could not be read", error.getCause());

@@ -13,11 +13,17 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class ModernMethodPatcherTest {
     private static final RuntimeJavaCompiler.ClassPath EMPTY = new RuntimeJavaCompiler.ClassPath() {
-        public byte[] find(String binaryName) { return null; }
-        public Collection<String> list(String packageName, boolean recurse) { return Collections.emptyList(); }
+        public byte[] find(String binaryName) {
+            return null;
+        }
+
+        public Collection<String> list(String packageName, boolean recurse) {
+            return Collections.emptyList();
+        }
     };
 
-    @Test void replacesAMethodContainingAnExistingLambda() throws Exception {
+    @Test
+    void replacesAMethodContainingAnExistingLambda() throws Exception {
         byte[] original = fixtureBytes();
         byte[] replacement = ModernMethodPatcher.patch(original, Fixture.class, "value", "(I)I",
                 "{ java.util.function.IntUnaryOperator operation = value -> value + 5; return operation.applyAsInt($1); }",
@@ -28,7 +34,8 @@ class ModernMethodPatcherTest {
         assertEquals(8, patched.getMethod("value", int.class).invoke(instance, 3));
     }
 
-    @Test void rejectsAddingMoreLambdaImplementationsThanHotSwapCanPreserve() throws Exception {
+    @Test
+    void rejectsAddingMoreLambdaImplementationsThanHotSwapCanPreserve() throws Exception {
         byte[] original = fixtureBytes();
         assertThrows(IOException.class, () -> ModernMethodPatcher.patch(
                 original, Fixture.class, "value", "(I)I",
@@ -52,7 +59,12 @@ class ModernMethodPatcherTest {
     }
 
     private static final class BytecodeLoader extends ClassLoader {
-        BytecodeLoader() { super(null); }
-        Class<?> define(byte[] bytecode) { return defineClass(null, bytecode, 0, bytecode.length); }
+        BytecodeLoader() {
+            super(null);
+        }
+
+        Class<?> define(byte[] bytecode) {
+            return defineClass(null, bytecode, 0, bytecode.length);
+        }
     }
 }

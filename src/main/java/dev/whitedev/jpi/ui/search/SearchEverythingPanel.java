@@ -14,6 +14,9 @@ import dev.whitedev.jpi.ui.Ui;
 import dev.whitedev.jpi.ui.context.AnalysisTarget;
 import dev.whitedev.jpi.ui.context.ContextActions;
 import dev.whitedev.jpi.ui.timeline.RuntimeTimelineStore;
+
+import javax.swing.AbstractAction;
+import javax.swing.BorderFactory;
 import javax.swing.DefaultListCellRenderer;
 import javax.swing.DefaultListModel;
 import javax.swing.JButton;
@@ -30,8 +33,6 @@ import javax.swing.KeyStroke;
 import javax.swing.ListSelectionModel;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
-import javax.swing.AbstractAction;
-import javax.swing.BorderFactory;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.table.DefaultTableCellRenderer;
@@ -59,7 +60,10 @@ public final class SearchEverythingPanel extends JPanel implements SessionAware,
     private final DefaultListModel<String> categories = new DefaultListModel<>();
     private final JList<String> category = new JList<>(categories);
     private final DefaultTableModel rows = new DefaultTableModel(new String[]{"Category", "Result", "Location"}, 0) {
-        @Override public boolean isCellEditable(int row, int column) { return false; }
+        @Override
+        public boolean isCellEditable(int row, int column) {
+            return false;
+        }
     };
     private final JTable table = new JTable(rows);
     private final JButton open = Ui.primaryButton("Open result");
@@ -87,14 +91,32 @@ public final class SearchEverythingPanel extends JPanel implements SessionAware,
         top.add(Ui.sectionHeader("Search Everything", "Ctrl+Shift+F | Classes, members, strings, mappings, notes, and recorded events", null), BorderLayout.NORTH);
         query.putClientProperty("JTextField.placeholderText", "Search everything, for example auth, /api/login, or Session.token");
         query.putClientProperty("JTextField.showClearButton", true);
-        query.addActionListener(event -> { debounce.stop(); startSearch(); });
+        query.addActionListener(event -> {
+            debounce.stop();
+            startSearch();
+        });
         query.getDocument().addDocumentListener(new DocumentListener() {
-            @Override public void insertUpdate(DocumentEvent event) { schedule(); }
-            @Override public void removeUpdate(DocumentEvent event) { schedule(); }
-            @Override public void changedUpdate(DocumentEvent event) { schedule(); }
+            @Override
+            public void insertUpdate(DocumentEvent event) {
+                schedule();
+            }
+
+            @Override
+            public void removeUpdate(DocumentEvent event) {
+                schedule();
+            }
+
+            @Override
+            public void changedUpdate(DocumentEvent event) {
+                schedule();
+            }
         });
         JButton refresh = Ui.secondaryButton("Search / Refresh");
-        refresh.addActionListener(event -> { generation++; debounce.stop(); startSearch(); });
+        refresh.addActionListener(event -> {
+            generation++;
+            debounce.stop();
+            startSearch();
+        });
         JPanel bar = new JPanel(new BorderLayout(8, 0));
         bar.setOpaque(false);
         bar.add(query, BorderLayout.CENTER);
@@ -105,13 +127,16 @@ public final class SearchEverythingPanel extends JPanel implements SessionAware,
         add(top, BorderLayout.NORTH);
         category.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         category.setCellRenderer(new DefaultListCellRenderer() {
-            @Override public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean selected, boolean focused) {
+            @Override
+            public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean selected, boolean focused) {
                 JComponent component = (JComponent) super.getListCellRendererComponent(list, value, index, selected, focused);
                 component.setBorder(BorderFactory.createEmptyBorder(8, 10, 8, 10));
                 return component;
             }
         });
-        category.addListSelectionListener(event -> { if (!event.getValueIsAdjusting()) renderRows(); });
+        category.addListSelectionListener(event -> {
+            if (!event.getValueIsAdjusting()) renderRows();
+        });
         table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         table.setFillsViewportHeight(true);
         DefaultTableCellRenderer renderer = new DefaultTableCellRenderer();
@@ -122,11 +147,17 @@ public final class SearchEverythingPanel extends JPanel implements SessionAware,
         table.getColumnModel().getColumn(2).setPreferredWidth(440);
         table.getSelectionModel().addListSelectionListener(event -> showDetails());
         table.addMouseListener(new MouseAdapter() {
-            @Override public void mouseClicked(MouseEvent event) { if (event.getClickCount() == 2 && SwingUtilities.isLeftMouseButton(event)) openSelected(); }
+            @Override
+            public void mouseClicked(MouseEvent event) {
+                if (event.getClickCount() == 2 && SwingUtilities.isLeftMouseButton(event)) openSelected();
+            }
         });
         table.getInputMap().put(KeyStroke.getKeyStroke("ENTER"), "open-search-result");
         table.getActionMap().put("open-search-result", new AbstractAction() {
-            @Override public void actionPerformed(ActionEvent event) { openSelected(); }
+            @Override
+            public void actionPerformed(ActionEvent event) {
+                openSelected();
+            }
         });
         open.addActionListener(event -> openSelected());
         JPanel detailPanel = new JPanel(new BorderLayout(0, 4));
@@ -146,9 +177,14 @@ public final class SearchEverythingPanel extends JPanel implements SessionAware,
         render(SearchReport.empty(), "Enter at least two characters", false);
     }
 
-    public void focusSearch() { query.requestFocusInWindow(); query.selectAll(); schedule(); }
+    public void focusSearch() {
+        query.requestFocusInWindow();
+        query.selectAll();
+        schedule();
+    }
 
-    @Override public void setSession(InspectorSession value) {
+    @Override
+    public void setSession(InspectorSession value) {
         session = value;
         generation++;
         pending = false;
@@ -169,9 +205,17 @@ public final class SearchEverythingPanel extends JPanel implements SessionAware,
     private void startSearch() {
         if (closed) return;
         final String text;
-        try { text = SearchEverythingService.query(query.getText()); }
-        catch (IllegalArgumentException error) { status.setText(error.getMessage()); return; }
-        if (loading) { pending = true; status.setText("Waiting for the current bounded target scan; the latest query will run next."); return; }
+        try {
+            text = SearchEverythingService.query(query.getText());
+        } catch (IllegalArgumentException error) {
+            status.setText(error.getMessage());
+            return;
+        }
+        if (loading) {
+            pending = true;
+            status.setText("Waiting for the current bounded target scan; the latest query will run next.");
+            return;
+        }
         loading = true;
         pending = false;
         long epoch = generation;
@@ -188,9 +232,13 @@ public final class SearchEverythingPanel extends JPanel implements SessionAware,
             });
             if (current == null || current != session || epoch != generation || closed) return cached;
             SearchReport result = local;
-            try { result = result.merge(SearchEverythingService.target(current, text)); }
-            catch (Exception error) { result = result.merge(new SearchReport(List.of(), Map.of(), List.of("Target symbols unavailable: " + error.getMessage()))); }
-            if (Thread.currentThread().isInterrupted() || current != session || epoch != generation || closed) return result;
+            try {
+                result = result.merge(SearchEverythingService.target(current, text));
+            } catch (Exception error) {
+                result = result.merge(new SearchReport(List.of(), Map.of(), List.of("Target symbols unavailable: " + error.getMessage())));
+            }
+            if (Thread.currentThread().isInterrupted() || current != session || epoch != generation || closed)
+                return result;
             try {
                 ExceptionSnapshot snapshot = ExceptionSnapshot.parse(current.requestText(Operation.EXCEPTION_SNAPSHOT, "30"));
                 result = result.merge(SearchEverythingService.exceptions(text, snapshot));
@@ -206,10 +254,14 @@ public final class SearchEverythingPanel extends JPanel implements SessionAware,
         loading = false;
         if (closed) return;
         if (current == session && epoch == generation) {
-            if (error == null) render(result, result.hits().size() + " results shown. Counts with + are lower bounds or capped.", false);
+            if (error == null)
+                render(result, result.hits().size() + " results shown. Counts with + are lower bounds or capped.", false);
             else status.setText("Search failed: " + error.getMessage());
         }
-        if (pending) { pending = false; startSearch(); }
+        if (pending) {
+            pending = false;
+            startSearch();
+        }
     }
 
     private void render(SearchReport value, String message, boolean targetPending) {
@@ -235,7 +287,8 @@ public final class SearchEverythingPanel extends JPanel implements SessionAware,
         SearchCategory selected = index <= 0 ? null : SearchCategory.values()[index - 1];
         visible = SearchEverythingService.ranked(report, searched, selected);
         rows.setRowCount(0);
-        for (SearchHit hit : visible) rows.addRow(new Object[]{hit.category(), singleLine(hit.title()), hit.location()});
+        for (SearchHit hit : visible)
+            rows.addRow(new Object[]{hit.category(), singleLine(hit.title()), hit.location()});
         if (!visible.isEmpty()) table.setRowSelectionInterval(0, 0);
         showDetails();
     }
@@ -252,7 +305,10 @@ public final class SearchEverythingPanel extends JPanel implements SessionAware,
         details.setCaretPosition(0);
     }
 
-    private void openSelected() { SearchHit hit = selected(); if (hit != null) navigation.accept(hit); }
+    private void openSelected() {
+        SearchHit hit = selected();
+        if (hit != null) navigation.accept(hit);
+    }
 
     public void setContextActions(ContextActions actions) {
         ContextActions.bindSelection(query, () -> null);
@@ -274,5 +330,11 @@ public final class SearchEverythingPanel extends JPanel implements SessionAware,
         return value.length() > 200 ? value.substring(0, 200) + "..." : value;
     }
 
-    @Override public void close() { closed = true; generation++; pending = false; debounce.stop(); }
+    @Override
+    public void close() {
+        closed = true;
+        generation++;
+        pending = false;
+        debounce.stop();
+    }
 }

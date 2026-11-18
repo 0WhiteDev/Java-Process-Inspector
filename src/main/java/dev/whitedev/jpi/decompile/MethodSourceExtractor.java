@@ -4,7 +4,8 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 public final class MethodSourceExtractor {
-    private MethodSourceExtractor() { }
+    private MethodSourceExtractor() {
+    }
 
     public static String extract(String source, String methodName, String descriptor) {
         int expectedParameters = descriptorParameterCount(descriptor);
@@ -18,7 +19,8 @@ public final class MethodSourceExtractor {
             if (openingParenthesis >= source.length() || source.charAt(openingParenthesis) != '(') continue;
             int closingParenthesis = matching(source, openingParenthesis, '(', ')');
             if (closingParenthesis < 0) continue;
-            if (sourceParameterCount(source, openingParenthesis + 1, closingParenthesis) != expectedParameters) continue;
+            if (sourceParameterCount(source, openingParenthesis + 1, closingParenthesis) != expectedParameters)
+                continue;
             int openingBrace = bodyOpeningBrace(source, closingParenthesis + 1);
             if (openingBrace < 0) continue;
             int closingBrace = matching(source, openingBrace, '{', '}');
@@ -38,7 +40,8 @@ public final class MethodSourceExtractor {
             while (descriptor.charAt(index) == '[') index++;
             if (descriptor.charAt(index) == 'L') {
                 index = descriptor.indexOf(';', index);
-                if (index < 0 || index > end) throw new IllegalArgumentException("Invalid method descriptor: " + descriptor);
+                if (index < 0 || index > end)
+                    throw new IllegalArgumentException("Invalid method descriptor: " + descriptor);
             }
             index++;
             count++;
@@ -57,10 +60,22 @@ public final class MethodSourceExtractor {
         boolean escaped = false;
         for (int index = start; index < end; index++) {
             char value = source.charAt(index);
-            if (escaped) { escaped = false; continue; }
-            if ((string || character) && value == '\\') { escaped = true; continue; }
-            if (!character && value == '"') { string = !string; continue; }
-            if (!string && value == '\'') { character = !character; continue; }
+            if (escaped) {
+                escaped = false;
+                continue;
+            }
+            if ((string || character) && value == '\\') {
+                escaped = true;
+                continue;
+            }
+            if (!character && value == '"') {
+                string = !string;
+                continue;
+            }
+            if (!string && value == '\'') {
+                character = !character;
+                continue;
+            }
             if (string || character) continue;
             if (value == '(') round++;
             else if (value == ')') round--;
@@ -93,7 +108,7 @@ public final class MethodSourceExtractor {
         boolean string = false;
         boolean character = false;
         boolean escaped = false;
-        for (int index = 0; index < source.length();) {
+        for (int index = 0; index < source.length(); ) {
             char value = source.charAt(index);
             if (escaped) {
                 output.append(value);
@@ -150,10 +165,22 @@ public final class MethodSourceExtractor {
         boolean escaped = false;
         for (int index = opening; index < source.length(); index++) {
             char value = source.charAt(index);
-            if (escaped) { escaped = false; continue; }
-            if ((string || character) && value == '\\') { escaped = true; continue; }
-            if (!character && value == '"') { string = !string; continue; }
-            if (!string && value == '\'') { character = !character; continue; }
+            if (escaped) {
+                escaped = false;
+                continue;
+            }
+            if ((string || character) && value == '\\') {
+                escaped = true;
+                continue;
+            }
+            if (!character && value == '"') {
+                string = !string;
+                continue;
+            }
+            if (!string && value == '\'') {
+                character = !character;
+                continue;
+            }
             if (string || character) continue;
             if (value == open) depth++;
             else if (value == close && --depth == 0) return index;

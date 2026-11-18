@@ -1,7 +1,7 @@
 package dev.whitedev.jpi.analysis.difference;
 
-import java.util.List;
 import java.util.ArrayList;
+import java.util.List;
 
 public record DifferenceReport(int commonMethods, List<String> onlyA, List<String> onlyB,
                                int differentBranches, int differentReturns, int differentApiCalls,

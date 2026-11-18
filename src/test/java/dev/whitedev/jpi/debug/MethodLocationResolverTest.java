@@ -7,7 +7,8 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class MethodLocationResolverTest {
-    @Test void resolvesFixedWideAndLookupSwitchInstructionOffsets() {
+    @Test
+    void resolvesFixedWideAndLookupSwitchInstructionOffsets() {
         byte[] code = new byte[]{
                 3,
                 16, 10,
@@ -22,7 +23,8 @@ class MethodLocationResolverTest {
         assertEquals(List.of(0, 1, 3, 7, 24), MethodLocationResolver.offsets(code));
     }
 
-    @Test void resolvesTableSwitchPaddingAndEntries() {
+    @Test
+    void resolvesTableSwitchPaddingAndEntries() {
         byte[] code = new byte[]{
                 0,
                 (byte) 170,

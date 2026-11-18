@@ -37,6 +37,7 @@ public final class StepManager {
         }
     }
 
-    public enum Depth { INTO, OVER, OUT }
-    public enum Mode { SOURCE, MINIMAL }
+    public enum Depth {INTO, OVER, OUT}
+
+    public enum Mode {SOURCE, MINIMAL}
 }

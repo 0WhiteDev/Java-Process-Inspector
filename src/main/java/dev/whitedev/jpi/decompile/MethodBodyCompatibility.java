@@ -1,7 +1,8 @@
 package dev.whitedev.jpi.decompile;
 
 public final class MethodBodyCompatibility {
-    private MethodBodyCompatibility() { }
+    private MethodBodyCompatibility() {
+    }
 
     public static String unsupportedReason(String body) {
         boolean string = false;

@@ -11,7 +11,8 @@ public record MappingSuggestion(MappingType type, String owner, String originalN
         reason = value(reason);
         if (originalName.isEmpty()) throw new IllegalArgumentException("Original name is required");
         if (suggestedName.isEmpty()) throw new IllegalArgumentException("Suggested name is required");
-        if (!validName(suggestedName)) throw new IllegalArgumentException("Suggested name is not a valid Java name: " + suggestedName);
+        if (!validName(suggestedName))
+            throw new IllegalArgumentException("Suggested name is not a valid Java name: " + suggestedName);
         if (!Double.isFinite(confidence) || confidence < 0.0 || confidence > 1.0) {
             throw new IllegalArgumentException("Confidence must be between 0 and 1");
         }

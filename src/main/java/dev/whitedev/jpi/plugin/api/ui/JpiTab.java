@@ -6,6 +6,7 @@ import javax.swing.JComponent;
 
 public interface JpiTab {
     String id();
+
     String title();
 
     default TabGroup group() {

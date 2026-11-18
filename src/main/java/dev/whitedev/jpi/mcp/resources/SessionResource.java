@@ -1,17 +1,20 @@
 package dev.whitedev.jpi.mcp.resources;
 
 import com.google.gson.JsonObject;
-
 import dev.whitedev.jpi.mcp.JpiMcpFacade;
 import dev.whitedev.jpi.mcp.McpJson;
 import dev.whitedev.jpi.mcp.McpSessionState;
+
 import java.util.List;
 import java.util.Map;
 
 public final class SessionResource {
     public static final String URI = "jpi://session";
     private final JpiMcpFacade facade;
-    public SessionResource(JpiMcpFacade facade) { this.facade = facade; }
+
+    public SessionResource(JpiMcpFacade facade) {
+        this.facade = facade;
+    }
 
     public Map<String, Object> definition() {
         return Map.of("uri", URI, "name", "JPI session", "description", "Current session selected by the user in JPI.", "mimeType", "application/json");

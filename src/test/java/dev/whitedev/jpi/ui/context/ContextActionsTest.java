@@ -14,7 +14,8 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.junit.jupiter.api.Assertions.*;
 
 class ContextActionsTest {
-    @Test void formatsOriginalJvmIdentifiersWithoutUsingAliasesOrLosingDescriptors() {
+    @Test
+    void formatsOriginalJvmIdentifiersWithoutUsingAliasesOrLosingDescriptors() {
         assertEquals("com/foo/Auth.validate(Ljava/lang/String;)Z",
                 AnalysisTarget.method("c:1", "com.foo.Auth", "validate", "(Ljava/lang/String;)Z").qualifiedJvmIdentifier());
         assertEquals("com/foo/Auth.token:Ljava/lang/String;",
@@ -24,7 +25,8 @@ class ContextActionsTest {
         assertEquals("", AnalysisTarget.method("c:1", "com.foo.Auth", "validate", "").qualifiedJvmIdentifier());
     }
 
-    @Test void resolvesTheFocusedSelectionBeforeViewDefaultsAndDoesNotReuseAnEmptySelection() throws Exception {
+    @Test
+    void resolvesTheFocusedSelectionBeforeViewDefaultsAndDoesNotReuseAnEmptySelection() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
             JPanel root = new JPanel();
             JTextField editor = new JTextField();
@@ -43,9 +45,11 @@ class ContextActionsTest {
         });
     }
 
-    @Test void exposesOnlyActionsSupportedByTheSelectedSymbol() throws Exception {
+    @Test
+    void exposesOnlyActionsSupportedByTheSelectedSymbol() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            ContextActions actions = new ContextActions(() -> true, (action, target) -> { });
+            ContextActions actions = new ContextActions(() -> true, (action, target) -> {
+            });
             List<String> method = labels(actions.menu(AnalysisTarget.method("c:1", "a.b", "run", "()V")));
             assertTrue(method.containsAll(List.of("Find static usages", "Find runtime usages", "Trace callers",
                     "Trace callees", "Open CFG", "Add breakpoint", "Investigate")));
@@ -62,7 +66,8 @@ class ContextActionsTest {
         });
     }
 
-    @Test void preservesOriginalDefinitionAndDescriptorWhenDispatching() throws Exception {
+    @Test
+    void preservesOriginalDefinitionAndDescriptorWhenDispatching() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
             AtomicReference<AnalysisTarget> received = new AtomicReference<>();
             AnalysisTarget target = AnalysisTarget.method("c:71", "obfuscated.a", "a", "(Ljava/lang/String;)Z");
@@ -74,7 +79,8 @@ class ContextActionsTest {
         });
     }
 
-    @Test void disablesDetachedActionsAndRechecksConnectionAtDispatch() throws Exception {
+    @Test
+    void disablesDetachedActionsAndRechecksConnectionAtDispatch() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
             AtomicBoolean attached = new AtomicBoolean(true);
             AtomicBoolean called = new AtomicBoolean();
@@ -91,7 +97,8 @@ class ContextActionsTest {
         });
     }
 
-    @Test void selectsClickedViewRowBeforeResolvingItsModelTarget() throws Exception {
+    @Test
+    void selectsClickedViewRowBeforeResolvingItsModelTarget() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
             JTable table = new JTable(new DefaultTableModel(new Object[][]{{"z"}, {"a"}}, new Object[]{"Class"}));
             table.setSize(240, 120);
@@ -104,7 +111,8 @@ class ContextActionsTest {
         });
     }
 
-    @Test void ignoresEmptyListAndTreeSpaceAndProvidesKeyboardAccess() throws Exception {
+    @Test
+    void ignoresEmptyListAndTreeSpaceAndProvidesKeyboardAccess() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
             JList<String> list = new JList<>(new String[]{"a"});
             list.setFixedCellHeight(20);
@@ -116,7 +124,8 @@ class ContextActionsTest {
             JTree tree = new JTree();
             tree.setSize(200, 120);
             assertFalse(ContextActions.selectAt(tree, new Point(199, 119)));
-            ContextActions actions = new ContextActions(() -> true, (action, target) -> { });
+            ContextActions actions = new ContextActions(() -> true, (action, target) -> {
+            });
             actions.install(list, () -> AnalysisTarget.type("c:1", "a.b"));
             assertNotNull(list.getInputMap().get(KeyStroke.getKeyStroke(KeyEvent.VK_F10, KeyEvent.SHIFT_DOWN_MASK)));
         });

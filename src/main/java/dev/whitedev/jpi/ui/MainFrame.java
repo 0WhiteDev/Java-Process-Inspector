@@ -1,31 +1,17 @@
 package dev.whitedev.jpi.ui;
 
-import dev.whitedev.jpi.attach.ProcessInjector;
-import dev.whitedev.jpi.investigation.InvestigationTarget;
-import dev.whitedev.jpi.protocol.Operation;
-import dev.whitedev.jpi.ui.jvmti.NativeJvmtiPanel;
-import dev.whitedev.jpi.ui.search.SearchEverythingPanel;
-import dev.whitedev.jpi.ui.commands.CommandContext;
-import dev.whitedev.jpi.ui.commands.CommandRegistry;
-import dev.whitedev.jpi.ui.commands.CommandPaletteDialog;
-import dev.whitedev.jpi.ui.commands.CommandShortcuts;
-import dev.whitedev.jpi.ui.commands.WorkspaceCommand;
-import java.util.function.Consumer;
-import java.util.function.Function;
-import java.util.function.Supplier;
-
-import dev.whitedev.jpi.mcp.JpiMcpRuntime;
-import dev.whitedev.jpi.ui.context.AnalysisTarget;
-import dev.whitedev.jpi.ui.context.ContextAction;
-import dev.whitedev.jpi.ui.context.ContextActions;
-
-import dev.whitedev.jpi.attach.ImprovedAttachService;
+import com.formdev.flatlaf.extras.FlatSVGIcon;
 import dev.whitedev.jpi.attach.CommandLineTokenizer;
+import dev.whitedev.jpi.attach.ImprovedAttachService;
 import dev.whitedev.jpi.attach.InspectorSession;
 import dev.whitedev.jpi.attach.JvmDescriptor;
 import dev.whitedev.jpi.attach.JvmDiscovery;
+import dev.whitedev.jpi.attach.ProcessInjector;
 import dev.whitedev.jpi.attach.jvmti.NativeAgentArtifact;
 import dev.whitedev.jpi.deobfuscation.DeobfuscationWorkspace;
+import dev.whitedev.jpi.investigation.InvestigationTarget;
+import dev.whitedev.jpi.loader.ClassLoaderSnapshot;
+import dev.whitedev.jpi.mcp.JpiMcpRuntime;
 import dev.whitedev.jpi.nativeaccess.WindowsNativeAccess;
 import dev.whitedev.jpi.nativeaccess.WindowsNetworkAccess;
 import dev.whitedev.jpi.plugin.api.JpiContext;
@@ -33,59 +19,71 @@ import dev.whitedev.jpi.plugin.api.ui.JpiTab;
 import dev.whitedev.jpi.plugin.api.ui.TabGroup;
 import dev.whitedev.jpi.plugin.runtime.PluginManager;
 import dev.whitedev.jpi.plugin.runtime.RegisteredExtension;
+import dev.whitedev.jpi.protocol.Operation;
 import dev.whitedev.jpi.ui.analysis.BytecodeCfgPanel;
 import dev.whitedev.jpi.ui.analysis.DifferenceTracingPanel;
 import dev.whitedev.jpi.ui.analysis.InvestigationPanel;
 import dev.whitedev.jpi.ui.browser.ClassesPanel;
 import dev.whitedev.jpi.ui.callgraph.CallGraphHeatmapPanel;
+import dev.whitedev.jpi.ui.commands.CommandContext;
+import dev.whitedev.jpi.ui.commands.CommandPaletteDialog;
+import dev.whitedev.jpi.ui.commands.CommandRegistry;
+import dev.whitedev.jpi.ui.commands.CommandShortcuts;
+import dev.whitedev.jpi.ui.commands.WorkspaceCommand;
 import dev.whitedev.jpi.ui.connection.TunnelAgentDialog;
+import dev.whitedev.jpi.ui.context.AnalysisTarget;
+import dev.whitedev.jpi.ui.context.ContextAction;
+import dev.whitedev.jpi.ui.context.ContextActions;
 import dev.whitedev.jpi.ui.debug.DebuggerPanel;
+import dev.whitedev.jpi.ui.exceptions.ExceptionAnalyzerPanel;
 import dev.whitedev.jpi.ui.file.FileMonitorPanel;
 import dev.whitedev.jpi.ui.fingerprint.TargetFingerprintPanel;
+import dev.whitedev.jpi.ui.inspection.ConstantSearchPanel;
+import dev.whitedev.jpi.ui.inspection.FieldWritesPanel;
+import dev.whitedev.jpi.ui.inspection.FieldsPanel;
+import dev.whitedev.jpi.ui.inspection.HeapObjectPanel;
+import dev.whitedev.jpi.ui.jvmti.NativeJvmtiPanel;
+import dev.whitedev.jpi.ui.loader.ClassLoaderExplorerPanel;
 import dev.whitedev.jpi.ui.mcp.McpPanel;
-import dev.whitedev.jpi.ui.profiler.ProfilerPanel;
-import dev.whitedev.jpi.ui.exceptions.ExceptionAnalyzerPanel;
-import dev.whitedev.jpi.loader.ClassLoaderSnapshot;
 import dev.whitedev.jpi.ui.nativeview.DllPanel;
 import dev.whitedev.jpi.ui.nativeview.MemoryPanel;
 import dev.whitedev.jpi.ui.nativeview.NativeSymbolsPanel;
 import dev.whitedev.jpi.ui.nativeview.NetworkPanel;
+import dev.whitedev.jpi.ui.plugins.PluginsPanel;
+import dev.whitedev.jpi.ui.profiler.ProfilerPanel;
+import dev.whitedev.jpi.ui.provenance.ValueTracePanel;
+import dev.whitedev.jpi.ui.search.SearchEverythingPanel;
 import dev.whitedev.jpi.ui.system.EnvironmentPanel;
 import dev.whitedev.jpi.ui.system.OverviewPanel;
+import dev.whitedev.jpi.ui.threads.ThreadAnalyzerPanel;
+import dev.whitedev.jpi.ui.timeline.RuntimeTimelinePanel;
+import dev.whitedev.jpi.ui.timeline.RuntimeTimelineStore;
 import dev.whitedev.jpi.ui.tracing.ApiHooksPanel;
 import dev.whitedev.jpi.ui.tracing.LiveTracerPanel;
 import dev.whitedev.jpi.ui.tracing.XrefsPanel;
-import dev.whitedev.jpi.ui.provenance.ValueTracePanel;
-import dev.whitedev.jpi.ui.timeline.RuntimeTimelinePanel;
-import dev.whitedev.jpi.ui.timeline.RuntimeTimelineStore;
-import dev.whitedev.jpi.ui.threads.ThreadAnalyzerPanel;
 import dev.whitedev.jpi.ui.workspace.DeobfuscationWorkspacePanel;
 import dev.whitedev.jpi.ui.workspace.ExecutorPanel;
-import dev.whitedev.jpi.ui.inspection.ConstantSearchPanel;
-import dev.whitedev.jpi.ui.inspection.FieldsPanel;
-import dev.whitedev.jpi.ui.inspection.FieldWritesPanel;
-import dev.whitedev.jpi.ui.inspection.HeapObjectPanel;
-import dev.whitedev.jpi.ui.loader.ClassLoaderExplorerPanel;
-import dev.whitedev.jpi.ui.plugins.PluginsPanel;
-import com.formdev.flatlaf.extras.FlatSVGIcon;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
+import java.awt.datatransfer.StringSelection;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
-import java.awt.datatransfer.StringSelection;
 import java.io.File;
 import java.net.URI;
-import java.util.Arrays;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
-import java.util.Set;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.Supplier;
 
 public final class MainFrame extends JFrame {
     private final JvmDiscovery discovery = new JvmDiscovery();
@@ -151,12 +149,12 @@ public final class MainFrame extends JFrame {
                     xrefs.selectTarget(target.classIdentifier(), target.className(), target.methodName(), target.descriptor());
                     selectView("Xrefs");
                 }, target -> {
-                    tracer.selectTarget(target.classIdentifier(), target.className(), target.methodName(), target.descriptor());
-                    selectView("Live tracer");
-                }, target -> {
-                    cfg.selectTarget(target.classIdentifier(), target.className(), target.methodName(), target.descriptor());
-                    selectView("Bytecode CFG");
-                });
+            tracer.selectTarget(target.classIdentifier(), target.className(), target.methodName(), target.descriptor());
+            selectView("Live tracer");
+        }, target -> {
+            cfg.selectTarget(target.classIdentifier(), target.className(), target.methodName(), target.descriptor());
+            selectView("Bytecode CFG");
+        });
         ApiHooksPanel apiHooks = new ApiHooksPanel(mappingWorkspace, xrefs, () -> selectView("Xrefs"),
                 pluginManager.extensions(), timelineStore);
         ClassesPanel classes = new ClassesPanel(mappingWorkspace, tracer, xrefs, cfg, differences,
@@ -345,7 +343,8 @@ public final class MainFrame extends JFrame {
         tunnelAgent.addActionListener(e -> connectTunnel());
         disconnect.addActionListener(e -> disconnect());
         addWindowListener(new WindowAdapter() {
-            @Override public void windowClosed(WindowEvent event) {
+            @Override
+            public void windowClosed(WindowEvent event) {
                 disconnect();
                 debugger.close();
                 pluginManager.close();
@@ -447,7 +446,7 @@ public final class MainFrame extends JFrame {
     }
 
     private void resolveContextDefinition(AnalysisTarget target,
-            Consumer<AnalysisTarget> ready) {
+                                          Consumer<AnalysisTarget> ready) {
         if (!target.identifier().isEmpty() && !target.identifier().equals(target.owner())) {
             ready.accept(target);
             return;
@@ -475,7 +474,9 @@ public final class MainFrame extends JFrame {
             }
             ready.accept(new AnalysisTarget(target.kind(), definitions.get(index).id(),
                     target.owner(), target.member(), target.descriptor(), target.value()));
-        }, error -> { if (session == current) Ui.error(this, error); });
+        }, error -> {
+            if (session == current) Ui.error(this, error);
+        });
     }
 
     private JComponent sidebar() {
@@ -579,7 +580,10 @@ public final class MainFrame extends JFrame {
         author.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         author.setToolTipText("github.com/0WhiteDev");
         author.addMouseListener(new MouseAdapter() {
-            @Override public void mouseClicked(MouseEvent event) { openAuthorProfile(); }
+            @Override
+            public void mouseClicked(MouseEvent event) {
+                openAuthorProfile();
+            }
         });
         authorRow.add(createdBy);
         authorRow.add(author);
@@ -672,10 +676,11 @@ public final class MainFrame extends JFrame {
 
     private CommandContext commandContext() {
         AnalysisTarget selected = null;
-        for (Component component : cards.getComponents()) if (component.isVisible() && component instanceof JComponent view) {
-            selected = ContextActions.selection(getFocusOwner(), view);
-            break;
-        }
+        for (Component component : cards.getComponents())
+            if (component.isVisible() && component instanceof JComponent view) {
+                selected = ContextActions.selection(getFocusOwner(), view);
+                break;
+            }
         return new CommandContext(session, selected, activeView, debuggerConnection.get());
     }
 
@@ -744,7 +749,8 @@ public final class MainFrame extends JFrame {
     private void refreshViewCommands() {
         commands.removePrefix("view.");
         for (String name : navigation.keySet()) {
-            if (name.equals("Command Palette") || name.equals("Search Everything") || name.equals("Call graph")) continue;
+            if (name.equals("Command Palette") || name.equals("Search Everything") || name.equals("Call graph"))
+                continue;
             addCommand("view." + name, "Open " + name, "view navigate workspace", "", context -> "", context -> selectView(name));
         }
     }
@@ -757,12 +763,16 @@ public final class MainFrame extends JFrame {
     }
 
     private String selectionReason(CommandContext context, AnalysisTarget.Kind kind, boolean attached) {
-        if (attached && (context.session() == null || context.session() != session)) return "Attach a JVM and select a target in the current session";
+        if (attached && (context.session() == null || context.session() != session))
+            return "Attach a JVM and select a target in the current session";
         AnalysisTarget target = context.target();
-        if (target == null) return kind == null ? "Select a JVM symbol" : "Select a " + kind.name().toLowerCase() + " in the active view";
-        if (kind != null && target.kind() != kind) return "Select a " + kind.name().toLowerCase() + " in the active view";
+        if (target == null)
+            return kind == null ? "Select a JVM symbol" : "Select a " + kind.name().toLowerCase() + " in the active view";
+        if (kind != null && target.kind() != kind)
+            return "Select a " + kind.name().toLowerCase() + " in the active view";
         if (target.kind() == AnalysisTarget.Kind.CONSTANT) return "Select a class, method, or field";
-        if (target.owner().isBlank() || kind == AnalysisTarget.Kind.METHOD && !target.descriptor().startsWith("(")) return "The selection has no exact JVM signature";
+        if (target.owner().isBlank() || kind == AnalysisTarget.Kind.METHOD && !target.descriptor().startsWith("("))
+            return "The selection has no exact JVM signature";
         return "";
     }
 

@@ -1,6 +1,9 @@
 package dev.whitedev.jpi.ui.commands;
 
+import dev.whitedev.jpi.ui.Ui;
+
 import javax.swing.AbstractAction;
+import javax.swing.BorderFactory;
 import javax.swing.DefaultListCellRenderer;
 import javax.swing.DefaultListModel;
 import javax.swing.JComponent;
@@ -12,10 +15,8 @@ import javax.swing.JTextField;
 import javax.swing.KeyStroke;
 import javax.swing.ListSelectionModel;
 import javax.swing.SwingUtilities;
-import javax.swing.BorderFactory;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
-import dev.whitedev.jpi.ui.Ui;
 import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.Dimension;
@@ -44,14 +45,26 @@ public final class CommandPaletteDialog extends JDialog {
         query.putClientProperty("JTextField.placeholderText", "> trace, breakpoint, search, or a view name");
         query.addActionListener(event -> execute());
         query.getDocument().addDocumentListener(new DocumentListener() {
-            @Override public void insertUpdate(DocumentEvent event) { filter(); }
-            @Override public void removeUpdate(DocumentEvent event) { filter(); }
-            @Override public void changedUpdate(DocumentEvent event) { filter(); }
+            @Override
+            public void insertUpdate(DocumentEvent event) {
+                filter();
+            }
+
+            @Override
+            public void removeUpdate(DocumentEvent event) {
+                filter();
+            }
+
+            @Override
+            public void changedUpdate(DocumentEvent event) {
+                filter();
+            }
         });
         results.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         results.setFixedCellHeight(40);
         results.setCellRenderer(new DefaultListCellRenderer() {
-            @Override public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean selected, boolean focused) {
+            @Override
+            public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean selected, boolean focused) {
                 WorkspaceCommand command = (WorkspaceCommand) value;
                 String reason = command.reason(context);
                 JLabel label = (JLabel) super.getListCellRendererComponent(list, command.title()
@@ -64,10 +77,14 @@ public final class CommandPaletteDialog extends JDialog {
         });
         results.addListSelectionListener(event -> {
             WorkspaceCommand command = results.getSelectedValue();
-            if (command != null) status.setText(command.reason(context).isEmpty() ? command.title() : command.reason(context));
+            if (command != null)
+                status.setText(command.reason(context).isEmpty() ? command.title() : command.reason(context));
         });
         results.addMouseListener(new MouseAdapter() {
-            @Override public void mouseClicked(MouseEvent event) { if (event.getClickCount() == 2 && SwingUtilities.isLeftMouseButton(event)) execute(); }
+            @Override
+            public void mouseClicked(MouseEvent event) {
+                if (event.getClickCount() == 2 && SwingUtilities.isLeftMouseButton(event)) execute();
+            }
         });
         JPanel header = new JPanel(new BorderLayout(0, 8));
         selection.putClientProperty("html.disable", Boolean.TRUE);
@@ -116,7 +133,10 @@ public final class CommandPaletteDialog extends JDialog {
         WorkspaceCommand command = results.getSelectedValue();
         if (command == null) return;
         String reason = command.reason(context);
-        if (!reason.isEmpty()) { status.setText(reason); return; }
+        if (!reason.isEmpty()) {
+            status.setText(reason);
+            return;
+        }
         CommandContext selected = context;
         setVisible(false);
         SwingUtilities.invokeLater(() -> {
@@ -128,7 +148,10 @@ public final class CommandPaletteDialog extends JDialog {
     private static void bind(JComponent component, String key, Runnable action) {
         component.getInputMap().put(KeyStroke.getKeyStroke(key), "palette-" + key);
         component.getActionMap().put("palette-" + key, new AbstractAction() {
-            @Override public void actionPerformed(ActionEvent event) { action.run(); }
+            @Override
+            public void actionPerformed(ActionEvent event) {
+                action.run();
+            }
         });
     }
 }

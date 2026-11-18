@@ -1,14 +1,13 @@
 package dev.whitedev.jpi.ui.inspection;
 
-import dev.whitedev.jpi.ui.context.AnalysisTarget;
-import dev.whitedev.jpi.ui.context.ContextActions;
-
 import dev.whitedev.jpi.attach.InspectorSession;
 import dev.whitedev.jpi.deobfuscation.DeobfuscationWorkspace;
 import dev.whitedev.jpi.protocol.Operation;
 import dev.whitedev.jpi.ui.Async;
 import dev.whitedev.jpi.ui.SessionAware;
 import dev.whitedev.jpi.ui.Ui;
+import dev.whitedev.jpi.ui.context.AnalysisTarget;
+import dev.whitedev.jpi.ui.context.ContextActions;
 import dev.whitedev.jpi.ui.timeline.RuntimeTimelineStore;
 import dev.whitedev.jpi.ui.timeline.TimelineEvent;
 import dev.whitedev.jpi.ui.timeline.TimelineSource;
@@ -22,10 +21,12 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.Base64;
-import java.util.function.Consumer;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 public final class FieldWritesPanel extends JPanel implements SessionAware {
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm:ss.SSS")
@@ -50,7 +51,7 @@ public final class FieldWritesPanel extends JPanel implements SessionAware {
     private final DefaultTableModel sitesModel = model("Class", "Method", "Descriptor", "Line", "Opcode", "Sites");
     private final DefaultTableModel eventsModel = model("#", "Time", "Thread", "Value change", "Written by", "Line", "Call");
     private final JTable sites = new JTable(sitesModel);
-    private final java.util.List<AnalysisTarget> siteTargets = new java.util.ArrayList<>();
+    private final List<AnalysisTarget> siteTargets = new ArrayList<>();
     private final JTable events = new JTable(eventsModel);
     private final JTextArea details = Ui.outputArea();
     private final Map<Long, WriteEvent> captured = new LinkedHashMap<>();
@@ -59,7 +60,9 @@ public final class FieldWritesPanel extends JPanel implements SessionAware {
     private String selectedDefinition = "";
     private String selectedOwner = "";
 
-    public boolean canStartTrace() { return session != null && !loading; }
+    public boolean canStartTrace() {
+        return session != null && !loading;
+    }
 
     public void traceField(String identifier, String className, String name, String fieldDescriptor) {
         if (!canStartTrace()) return;
@@ -70,6 +73,7 @@ public final class FieldWritesPanel extends JPanel implements SessionAware {
         descriptor.setText(fieldDescriptor);
         start();
     }
+
     private boolean polling;
     private boolean loading;
     private Consumer<String> traceValueAction;
@@ -194,7 +198,8 @@ public final class FieldWritesPanel extends JPanel implements SessionAware {
         });
     }
 
-    @Override public void setSession(InspectorSession session) {
+    @Override
+    public void setSession(InspectorSession session) {
         selectedDefinition = "";
         selectedOwner = "";
         this.session = session;
@@ -322,7 +327,8 @@ public final class FieldWritesPanel extends JPanel implements SessionAware {
                         + " dropped, " + values[7] + " classes, " + values[8] + " sites");
             } else if (values.length == 18 && "E".equals(values[0])) {
                 WriteEvent event = WriteEvent.parse(values);
-                if (event == null || captured.containsKey(event.sequence) || captured.size() >= MAX_LOCAL_EVENTS) continue;
+                if (event == null || captured.containsKey(event.sequence) || captured.size() >= MAX_LOCAL_EVENTS)
+                    continue;
                 captured.put(event.sequence, event);
                 String call = event.callId == 0L ? "-" : "#" + event.callId;
                 eventsModel.addRow(new Object[]{event.sequence, TIME.format(Instant.ofEpochMilli(event.timestamp)),
@@ -429,7 +435,8 @@ public final class FieldWritesPanel extends JPanel implements SessionAware {
 
     private static DefaultTableModel model(String... columns) {
         return new DefaultTableModel(columns, 0) {
-            @Override public boolean isCellEditable(int row, int column) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
                 return false;
             }
         };

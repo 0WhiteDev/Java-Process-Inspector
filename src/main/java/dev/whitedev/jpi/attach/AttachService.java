@@ -1,10 +1,12 @@
 package dev.whitedev.jpi.attach;
 
-import com.sun.tools.attach.AttachNotSupportedException;
 import com.sun.tools.attach.AgentInitializationException;
 import com.sun.tools.attach.AgentLoadException;
+import com.sun.tools.attach.AttachNotSupportedException;
 import com.sun.tools.attach.VirtualMachine;
 import dev.whitedev.jpi.JpiApplication;
+import dev.whitedev.jpi.agent.AgentOptions;
+import dev.whitedev.jpi.agent.jvmti.NativeJvmtiBridge;
 import dev.whitedev.jpi.attach.jvmti.NativeAgentArtifact;
 import dev.whitedev.jpi.protocol.Operation;
 
@@ -29,18 +31,25 @@ import java.util.UUID;
 public class AttachService {
     private final File configuredAgentJar;
 
-    public AttachService() { this.configuredAgentJar = null; }
-    public AttachService(File agentJar) { this.configuredAgentJar = agentJar; }
+    public AttachService() {
+        this.configuredAgentJar = null;
+    }
 
-    public AttachRestriction attachRestriction(String pid) { return AttachRestriction.inspect(pid); }
+    public AttachService(File agentJar) {
+        this.configuredAgentJar = agentJar;
+    }
+
+    public AttachRestriction attachRestriction(String pid) {
+        return AttachRestriction.inspect(pid);
+    }
 
     private void requireAttachAvailable(String pid) throws IOException {
         if (attachRestriction(pid) == AttachRestriction.DISABLED) throw new IOException(
                 "Attach API is disabled by -XX:+DisableAttachMechanism for PID " + pid
-                + ". Connect to a preloaded JPI listener with connectPreloadedAgent, or restart with -javaagent"
-                + ", or provision ImprovedAttachService.nativePreloadedAgentArgument at startup."
-                + " A native library without communication options does not provide a JPI session."
-                + " No security-restriction bypass is attempted.");
+                        + ". Connect to a preloaded JPI listener with connectPreloadedAgent, or restart with -javaagent"
+                        + ", or provision ImprovedAttachService.nativePreloadedAgentArgument at startup."
+                        + " A native library without communication options does not provide a JPI session."
+                        + " No security-restriction bypass is attempted.");
     }
 
     public PreparedTunnelAgent preparePreloadedAgent(int port, String token, int idleTimeoutSeconds) {
@@ -54,24 +63,30 @@ public class AttachService {
     }
 
     public InspectorSession connectPreloadedAgent(int port, String token, JvmDescriptor target) throws IOException {
-        if (target == null || !target.id().matches("[1-9][0-9]*")) throw new IllegalArgumentException("A target PID is required");
+        if (target == null || !target.id().matches("[1-9][0-9]*"))
+            throw new IllegalArgumentException("A target PID is required");
         InspectorSession session = connectEndpoint(port, token, target, false);
         try {
             String info = session.requestText(Operation.SESSION_INFO, "");
-            if (!info.startsWith("pid=" + target.id() + "\n")) throw new IOException("Preloaded endpoint belongs to a different JVM");
+            if (!info.startsWith("pid=" + target.id() + "\n"))
+                throw new IOException("Preloaded endpoint belongs to a different JVM");
             return session;
-        } catch (IOException error) { session.close(); throw error; }
+        } catch (IOException error) {
+            session.close();
+            throw error;
+        }
     }
 
-    public String enableNativeBackend(InspectorSession session, dev.whitedev.jpi.attach.jvmti.NativeAgentArtifact artifact) throws IOException {
-        if (session == null || session.isTunneled()) throw new IOException("Native loading requires a local inspection session. Use startup loading and remote binding for tunnels.");
-        dev.whitedev.jpi.agent.jvmti.NativeJvmtiBridge.verifyLibrary(artifact.library().toString(), artifact.sha256());
+    public String enableNativeBackend(InspectorSession session, NativeAgentArtifact artifact) throws IOException {
+        if (session == null || session.isTunneled())
+            throw new IOException("Native loading requires a local inspection session. Use startup loading and remote binding for tunnels.");
+        NativeJvmtiBridge.verifyLibrary(artifact.library().toString(), artifact.sha256());
         String status = session.requestText(Operation.JVMTI_STATUS, "");
         if (!status.startsWith("backend=JVMTI\n")) loadNativeAgent(session.target().id(), artifact);
         return session.requestText(Operation.JVMTI_BIND, artifact.bindingOptions());
     }
 
-    public void loadNativeAgent(String pid, dev.whitedev.jpi.attach.jvmti.NativeAgentArtifact artifact) throws IOException {
+    public void loadNativeAgent(String pid, NativeAgentArtifact artifact) throws IOException {
         loadNativeAgent(pid, artifact, "");
     }
 
@@ -79,7 +94,7 @@ public class AttachService {
         if (pid == null || !pid.matches("[0-9]+")) throw new IOException("A local numeric target PID is required");
         requireAttachAvailable(pid);
         JvmAgentPolicy.inspect(pid).rejectObservedRestrictions(pid);
-        File library = dev.whitedev.jpi.agent.jvmti.NativeJvmtiBridge.verifyLibrary(artifact.library().toString(), artifact.sha256());
+        File library = NativeJvmtiBridge.verifyLibrary(artifact.library().toString(), artifact.sha256());
         VirtualMachine vm = null;
         try {
             vm = VirtualMachine.attach(pid);
@@ -107,16 +122,19 @@ public class AttachService {
                     + "=" + nativeCommunicationOptions(verified, channel.options());
             if (argument.indexOf(' ') >= 0) argument = '"' + argument + '"';
             return new PreparedAgentSession(channel, argument);
-        } catch (Exception error) { channel.close(); throw error; }
+        } catch (Exception error) {
+            channel.close();
+            throw error;
+        }
     }
 
     protected String nativeCommunicationOptions(NativeAgentArtifact verified, String options) throws Exception {
-        dev.whitedev.jpi.agent.AgentOptions.parse(options);
+        AgentOptions.parse(options);
         File jar = applicationJar().getCanonicalFile();
         if (!jar.isFile() || !jar.canRead() || !jar.getName().toLowerCase(Locale.ROOT).endsWith(".jar"))
             throw new IOException("Native communication requires a readable packaged JPI JAR");
         String library = verified.library().toFile().getCanonicalPath();
-        for (String value : new String[] {jar.toString(), library, options}) {
+        for (String value : new String[]{jar.toString(), library, options}) {
             if (value.indexOf('\n') >= 0 || value.indexOf('\r') >= 0 || value.indexOf('\0') >= 0)
                 throw new IllegalArgumentException("Native bootstrap options cannot contain control characters");
         }
@@ -131,7 +149,8 @@ public class AttachService {
     }
 
     public PreparedTunnelAgent prepareTunnelAgent(int agentPort, String token, int acceptTimeoutSeconds) {
-        if (agentPort < 1 || agentPort > 65535) throw new IllegalArgumentException("Agent port must be between 1 and 65535");
+        if (agentPort < 1 || agentPort > 65535)
+            throw new IllegalArgumentException("Agent port must be between 1 and 65535");
         if (token == null || token.length() < 16 || token.length() > 512 || token.indexOf(';') >= 0) {
             throw new IllegalArgumentException("Invalid tunnel authentication token");
         }
@@ -171,7 +190,8 @@ public class AttachService {
     }
 
     private InspectorSession connectEndpoint(int localPort, String token, JvmDescriptor target, boolean tunneled) throws IOException {
-        if (localPort < 1 || localPort > 65535) throw new IllegalArgumentException("Tunnel port must be between 1 and 65535");
+        if (localPort < 1 || localPort > 65535)
+            throw new IllegalArgumentException("Tunnel port must be between 1 and 65535");
         if (token == null || token.length() < 16 || token.length() > 512) {
             throw new IllegalArgumentException("Invalid tunnel authentication token");
         }
@@ -190,7 +210,10 @@ public class AttachService {
             }
             return session;
         } catch (IOException error) {
-            try { socket.close(); } catch (IOException ignored) {}
+            try {
+                socket.close();
+            } catch (IOException ignored) {
+            }
             throw new IOException("Could not connect to the local tunnel endpoint on port " + localPort
                     + ". Verify the agent, SSH forwarding, port, and token. Cause: " + error.getMessage(), error);
         }
@@ -208,7 +231,8 @@ public class AttachService {
                 String specification = vm.getSystemProperties().getProperty("java.specification.version", "unknown");
                 String implementation = vm.getSystemProperties().getProperty("java.vm.name", "JVM");
                 targetRuntime = implementation + " " + specification;
-            } catch (IOException ignored) { }
+            } catch (IOException ignored) {
+            }
             vm.loadAgent(agentJar.getAbsolutePath(), channel.options());
             return channel.accept(target);
         } catch (AgentInitializationException exception) {
@@ -327,7 +351,9 @@ public class AttachService {
         private final String token = UUID.randomUUID().toString() + UUID.randomUUID();
         private final ServerSocket listener;
 
-        SessionChannel() throws IOException { this(20_000); }
+        SessionChannel() throws IOException {
+            this(20_000);
+        }
 
         SessionChannel(int timeoutMillis) throws IOException {
             listener = new ServerSocket(0, 1, InetAddress.getLoopbackAddress());
@@ -356,13 +382,19 @@ public class AttachService {
                 }
                 return session;
             } catch (Exception error) {
-                try { socket.close(); } catch (IOException ignored) { }
+                try {
+                    socket.close();
+                } catch (IOException ignored) {
+                }
                 throw error;
             }
         }
 
         void close() {
-            try { listener.close(); } catch (IOException ignored) { }
+            try {
+                listener.close();
+            } catch (IOException ignored) {
+            }
         }
     }
 
@@ -375,7 +407,9 @@ public class AttachService {
             this.jvmArgument = jvmArgument;
         }
 
-        public String jvmArgument() { return jvmArgument; }
+        public String jvmArgument() {
+            return jvmArgument;
+        }
 
         public InspectorSession await(String pid, String displayName) throws Exception {
             try {
@@ -386,7 +420,10 @@ public class AttachService {
             }
         }
 
-        @Override public void close() { channel.close(); }
+        @Override
+        public void close() {
+            channel.close();
+        }
     }
 
     public static final class PreparedTunnelAgent {
@@ -398,7 +435,12 @@ public class AttachService {
             this.options = options;
         }
 
-        public String token() { return token; }
-        public String options() { return options; }
+        public String token() {
+            return token;
+        }
+
+        public String options() {
+            return options;
+        }
     }
 }

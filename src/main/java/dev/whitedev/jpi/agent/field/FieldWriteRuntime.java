@@ -20,7 +20,8 @@ public final class FieldWriteRuntime {
     private static final ArrayDeque<WriteEvent> HISTORY = new ArrayDeque<WriteEvent>();
     private static final AtomicLong SEQUENCE = new AtomicLong();
 
-    private FieldWriteRuntime() { }
+    private FieldWriteRuntime() {
+    }
 
     public static void record(String probeId, String writerClass, String writerMethod, String writerDescriptor,
                               String opcode, int line, Object receiver, Object previous, Object current) {

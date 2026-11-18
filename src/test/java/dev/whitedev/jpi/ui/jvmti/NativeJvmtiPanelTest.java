@@ -12,9 +12,11 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 class NativeJvmtiPanelTest {
-    @Test void disablesTargetActionsWhileDisconnectedAndKeepsToolbarButtonsVisible() throws Exception {
+    @Test
+    void disablesTargetActionsWhileDisconnectedAndKeepsToolbarButtonsVisible() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            NativeJvmtiPanel panel = new NativeJvmtiPanel(new ImprovedAttachService(), () -> {});
+            NativeJvmtiPanel panel = new NativeJvmtiPanel(new ImprovedAttachService(), () -> {
+            });
             panel.setSession(null);
             for (int width : new int[]{1200, 700, 500, 1200}) {
                 panel.setSize(width, 900);

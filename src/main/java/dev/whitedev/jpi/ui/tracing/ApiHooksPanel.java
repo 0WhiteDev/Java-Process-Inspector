@@ -1,16 +1,15 @@
 package dev.whitedev.jpi.ui.tracing;
 
-import dev.whitedev.jpi.ui.Async;
-import dev.whitedev.jpi.ui.SessionAware;
-import dev.whitedev.jpi.ui.Ui;
-
 import dev.whitedev.jpi.attach.InspectorSession;
 import dev.whitedev.jpi.deobfuscation.DeobfuscationWorkspace;
-import dev.whitedev.jpi.protocol.Operation;
 import dev.whitedev.jpi.plugin.api.hook.HookProfile;
 import dev.whitedev.jpi.plugin.api.hook.HookTarget;
 import dev.whitedev.jpi.plugin.runtime.ExtensionRegistry;
 import dev.whitedev.jpi.plugin.runtime.RegisteredExtension;
+import dev.whitedev.jpi.protocol.Operation;
+import dev.whitedev.jpi.ui.Async;
+import dev.whitedev.jpi.ui.SessionAware;
+import dev.whitedev.jpi.ui.Ui;
 import dev.whitedev.jpi.ui.timeline.RuntimeTimelineStore;
 import dev.whitedev.jpi.ui.timeline.TimelineEvent;
 import dev.whitedev.jpi.ui.timeline.TimelineSource;
@@ -26,8 +25,8 @@ import javax.swing.JTable;
 import javax.swing.JTextArea;
 import javax.swing.ListSelectionModel;
 import javax.swing.SpinnerNumberModel;
-import javax.swing.Timer;
 import javax.swing.SwingUtilities;
+import javax.swing.Timer;
 import javax.swing.border.EmptyBorder;
 import javax.swing.table.DefaultTableModel;
 import java.awt.BorderLayout;
@@ -121,7 +120,8 @@ public final class ApiHooksPanel extends JPanel implements SessionAware {
             if (!event.getValueIsAdjusting()) showSelected();
         });
         eventTable.addMouseListener(new MouseAdapter() {
-            @Override public void mouseClicked(MouseEvent event) {
+            @Override
+            public void mouseClicked(MouseEvent event) {
                 if (event.getClickCount() == 2) openCallerXrefs();
             }
         });
@@ -161,7 +161,8 @@ public final class ApiHooksPanel extends JPanel implements SessionAware {
         pollTimer.start();
     }
 
-    @Override public void setSession(InspectorSession session) {
+    @Override
+    public void setSession(InspectorSession session) {
         this.session = session;
         polling = false;
         boolean connected = session != null;
@@ -226,7 +227,8 @@ public final class ApiHooksPanel extends JPanel implements SessionAware {
 
     private void refreshProfiles() {
         Map<String, Boolean> selected = new LinkedHashMap<>();
-        for (Map.Entry<String, JCheckBox> entry : profiles.entrySet()) selected.put(entry.getKey(), entry.getValue().isSelected());
+        for (Map.Entry<String, JCheckBox> entry : profiles.entrySet())
+            selected.put(entry.getKey(), entry.getValue().isSelected());
         profiles.clear();
         pluginProfiles.clear();
         profileRows.removeAll();
@@ -436,7 +438,8 @@ public final class ApiHooksPanel extends JPanel implements SessionAware {
 
     private static DefaultTableModel model(String... columns) {
         return new DefaultTableModel(columns, 0) {
-            @Override public boolean isCellEditable(int row, int column) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
                 return false;
             }
         };

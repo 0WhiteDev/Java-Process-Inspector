@@ -32,6 +32,7 @@ public record BreakpointSpec(String className, String methodName, String descrip
         return value == null ? "" : value.trim();
     }
 
-    public enum Type { METHOD, LINE, BYTECODE, EXCEPTION }
-    public enum SuspendPolicy { THREAD, ALL }
+    public enum Type {METHOD, LINE, BYTECODE, EXCEPTION}
+
+    public enum SuspendPolicy {THREAD, ALL}
 }

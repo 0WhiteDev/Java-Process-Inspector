@@ -1,11 +1,10 @@
 package dev.whitedev.jpi.ui.callgraph;
 
+import dev.whitedev.jpi.deobfuscation.DeobfuscationWorkspace;
+import dev.whitedev.jpi.ui.Ui;
 import dev.whitedev.jpi.ui.context.AnalysisTarget;
 import dev.whitedev.jpi.ui.context.ContextAction;
 import dev.whitedev.jpi.ui.context.ContextActions;
-
-import dev.whitedev.jpi.deobfuscation.DeobfuscationWorkspace;
-import dev.whitedev.jpi.ui.Ui;
 
 import javax.swing.JComponent;
 import javax.swing.ToolTipManager;
@@ -15,8 +14,8 @@ import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.FontMetrics;
-import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.Graphics;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
@@ -44,7 +43,8 @@ final class CallGraphCanvas extends JComponent {
     private CallGraphModel.View view = new CallGraphModel.View(List.of(), List.of(),
             CallGraphModel.HeatMetric.CALLS);
     private CallGraphModel.Node selected;
-    private Consumer<CallGraphModel.Node> selectionListener = ignored -> {};
+    private Consumer<CallGraphModel.Node> selectionListener = ignored -> {
+    };
     private long maximumHeat;
 
     CallGraphCanvas(DeobfuscationWorkspace workspace) {
@@ -53,12 +53,14 @@ final class CallGraphCanvas extends JComponent {
         setBackground(Ui.BACKGROUND);
         ToolTipManager.sharedInstance().registerComponent(this);
         MouseAdapter mouse = new MouseAdapter() {
-            @Override public void mouseMoved(MouseEvent event) {
+            @Override
+            public void mouseMoved(MouseEvent event) {
                 setCursor(nodeAt(event.getPoint()) == null
                         ? Cursor.getDefaultCursor() : Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
             }
 
-            @Override public void mouseClicked(MouseEvent event) {
+            @Override
+            public void mouseClicked(MouseEvent event) {
                 selected = nodeAt(event.getPoint());
                 selectionListener.accept(selected);
                 repaint();
@@ -69,7 +71,8 @@ final class CallGraphCanvas extends JComponent {
     }
 
     void setSelectionListener(Consumer<CallGraphModel.Node> listener) {
-        selectionListener = listener == null ? ignored -> {} : listener;
+        selectionListener = listener == null ? ignored -> {
+        } : listener;
     }
 
     void setContextActions(ContextActions actions) {
@@ -93,13 +96,15 @@ final class CallGraphCanvas extends JComponent {
         repaint();
     }
 
-    @Override public String getToolTipText(MouseEvent event) {
+    @Override
+    public String getToolTipText(MouseEvent event) {
         CallGraphModel.Node node = nodeAt(event.getPoint());
         if (node == null) return null;
         return node.id() + " | " + node.calls + " calls | " + formatNanos(node.totalNanos);
     }
 
-    @Override protected void paintComponent(Graphics graphics) {
+    @Override
+    protected void paintComponent(Graphics graphics) {
         super.paintComponent(graphics);
         Graphics2D g = (Graphics2D) graphics.create();
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);

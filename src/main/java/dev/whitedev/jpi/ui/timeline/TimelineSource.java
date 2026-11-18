@@ -22,7 +22,8 @@ public enum TimelineSource {
         this.label = label;
     }
 
-    @Override public String toString() {
+    @Override
+    public String toString() {
         return label;
     }
 }

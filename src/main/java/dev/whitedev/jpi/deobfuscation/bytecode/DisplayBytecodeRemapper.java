@@ -1,14 +1,14 @@
 package dev.whitedev.jpi.deobfuscation.bytecode;
 
 import dev.whitedev.jpi.deobfuscation.DeobfuscationWorkspace;
-
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.commons.ClassRemapper;
 import org.objectweb.asm.commons.Remapper;
 
 public final class DisplayBytecodeRemapper {
-    private DisplayBytecodeRemapper() {}
+    private DisplayBytecodeRemapper() {
+    }
 
     public static byte[] remap(byte[] bytecode, DeobfuscationWorkspace workspace) {
         ClassReader reader = new ClassReader(bytecode);
@@ -24,24 +24,28 @@ public final class DisplayBytecodeRemapper {
             this.workspace = workspace;
         }
 
-        @Override public String map(String internalName) {
+        @Override
+        public String map(String internalName) {
             if (internalName == null) return null;
             String original = internalName.replace('/', '.');
             String mapped = workspace.classAlias(original);
             return mapped.equals(original) ? internalName : mapped.replace('.', '/');
         }
 
-        @Override public String mapPackageName(String name) {
+        @Override
+        public String mapPackageName(String name) {
             String original = name.replace('/', '.');
             String mapped = workspace.packageAlias(original);
             return mapped.equals(original) ? name : mapped.replace('.', '/');
         }
 
-        @Override public String mapMethodName(String owner, String name, String descriptor) {
+        @Override
+        public String mapMethodName(String owner, String name, String descriptor) {
             return workspace.methodAlias(owner.replace('/', '.'), name, descriptor);
         }
 
-        @Override public String mapFieldName(String owner, String name, String descriptor) {
+        @Override
+        public String mapFieldName(String owner, String name, String descriptor) {
             return workspace.fieldAlias(owner.replace('/', '.'), name, descriptor);
         }
     }

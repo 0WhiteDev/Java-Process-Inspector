@@ -15,6 +15,7 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JSpinner;
 import javax.swing.JSplitPane;
+import javax.swing.JTabbedPane;
 import javax.swing.JTable;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
@@ -39,6 +40,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
+import java.util.Locale;
 
 public final class HeapObjectPanel extends JPanel implements SessionAware {
     private static final DateTimeFormatter FILE_TIME = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
@@ -65,7 +67,7 @@ public final class HeapObjectPanel extends JPanel implements SessionAware {
     private final JTable members = new JTable(memberModel);
     private final JTextArea objectHeader = Ui.outputArea();
     private final HprofPanel snapshotPanel = new HprofPanel();
-    private final javax.swing.JTabbedPane modes = new javax.swing.JTabbedPane();
+    private final JTabbedPane modes = new JTabbedPane();
     private InspectorSession session;
 
     public HeapObjectPanel(DeobfuscationWorkspace workspace) {
@@ -94,17 +96,19 @@ public final class HeapObjectPanel extends JPanel implements SessionAware {
         instances.getSelectionModel().addListSelectionListener(event -> inspect.setEnabled(
                 session != null && instances.getSelectedRow() >= 0));
         instances.addMouseListener(new MouseAdapter() {
-            @Override public void mouseClicked(MouseEvent event) {
+            @Override
+            public void mouseClicked(MouseEvent event) {
                 if (event.getClickCount() == 2) inspectSelected();
             }
         });
         members.addMouseListener(new MouseAdapter() {
-            @Override public void mouseClicked(MouseEvent event) {
+            @Override
+            public void mouseClicked(MouseEvent event) {
                 if (event.getClickCount() == 2) inspectReferenced();
             }
         });
 
-        javax.swing.JTabbedPane results = new javax.swing.JTabbedPane();
+        JTabbedPane results = new JTabbedPane();
         results.addTab("Sample instances", Ui.scroll(instances));
         results.addTab("Reachable class counts", Ui.scroll(counts));
         JSplitPane objectDetails = new JSplitPane(JSplitPane.VERTICAL_SPLIT, Ui.scroll(objectHeader), Ui.scroll(members));
@@ -148,7 +152,8 @@ public final class HeapObjectPanel extends JPanel implements SessionAware {
         snapshotPanel.focusClass(loaderType);
     }
 
-    @Override public void setSession(InspectorSession session) {
+    @Override
+    public void setSession(InspectorSession session) {
         this.session = session;
         boolean connected = session != null;
         scan.setEnabled(connected);
@@ -344,7 +349,7 @@ public final class HeapObjectPanel extends JPanel implements SessionAware {
         chooser.setSelectedFile(new File("jpi-heap-" + FILE_TIME.format(LocalDateTime.now()) + ".hprof"));
         if (chooser.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) return;
         File destination = chooser.getSelectedFile();
-        if (!destination.getName().toLowerCase(java.util.Locale.ROOT).endsWith(".hprof")) {
+        if (!destination.getName().toLowerCase(Locale.ROOT).endsWith(".hprof")) {
             destination = new File(destination.getParentFile(), destination.getName() + ".hprof");
         }
         if (destination.exists()) {
@@ -415,13 +420,15 @@ public final class HeapObjectPanel extends JPanel implements SessionAware {
 
     private static DefaultTableModel model(String... columns) {
         return new DefaultTableModel(columns, 0) {
-            @Override public boolean isCellEditable(int row, int column) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
                 return false;
             }
         };
     }
 
-    private record Sample(long id, String className, String loader, long size, int depth, String root, String path, String preview) {
+    private record Sample(long id, String className, String loader, long size, int depth, String root, String path,
+                          String preview) {
         static Sample parse(String[] values) {
             try {
                 return new Sample(Long.parseLong(values[1]), decoded(values[2]), decoded(values[3]),

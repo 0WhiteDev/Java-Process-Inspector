@@ -3,6 +3,7 @@ package dev.whitedev.jpi.investigation.assistant;
 import dev.whitedev.jpi.protocol.Operation;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -16,13 +17,15 @@ import static org.junit.jupiter.api.Assertions.*;
 class InvestigationAssistantTest {
     private static final String QUERY = "api.example.com/v2/login";
 
-    @Test void buildsDeterministicGraphFindingsAndSafeTraceSuggestions() throws Exception {
+    @Test
+    void buildsDeterministicGraphFindingsAndSafeTraceSuggestions() throws Exception {
         Fixture fixture = new Fixture();
         var updates = new ArrayList<InvestigationAssistant.Progress>();
         var first = new InvestigationAssistant(fixture, InvestigationAssistant.Limits.defaults())
                 .run(QUERY, updates::add, () -> false);
         var second = new InvestigationAssistant(new Fixture(), InvestigationAssistant.Limits.defaults())
-                .run(QUERY, ignored -> { }, () -> false);
+                .run(QUERY, ignored -> {
+                }, () -> false);
         assertEquals(first.markdown(), second.markdown());
         assertTrue(updates.stream().map(InvestigationAssistant.Progress::step).toList().containsAll(List.of(1, 2, 3, 4, 5, 6, 7)));
         assertTrue(first.findings().stream().anyMatch(finding -> finding.category().equals("Crypto")));
@@ -37,9 +40,11 @@ class InvestigationAssistantTest {
         assertTrue(first.markdown().contains("not proof of one complete execution"));
     }
 
-    @Test void doesNotInventAnOrderedChainBetweenSiblingCryptoAndNetworkCalls() throws Exception {
+    @Test
+    void doesNotInventAnOrderedChainBetweenSiblingCryptoAndNetworkCalls() throws Exception {
         var report = new InvestigationAssistant(new Fixture(), InvestigationAssistant.Limits.defaults())
-                .run(QUERY, ignored -> { }, () -> false);
+                .run(QUERY, ignored -> {
+                }, () -> false);
         assertFalse(report.chains().isEmpty());
         for (var chain : report.chains()) {
             boolean crypto = chain.methods().stream().anyMatch(method -> method.owner().equals("javax.crypto.Cipher"));
@@ -48,48 +53,57 @@ class InvestigationAssistantTest {
         }
     }
 
-    @Test void respectsRequestDepthAndGraphBoundsAndReportsPartialEvidence() throws Exception {
+    @Test
+    void respectsRequestDepthAndGraphBoundsAndReportsPartialEvidence() throws Exception {
         Fixture fixture = new Fixture();
         var limits = new InvestigationAssistant.Limits(1, 1, 0, 3, 2, Duration.ofSeconds(30));
-        var report = new InvestigationAssistant(fixture, limits).run(QUERY, ignored -> { }, () -> false);
+        var report = new InvestigationAssistant(fixture, limits).run(QUERY, ignored -> {
+        }, () -> false);
         assertTrue(report.partial());
         assertTrue(report.edges().size() <= 2);
         assertEquals(1, fixture.operations.stream().filter(operation -> operation == Operation.METHOD_XREFS).count());
         assertFalse(report.notices().isEmpty());
     }
 
-    @Test void stopsAtTheSoftDeadlineWithoutIssuingAnExpansionRequest() throws Exception {
+    @Test
+    void stopsAtTheSoftDeadlineWithoutIssuingAnExpansionRequest() throws Exception {
         Fixture fixture = new Fixture();
         var limits = new InvestigationAssistant.Limits(1, 16, 3, 80, 200, Duration.ofNanos(1));
-        var report = new InvestigationAssistant(fixture, limits).run(QUERY, ignored -> { }, () -> false);
+        var report = new InvestigationAssistant(fixture, limits).run(QUERY, ignored -> {
+        }, () -> false);
         assertTrue(report.partial());
         assertEquals(0, report.analyzedMethods());
         assertTrue(fixture.operations.stream().noneMatch(operation -> operation == Operation.METHOD_XREFS));
         assertFalse(report.text().contains("```"));
     }
 
-    @Test void neverExpandsAnAmbiguousClassloaderOrSuggestsItsUnresolvedMethod() throws Exception {
+    @Test
+    void neverExpandsAnAmbiguousClassloaderOrSuggestsItsUnresolvedMethod() throws Exception {
         Fixture fixture = new Fixture();
         fixture.ambiguous = true;
         var report = new InvestigationAssistant(fixture, InvestigationAssistant.Limits.defaults())
-                .run(QUERY, ignored -> { }, () -> false);
+                .run(QUERY, ignored -> {
+                }, () -> false);
         assertTrue(report.partial());
         assertTrue(report.notices().stream().anyMatch(notice -> notice.contains("Ambiguous classloader for app.Crypto")));
         assertTrue(report.probes().stream().noneMatch(probe -> probe.className().equals("app.Crypto")));
         assertTrue(fixture.calls.stream().noneMatch(call -> call.startsWith("c:2\n")));
     }
 
-    @Test void preservesSuccessfulEvidenceWhenOneExpansionFails() throws Exception {
+    @Test
+    void preservesSuccessfulEvidenceWhenOneExpansionFails() throws Exception {
         Fixture fixture = new Fixture();
         fixture.failCrypto = true;
         var report = new InvestigationAssistant(fixture, InvestigationAssistant.Limits.defaults())
-                .run(QUERY, ignored -> { }, () -> false);
+                .run(QUERY, ignored -> {
+                }, () -> false);
         assertTrue(report.partial());
         assertTrue(report.notices().stream().anyMatch(notice -> notice.contains("bytecode unavailable")));
         assertTrue(report.findings().stream().anyMatch(finding -> finding.category().equals("Network")));
     }
 
-    @Test void cancelsBetweenRequestsWithoutInstallingAnything() {
+    @Test
+    void cancelsBetweenRequestsWithoutInstallingAnything() {
         AtomicBoolean cancelled = new AtomicBoolean();
         List<Operation> calls = new ArrayList<>();
         var assistant = new InvestigationAssistant((operation, payload) -> {
@@ -97,13 +111,16 @@ class InvestigationAssistantTest {
             cancelled.set(true);
             return "";
         }, InvestigationAssistant.Limits.defaults());
-        assertThrows(CancellationException.class, () -> assistant.run(QUERY, ignored -> { }, cancelled::get));
+        assertThrows(CancellationException.class, () -> assistant.run(QUERY, ignored -> {
+        }, cancelled::get));
         assertEquals(List.of(Operation.CONSTANT_SEARCH), calls);
     }
 
-    @Test void emptyAndMalformedResultsDoNotGenerateFalseApiFindings() throws Exception {
+    @Test
+    void emptyAndMalformedResultsDoNotGenerateFalseApiFindings() throws Exception {
         var report = new InvestigationAssistant((operation, payload) -> "broken\nR\tinvalid",
-                InvestigationAssistant.Limits.defaults()).run(QUERY, ignored -> { }, () -> false);
+                InvestigationAssistant.Limits.defaults()).run(QUERY, ignored -> {
+        }, () -> false);
         assertTrue(report.edges().isEmpty());
         assertTrue(report.findings().isEmpty());
         assertTrue(report.probes().isEmpty());
@@ -119,7 +136,8 @@ class InvestigationAssistantTest {
         boolean ambiguous;
         boolean failCrypto;
 
-        @Override public String request(Operation operation, String payload) throws Exception {
+        @Override
+        public String request(Operation operation, String payload) throws Exception {
             operations.add(operation);
             calls.add(payload);
             return switch (operation) {
@@ -130,17 +148,20 @@ class InvestigationAssistantTest {
                         + definition("c:3", "app.Request") + definition("c:4", "app.Screen")
                         + (ambiguous ? definition("c:22", "app.Crypto") : "");
                 case METHOD_XREFS -> {
-                    if (payload.startsWith("c:1\n")) yield row("STATIC", "CALLED_BY", "c:4", "app.Screen", "click", "()V", "invoke", 1)
-                            + row("STATIC", "CALLS", "app.Crypto", "app.Crypto", "sign", "()V", "invoke", 1)
-                            + row("STATIC", "CALLS", "app.Request", "app.Request", "send", "()V", "invoke", 1)
-                            + "R\tbroken\n";
+                    if (payload.startsWith("c:1\n"))
+                        yield row("STATIC", "CALLED_BY", "c:4", "app.Screen", "click", "()V", "invoke", 1)
+                                + row("STATIC", "CALLS", "app.Crypto", "app.Crypto", "sign", "()V", "invoke", 1)
+                                + row("STATIC", "CALLS", "app.Request", "app.Request", "send", "()V", "invoke", 1)
+                                + "R\tbroken\n";
                     if (payload.startsWith("c:2\n")) {
-                        if (failCrypto) throw new java.io.IOException("bytecode unavailable");
+                        if (failCrypto) throw new IOException("bytecode unavailable");
                         yield row("STATIC", "CALLS", "javax.crypto.Cipher", "javax.crypto.Cipher", "doFinal", "()[B", "invoke", 1);
                     }
-                    if (payload.startsWith("c:3\n")) yield row("STATIC", "CALLS", "java.net.http.HttpClient", "java.net.http.HttpClient", "send", "()V", "invoke", 1)
-                            + row("DYNAMIC", "CALLS", "java.net.http.HttpClient", "java.net.http.HttpClient", "send", "()V", "observed", 4);
-                    if (payload.startsWith("c:4\n")) yield row("STATIC", "CALLS", "app.Auth", "app.Auth", "login", "()V", "invoke", 1);
+                    if (payload.startsWith("c:3\n"))
+                        yield row("STATIC", "CALLS", "java.net.http.HttpClient", "java.net.http.HttpClient", "send", "()V", "invoke", 1)
+                                + row("DYNAMIC", "CALLS", "java.net.http.HttpClient", "java.net.http.HttpClient", "send", "()V", "observed", 4);
+                    if (payload.startsWith("c:4\n"))
+                        yield row("STATIC", "CALLS", "app.Auth", "app.Auth", "login", "()V", "invoke", 1);
                     throw new AssertionError("Unexpected Xrefs query: " + payload);
                 }
                 default -> throw new AssertionError("Unexpected operation: " + operation);

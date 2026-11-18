@@ -18,7 +18,8 @@ public final class InvestigationAnalyzer {
 
     private static final int MAX_PATHS = 100;
 
-    private InvestigationAnalyzer() {}
+    private InvestigationAnalyzer() {
+    }
 
     public static InvestigationReport analyze(String query, String constantsRaw, String xrefsRaw, String tracesRaw) {
         String normalizedQuery = query == null ? "" : query.trim();

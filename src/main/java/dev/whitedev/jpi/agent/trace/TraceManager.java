@@ -1,9 +1,10 @@
 package dev.whitedev.jpi.agent.trace;
 
+import dev.whitedev.jpi.agent.RuntimeAccess;
+
 import java.io.IOException;
 import java.lang.instrument.ClassDefinition;
 import java.lang.instrument.Instrumentation;
-import dev.whitedev.jpi.agent.RuntimeAccess;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.IdentityHashMap;
@@ -23,7 +24,8 @@ public final class TraceManager {
     private final Map<Class<?>, TracedClass> classes = new IdentityHashMap<Class<?>, TracedClass>();
     private final Map<String, TraceProbe> probes = new LinkedHashMap<String, TraceProbe>();
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(new ThreadFactory() {
-        @Override public Thread newThread(Runnable task) {
+        @Override
+        public Thread newThread(Runnable task) {
             Thread thread = new Thread(task, "jpi-trace-expiration");
             thread.setDaemon(true);
             thread.setContextClassLoader(TraceRuntime.class.getClassLoader());
@@ -40,7 +42,7 @@ public final class TraceManager {
     }
 
     public synchronized String start(Class<?> target, String targetIdentifier, String methodName,
-                              String descriptor, String settings, byte[] currentBytecode) throws Exception {
+                                     String descriptor, String settings, byte[] currentBytecode) throws Exception {
         requireRuntimeVisibility(target);
         TraceConfig config = TraceConfig.parse(settings);
         String id = "trace-" + IDS.incrementAndGet();
@@ -66,7 +68,8 @@ public final class TraceManager {
         if (created) classes.put(target, traced);
         probes.put(probe.id, probe);
         probe.expiration = scheduler.schedule(new Runnable() {
-            @Override public void run() {
+            @Override
+            public void run() {
                 try {
                     stop(id);
                 } catch (Throwable ignored) {

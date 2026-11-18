@@ -5,7 +5,8 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 public final class TunnelAgentCommand {
-    private TunnelAgentCommand() {}
+    private TunnelAgentCommand() {
+    }
 
     public static boolean matches(String[] arguments) {
         return arguments != null && arguments.length > 0 && "agent-server".equals(arguments[0]);

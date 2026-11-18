@@ -3,18 +3,21 @@ package dev.whitedev.jpi.integration;
 import dev.whitedev.jpi.attach.AttachService;
 import dev.whitedev.jpi.attach.InspectorSession;
 import dev.whitedev.jpi.attach.JvmDescriptor;
+import dev.whitedev.jpi.protocol.Operation;
 import dev.whitedev.jpi.search.SearchCategory;
 import dev.whitedev.jpi.search.SearchEverythingService;
-import dev.whitedev.jpi.protocol.Operation;
 import org.junit.jupiter.api.Test;
 import org.objectweb.asm.ClassReader;
+
 import java.io.File;
 import java.nio.file.Path;
 import java.util.concurrent.TimeUnit;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 class SearchEverythingIT {
-    @Test void searchesRealLoadedClassesMembersAndLiteralStrings() throws Exception {
+    @Test
+    void searchesRealLoadedClassesMembersAndLiteralStrings() throws Exception {
         String javaExe = Path.of(System.getProperty("java.home"), "bin", System.getProperty("os.name").startsWith("Windows") ? "java.exe" : "java").toString();
         Process target = new ProcessBuilder(javaExe, "-cp", System.getProperty("jpi.test.classes", "target/test-classes"), AttachTarget.class.getName())
                 .redirectErrorStream(true).start();

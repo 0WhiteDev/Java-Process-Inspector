@@ -44,7 +44,8 @@ public final class ElfSymbolParser {
         Set<String> sources = new LinkedHashSet<>();
         List<String> warnings = new ArrayList<>();
         for (Section section : sections) {
-            if (section.type == 2L || section.type == 11L) parseSymbols(data, sections, section, elf64, symbols, warnings);
+            if (section.type == 2L || section.type == 11L)
+                parseSymbols(data, sections, section, elf64, symbols, warnings);
             if (".debug_str".equals(section.name) || ".debug_line_str".equals(section.name)) {
                 extractSourceStrings(data, section, sources);
             }
@@ -57,8 +58,11 @@ public final class ElfSymbolParser {
             warnings.addAll(lines.warnings());
         }
         List<String> dwarfSections = new ArrayList<>();
-        for (Section section : sections) if (section.name.startsWith(".debug_") || section.name.startsWith(".zdebug_")) dwarfSections.add(section.name);
-        if (!dwarfSections.isEmpty()) artifacts.add(new DebugArtifact("DWARF", path, String.join(",", dwarfSections), true));
+        for (Section section : sections)
+            if (section.name.startsWith(".debug_") || section.name.startsWith(".zdebug_"))
+                dwarfSections.add(section.name);
+        if (!dwarfSections.isEmpty())
+            artifacts.add(new DebugArtifact("DWARF", path, String.join(",", dwarfSections), true));
         if (symbols.isEmpty()) warnings.add("No ELF symbol table or supported DWARF line rows were found");
         return new ParsedSymbols("ELF", architecture(machine), symbols, artifacts, sources, warnings);
     }
@@ -66,7 +70,8 @@ public final class ElfSymbolParser {
     private static List<Section> sections(BinaryData data, long offset, int entrySize, int count,
                                           boolean elf64) throws IOException {
         int minimum = elf64 ? 64 : 40;
-        if (entrySize < minimum || !data.contains(offset, (long) entrySize * count)) throw new IOException("Truncated ELF section table");
+        if (entrySize < minimum || !data.contains(offset, (long) entrySize * count))
+            throw new IOException("Truncated ELF section table");
         List<Section> result = new ArrayList<>();
         for (int index = 0; index < count; index++) {
             long entry = offset + (long) index * entrySize;

@@ -2,7 +2,7 @@ package dev.whitedev.jpi.deobfuscation.io;
 
 import dev.whitedev.jpi.deobfuscation.MappingEntry;
 import dev.whitedev.jpi.deobfuscation.MappingKind;
-
+import dev.whitedev.jpi.fingerprint.TargetFingerprint;
 import org.objectweb.asm.Type;
 
 import java.io.IOException;
@@ -10,6 +10,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -24,7 +25,8 @@ public final class MappingFormats {
     private static final Pattern JSON_VALUE = Pattern.compile(
             "\"([A-Za-z]+)\"\\s*:\\s*(?:\"((?:\\\\.|[^\"\\\\])*)\"|(true|false|-?\\d+))");
 
-    private MappingFormats() {}
+    private MappingFormats() {
+    }
 
     public static void write(Path path, Format format, List<MappingEntry> entries) throws IOException {
         write(path, format, entries, "");
@@ -37,8 +39,8 @@ public final class MappingFormats {
         else if (format == Format.TSRG2) value = tsrg(entries);
         else value = proguard(entries);
         if (format == Format.JSON && !fingerprint.isEmpty()) {
-            dev.whitedev.jpi.fingerprint.TargetFingerprint.parse(fingerprint);
-            String encoded = java.util.Base64.getEncoder().encodeToString(fingerprint.getBytes(StandardCharsets.UTF_8));
+            TargetFingerprint.parse(fingerprint);
+            String encoded = Base64.getEncoder().encodeToString(fingerprint.getBytes(StandardCharsets.UTF_8));
             value = value.replace("  \"entries\": [", "  \"targetFingerprint\": \"" + encoded + "\",\n  \"entries\": [");
         }
         Files.writeString(path, value, StandardCharsets.UTF_8);
@@ -49,12 +51,13 @@ public final class MappingFormats {
         String document = Files.readString(path, StandardCharsets.UTF_8);
         Matcher matcher = Pattern.compile("\"targetFingerprint\"\\s*:\\s*\"([A-Za-z0-9+/=]*)\"").matcher(document);
         if (!matcher.find()) {
-            if (Pattern.compile("\"targetFingerprint\"\\s*:").matcher(document).find()) throw new IOException("Invalid workspace target fingerprint encoding");
+            if (Pattern.compile("\"targetFingerprint\"\\s*:").matcher(document).find())
+                throw new IOException("Invalid workspace target fingerprint encoding");
             return "";
         }
         try {
-            String wire = new String(java.util.Base64.getDecoder().decode(matcher.group(1)), StandardCharsets.UTF_8);
-            dev.whitedev.jpi.fingerprint.TargetFingerprint.parse(wire);
+            String wire = new String(Base64.getDecoder().decode(matcher.group(1)), StandardCharsets.UTF_8);
+            TargetFingerprint.parse(wire);
             return wire;
         } catch (RuntimeException error) {
             throw new IOException("Invalid workspace target fingerprint", error);
@@ -156,8 +159,11 @@ public final class MappingFormats {
             for (MappingEntry entry : members(entries, owner, MappingKind.FIELD)) {
                 if (!mapped(entry)) continue;
                 String type;
-                try { type = Type.getType(entry.descriptor()).getClassName(); }
-                catch (RuntimeException ignored) { type = "java.lang.Object"; }
+                try {
+                    type = Type.getType(entry.descriptor()).getClassName();
+                } catch (RuntimeException ignored) {
+                    type = "java.lang.Object";
+                }
                 output.append("    ").append(type).append(' ').append(entry.originalName())
                         .append(" -> ").append(entry.mappedName()).append('\n');
             }
@@ -306,7 +312,13 @@ public final class MappingFormats {
             this.extension = extension;
         }
 
-        public String extension() { return extension; }
-        @Override public String toString() { return label; }
+        public String extension() {
+            return extension;
+        }
+
+        @Override
+        public String toString() {
+            return label;
+        }
     }
 }

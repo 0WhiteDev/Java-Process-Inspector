@@ -4,13 +4,16 @@ import java.io.IOException;
 import java.util.Base64;
 
 public final class RawMemoryCommand {
-    private RawMemoryCommand() {}
+    private RawMemoryCommand() {
+    }
 
     public static byte[] read(String payload) throws IOException {
         String[] fields = fields(payload, 2);
         try {
             return NativeJvmtiBridge.readMemory(address(fields[0]), Integer.parseInt(fields[1]));
-        } catch (IllegalArgumentException error) { throw new IOException("Invalid memory read request", error); }
+        } catch (IllegalArgumentException error) {
+            throw new IOException("Invalid memory read request", error);
+        }
     }
 
     public static String patch(String payload) throws IOException {
@@ -20,7 +23,9 @@ public final class RawMemoryCommand {
             byte[] replacement = Base64.getDecoder().decode(fields[2]);
             NativeJvmtiBridge.patchMemory(address(fields[0]), expected, replacement);
             return "Patched " + replacement.length + " bytes\n";
-        } catch (IllegalArgumentException error) { throw new IOException("Invalid memory patch request", error); }
+        } catch (IllegalArgumentException error) {
+            throw new IOException("Invalid memory patch request", error);
+        }
     }
 
     private static String[] fields(String payload, int count) throws IOException {
@@ -31,7 +36,8 @@ public final class RawMemoryCommand {
     }
 
     private static long address(String value) {
-        if (!value.matches("(?:0[xX])?[0-9a-fA-F]{1,16}")) throw new IllegalArgumentException("Expected hexadecimal address");
+        if (!value.matches("(?:0[xX])?[0-9a-fA-F]{1,16}"))
+            throw new IllegalArgumentException("Expected hexadecimal address");
         return Long.parseUnsignedLong(value.replaceFirst("^0[xX]", ""), 16);
     }
 }

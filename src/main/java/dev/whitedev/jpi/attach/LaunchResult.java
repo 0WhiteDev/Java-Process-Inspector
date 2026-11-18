@@ -13,7 +13,15 @@ public final class LaunchResult {
         this.logFile = logFile;
     }
 
-    public InspectorSession session() { return session; }
-    public Process process() { return process; }
-    public File logFile() { return logFile; }
+    public InspectorSession session() {
+        return session;
+    }
+
+    public Process process() {
+        return process;
+    }
+
+    public File logFile() {
+        return logFile;
+    }
 }

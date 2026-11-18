@@ -11,7 +11,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MappingSearchQueryTest {
-    @Test void filtersOneClassAndMultipleFieldsAndMethodsAtTheSameTime() {
+    @Test
+    void filtersOneClassAndMultipleFieldsAndMethodsAtTheSameTime() {
         DeobfuscationWorkspace workspace = workspace();
         MappingSearchQuery query = MappingSearchQuery.parse(
                 "class=abc field=a,b,c method=l,p,av1");
@@ -31,7 +32,8 @@ class MappingSearchQueryTest {
         assertFalse(matches.contains("CLASS:sample.other"));
     }
 
-    @Test void searchesOriginalAndMappedNamesWithWildcards() {
+    @Test
+    void searchesOriginalAndMappedNamesWithWildcards() {
         DeobfuscationWorkspace workspace = workspace();
         map(workspace, MappingKind.CLASS, "", "sample.abc", "", "AuthenticationManager");
         map(workspace, MappingKind.FIELD, "sample.abc", "a", "Ljava/lang/String;", "serverPublicKey");
@@ -50,7 +52,8 @@ class MappingSearchQueryTest {
                 && "l".equals(entry.originalName())));
     }
 
-    @Test void keepsFreeTextAsAnAdditionalConstraint() {
+    @Test
+    void keepsFreeTextAsAnAdditionalConstraint() {
         DeobfuscationWorkspace workspace = workspace();
         for (MappingEntry entry : workspace.entries()) {
             if (entry.kind() == MappingKind.METHOD && "l".equals(entry.originalName())) {

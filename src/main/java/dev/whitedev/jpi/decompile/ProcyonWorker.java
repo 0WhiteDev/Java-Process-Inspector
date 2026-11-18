@@ -4,7 +4,8 @@ import java.io.File;
 import java.nio.charset.StandardCharsets;
 
 public final class ProcyonWorker {
-    private ProcyonWorker() {}
+    private ProcyonWorker() {
+    }
 
     public static void main(String[] args) throws Exception {
         if (args.length != 1) throw new IllegalArgumentException("A local class file is required");

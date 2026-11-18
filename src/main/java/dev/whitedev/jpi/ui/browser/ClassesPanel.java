@@ -1,53 +1,62 @@
 package dev.whitedev.jpi.ui.browser;
 
-import dev.whitedev.jpi.ui.context.AnalysisTarget;
-import dev.whitedev.jpi.ui.context.ContextActions;
-
-import dev.whitedev.jpi.ui.Async;
-import dev.whitedev.jpi.ui.CodeEditors;
-import dev.whitedev.jpi.ui.SessionAware;
-import dev.whitedev.jpi.ui.Ui;
-import dev.whitedev.jpi.ui.layout.WrappingFlowLayout;
-import dev.whitedev.jpi.ui.debug.DebuggerPanel;
-import dev.whitedev.jpi.ui.tracing.LiveTracerPanel;
-import dev.whitedev.jpi.ui.tracing.XrefsPanel;
-import dev.whitedev.jpi.ui.timeline.RuntimeTimelineStore;
-import dev.whitedev.jpi.ui.timeline.TimelineEvent;
-import dev.whitedev.jpi.ui.timeline.TimelineSource;
-
 import dev.whitedev.jpi.attach.InspectorSession;
 import dev.whitedev.jpi.decompile.DecompilerOption;
 import dev.whitedev.jpi.decompile.DecompilerService;
 import dev.whitedev.jpi.decompile.MethodBodyCompatibility;
 import dev.whitedev.jpi.decompile.MethodSourceExtractor;
 import dev.whitedev.jpi.deobfuscation.DeobfuscationWorkspace;
+import dev.whitedev.jpi.deobfuscation.MappingEntry;
+import dev.whitedev.jpi.deobfuscation.MappingKind;
 import dev.whitedev.jpi.deobfuscation.bytecode.DisplayBytecodeRemapper;
-import dev.whitedev.jpi.protocol.Operation;
-import dev.whitedev.jpi.plugin.api.decompile.DecompilerProvider;
 import dev.whitedev.jpi.plugin.api.analysis.AnalysisResult;
 import dev.whitedev.jpi.plugin.api.analysis.BytecodeAnalyzer;
 import dev.whitedev.jpi.plugin.api.analysis.BytecodeTarget;
+import dev.whitedev.jpi.plugin.api.decompile.DecompilerProvider;
 import dev.whitedev.jpi.plugin.api.deobfuscation.Deobfuscator;
 import dev.whitedev.jpi.plugin.api.deobfuscation.MappingSuggestion;
 import dev.whitedev.jpi.plugin.runtime.ExtensionRegistry;
 import dev.whitedev.jpi.plugin.runtime.RegisteredExtension;
+import dev.whitedev.jpi.protocol.Operation;
+import dev.whitedev.jpi.ui.Async;
+import dev.whitedev.jpi.ui.CodeEditors;
+import dev.whitedev.jpi.ui.SessionAware;
+import dev.whitedev.jpi.ui.Ui;
 import dev.whitedev.jpi.ui.analysis.BytecodeCfgPanel;
 import dev.whitedev.jpi.ui.analysis.DifferenceTracingPanel;
+import dev.whitedev.jpi.ui.context.AnalysisTarget;
+import dev.whitedev.jpi.ui.context.ContextActions;
+import dev.whitedev.jpi.ui.debug.DebuggerPanel;
+import dev.whitedev.jpi.ui.layout.WrappingFlowLayout;
+import dev.whitedev.jpi.ui.patch.PatchDiffPanel;
+import dev.whitedev.jpi.ui.timeline.RuntimeTimelineStore;
+import dev.whitedev.jpi.ui.timeline.TimelineEvent;
+import dev.whitedev.jpi.ui.timeline.TimelineSource;
+import dev.whitedev.jpi.ui.tracing.LiveTracerPanel;
+import dev.whitedev.jpi.ui.tracing.XrefsPanel;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 
 import javax.swing.*;
+import javax.swing.Timer;
 import javax.swing.border.EmptyBorder;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
+import javax.swing.event.PopupMenuEvent;
+import javax.swing.event.PopupMenuListener;
 import java.awt.*;
+import java.awt.event.ComponentAdapter;
+import java.awt.event.ComponentEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.io.File;
 import java.nio.file.Files;
 import java.security.MessageDigest;
 import java.text.SimpleDateFormat;
-import java.util.List;
 import java.util.*;
+import java.util.List;
+import java.util.function.Supplier;
 
 public final class ClassesPanel extends JPanel implements SessionAware {
     private static final int MAX_HEX_BYTES = 4 * 1024 * 1024;
@@ -98,8 +107,8 @@ public final class ClassesPanel extends JPanel implements SessionAware {
     private final JComboBox<SourceMode> sourceMode = new JComboBox<>(SourceMode.values());
     private final DecompilerService decompilerService = new DecompilerService();
     private final ExtensionRegistry extensions;
-    private final javax.swing.Timer classFilterTimer = new javax.swing.Timer(220, event -> filter(false, null));
-    private final javax.swing.Timer mappedSourceTimer = new javax.swing.Timer(350, event -> refreshMappedSource());
+    private final Timer classFilterTimer = new Timer(220, event -> filter(false, null));
+    private final Timer mappedSourceTimer = new Timer(350, event -> refreshMappedSource());
     private List<LoadedClassInfo> allClasses = new ArrayList<>();
     private List<LoadedClassInfo> filteredClasses = Collections.emptyList();
     private InspectorSession session;
@@ -119,29 +128,29 @@ public final class ClassesPanel extends JPanel implements SessionAware {
     private Runnable openDebugger;
 
     public ClassesPanel(DeobfuscationWorkspace mappingWorkspace, LiveTracerPanel liveTracer, XrefsPanel xrefs,
-                 BytecodeCfgPanel cfg, Runnable openLiveTracer, Runnable openXrefs, Runnable openCfg) {
+                        BytecodeCfgPanel cfg, Runnable openLiveTracer, Runnable openXrefs, Runnable openCfg) {
         this(mappingWorkspace, liveTracer, xrefs, cfg, openLiveTracer, openXrefs, openCfg, new ExtensionRegistry(),
                 new RuntimeTimelineStore());
     }
 
     public ClassesPanel(DeobfuscationWorkspace mappingWorkspace, LiveTracerPanel liveTracer, XrefsPanel xrefs,
-                 BytecodeCfgPanel cfg, Runnable openLiveTracer, Runnable openXrefs, Runnable openCfg,
-                 ExtensionRegistry extensions) {
+                        BytecodeCfgPanel cfg, Runnable openLiveTracer, Runnable openXrefs, Runnable openCfg,
+                        ExtensionRegistry extensions) {
         this(mappingWorkspace, liveTracer, xrefs, cfg, openLiveTracer, openXrefs, openCfg, extensions,
                 new RuntimeTimelineStore());
     }
 
     public ClassesPanel(DeobfuscationWorkspace mappingWorkspace, LiveTracerPanel liveTracer, XrefsPanel xrefs,
-                 BytecodeCfgPanel cfg, Runnable openLiveTracer, Runnable openXrefs, Runnable openCfg,
-                 ExtensionRegistry extensions, RuntimeTimelineStore timeline) {
+                        BytecodeCfgPanel cfg, Runnable openLiveTracer, Runnable openXrefs, Runnable openCfg,
+                        ExtensionRegistry extensions, RuntimeTimelineStore timeline) {
         this(mappingWorkspace, liveTracer, xrefs, cfg, null, openLiveTracer, openXrefs, openCfg, null,
                 extensions, timeline);
     }
 
     public ClassesPanel(DeobfuscationWorkspace mappingWorkspace, LiveTracerPanel liveTracer, XrefsPanel xrefs,
-                 BytecodeCfgPanel cfg, DifferenceTracingPanel differences, Runnable openLiveTracer,
-                 Runnable openXrefs, Runnable openCfg, Runnable openDifferences,
-                 ExtensionRegistry extensions, RuntimeTimelineStore timeline) {
+                        BytecodeCfgPanel cfg, DifferenceTracingPanel differences, Runnable openLiveTracer,
+                        Runnable openXrefs, Runnable openCfg, Runnable openDifferences,
+                        ExtensionRegistry extensions, RuntimeTimelineStore timeline) {
         super(new BorderLayout(0, 16));
         this.mappingWorkspace = mappingWorkspace;
         this.timeline = timeline;
@@ -163,7 +172,7 @@ public final class ClassesPanel extends JPanel implements SessionAware {
             if (isMappedSource()) mappedSourceTimer.restart();
         }));
         add(Ui.sectionHeader("Loaded classes",
-                "Track definitions, duplicate names, classloaders, modules, and captured bytecode", null),
+                        "Track definitions, duplicate names, classloaders, modules, and captured bytecode", null),
                 BorderLayout.NORTH);
 
         JPanel browser = Ui.card(new BorderLayout(0, 10));
@@ -256,8 +265,9 @@ public final class ClassesPanel extends JPanel implements SessionAware {
         toolbarRow.gridy++;
         tools.add(sourceHint, toolbarRow);
         detail.add(tools, BorderLayout.NORTH);
-        detail.addComponentListener(new java.awt.event.ComponentAdapter() {
-            @Override public void componentResized(java.awt.event.ComponentEvent event) {
+        detail.addComponentListener(new ComponentAdapter() {
+            @Override
+            public void componentResized(ComponentEvent event) {
                 tools.revalidate();
             }
         });
@@ -284,12 +294,21 @@ public final class ClassesPanel extends JPanel implements SessionAware {
         previousClassPage.addActionListener(event -> changeClassPage(-1));
         nextClassPage.addActionListener(event -> changeClassPage(1));
         search.getDocument().addDocumentListener(new DocumentListener() {
-            public void insertUpdate(DocumentEvent event) { scheduleFilter(); }
-            public void removeUpdate(DocumentEvent event) { scheduleFilter(); }
-            public void changedUpdate(DocumentEvent event) { scheduleFilter(); }
+            public void insertUpdate(DocumentEvent event) {
+                scheduleFilter();
+            }
+
+            public void removeUpdate(DocumentEvent event) {
+                scheduleFilter();
+            }
+
+            public void changedUpdate(DocumentEvent event) {
+                scheduleFilter();
+            }
         });
         list.addMouseListener(new MouseAdapter() {
-            @Override public void mouseClicked(MouseEvent event) {
+            @Override
+            public void mouseClicked(MouseEvent event) {
                 if (event.getClickCount() == 2) decompile();
             }
         });
@@ -306,11 +325,19 @@ public final class ClassesPanel extends JPanel implements SessionAware {
         refreshPluginTools();
         sourceMode.addActionListener(event -> sourceModeChanged());
         methodBody.getDocument().addDocumentListener(new DocumentListener() {
-            public void insertUpdate(DocumentEvent event) { refreshMethodPatchState(); }
-            public void removeUpdate(DocumentEvent event) { refreshMethodPatchState(); }
-            public void changedUpdate(DocumentEvent event) { refreshMethodPatchState(); }
+            public void insertUpdate(DocumentEvent event) {
+                refreshMethodPatchState();
+            }
+
+            public void removeUpdate(DocumentEvent event) {
+                refreshMethodPatchState();
+            }
+
+            public void changedUpdate(DocumentEvent event) {
+                refreshMethodPatchState();
+            }
         });
-        new javax.swing.Timer(3000, event -> {
+        new Timer(3000, event -> {
             if (live.isSelected() && session != null) {
                 reload(false);
                 refreshEvents();
@@ -318,7 +345,8 @@ public final class ClassesPanel extends JPanel implements SessionAware {
         }).start();
     }
 
-    @Override public void setSession(InspectorSession session) {
+    @Override
+    public void setSession(InspectorSession session) {
         this.session = session;
         inventoryGeneration++;
         reloading = false;
@@ -391,10 +419,17 @@ public final class ClassesPanel extends JPanel implements SessionAware {
         });
     }
 
-    private Operation inventoryOperation() { return nativeBackend ? Operation.JVMTI_CLASSES : Operation.CLASSES; }
-    private Operation bytecodeOperation() { return nativeBackend ? Operation.JVMTI_CLASS_BYTES : Operation.CLASS_BYTES; }
+    private Operation inventoryOperation() {
+        return nativeBackend ? Operation.JVMTI_CLASSES : Operation.CLASSES;
+    }
 
-    public void useNativeBackend() { backend.setSelectedIndex(1); }
+    private Operation bytecodeOperation() {
+        return nativeBackend ? Operation.JVMTI_CLASS_BYTES : Operation.CLASS_BYTES;
+    }
+
+    public void useNativeBackend() {
+        backend.setSelectedIndex(1);
+    }
 
     private static ClassInventory parseClassInventory(String value) {
         List<LoadedClassInfo> parsed = new ArrayList<>();
@@ -496,6 +531,7 @@ public final class ClassesPanel extends JPanel implements SessionAware {
             }
         }
     }
+
     private void updateSelectionMetadata() {
         if (updatingClassList) return;
         LoadedClassInfo selected = list.getSelectedValue();
@@ -631,21 +667,21 @@ public final class ClassesPanel extends JPanel implements SessionAware {
                 "Apply " + values.size() + " suggestions from " + tool.name,
                 JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
         if (choice != JOptionPane.OK_OPTION) return;
-        Map<String, dev.whitedev.jpi.deobfuscation.MappingEntry> current = new HashMap<>();
-        for (dev.whitedev.jpi.deobfuscation.MappingEntry entry : mappingWorkspace.entries()) current.put(entry.key(), entry);
-        List<dev.whitedev.jpi.deobfuscation.MappingEntry> accepted = new ArrayList<>();
+        Map<String, MappingEntry> current = new HashMap<>();
+        for (MappingEntry entry : mappingWorkspace.entries()) current.put(entry.key(), entry);
+        List<MappingEntry> accepted = new ArrayList<>();
         int preserved = 0;
         for (MappingSuggestion suggestion : values) {
-            dev.whitedev.jpi.deobfuscation.MappingEntry candidate = new dev.whitedev.jpi.deobfuscation.MappingEntry(
-                    dev.whitedev.jpi.deobfuscation.MappingKind.valueOf(suggestion.type().name()),
+            MappingEntry candidate = new MappingEntry(
+                    MappingKind.valueOf(suggestion.type().name()),
                     suggestion.owner(), suggestion.originalName(), suggestion.descriptor(),
                     suggestion.parameterIndex(), 0);
-            dev.whitedev.jpi.deobfuscation.MappingEntry existing = current.get(candidate.key());
+            MappingEntry existing = current.get(candidate.key());
             if (existing != null && !existing.mappedName().isBlank()) {
                 preserved++;
                 continue;
             }
-            dev.whitedev.jpi.deobfuscation.MappingEntry result = existing == null ? candidate : existing.copy();
+            MappingEntry result = existing == null ? candidate : existing.copy();
             result.setMappedName(suggestion.suggestedName());
             result.setComment(suggestion.reason());
             result.setTags("plugin," + tool.pluginId);
@@ -715,6 +751,7 @@ public final class ClassesPanel extends JPanel implements SessionAware {
         return generation == decompileGeneration && selected != null && classId.equals(selected.id)
                 && engine.equals(selectedDecompiler()) && mode == sourceMode.getSelectedItem();
     }
+
     private JPanel methodPatchPanel() {
         JPanel panel = new JPanel(new BorderLayout(0, 10));
         panel.setOpaque(false);
@@ -837,7 +874,8 @@ public final class ClassesPanel extends JPanel implements SessionAware {
         if ("captured-only".equals(selected.kind)) return "The class is no longer loaded and can only be dumped";
         if (!selected.modifiable) return "The target JVM marks this class as read-only";
         if (method == null) return "Select a method";
-        if (!method.patchable) return "Constructors, class initializers, abstract methods, and native methods are read-only";
+        if (!method.patchable)
+            return "Constructors, class initializers, abstract methods, and native methods are read-only";
         return null;
     }
 
@@ -861,7 +899,7 @@ public final class ClassesPanel extends JPanel implements SessionAware {
             LoadedClassInfo selected = list.getSelectedValue();
             return selected == null ? null : AnalysisTarget.type(selected.id, selected.name);
         });
-        java.util.function.Supplier<AnalysisTarget> target = () -> {
+        Supplier<AnalysisTarget> target = () -> {
             LoadedClassInfo selected = list.getSelectedValue();
             MethodInfo method = (MethodInfo) methodSelector.getSelectedItem();
             if (selected == null || method == null || !selected.id.equals(methodClassId)) return null;
@@ -873,15 +911,22 @@ public final class ClassesPanel extends JPanel implements SessionAware {
         JPopupMenu editorMenu = methodBody.getPopupMenu();
         editorMenu.addSeparator();
         editorMenu.add(analysis);
-        editorMenu.addPopupMenuListener(new javax.swing.event.PopupMenuListener() {
-            @Override public void popupMenuWillBecomeVisible(javax.swing.event.PopupMenuEvent event) {
+        editorMenu.addPopupMenuListener(new PopupMenuListener() {
+            @Override
+            public void popupMenuWillBecomeVisible(PopupMenuEvent event) {
                 analysis.removeAll();
                 JPopupMenu menu = actions.menu(target.get());
                 while (menu.getComponentCount() > 0) analysis.add(menu.getComponent(0));
                 analysis.setEnabled(analysis.getMenuComponentCount() > 0);
             }
-            @Override public void popupMenuWillBecomeInvisible(javax.swing.event.PopupMenuEvent event) { }
-            @Override public void popupMenuCanceled(javax.swing.event.PopupMenuEvent event) { }
+
+            @Override
+            public void popupMenuWillBecomeInvisible(PopupMenuEvent event) {
+            }
+
+            @Override
+            public void popupMenuCanceled(PopupMenuEvent event) {
+            }
         });
     }
 
@@ -1168,7 +1213,8 @@ public final class ClassesPanel extends JPanel implements SessionAware {
 
     private static byte[] parseHex(String text) {
         String compact = text.replaceAll("\\s+", "");
-        if ((compact.length() & 1) != 0) throw new IllegalArgumentException("Hex bytecode must contain complete byte pairs");
+        if ((compact.length() & 1) != 0)
+            throw new IllegalArgumentException("Hex bytecode must contain complete byte pairs");
         byte[] output = new byte[compact.length() / 2];
         for (int index = 0; index < output.length; index++) {
             int high = Character.digit(compact.charAt(index * 2), 16);
@@ -1229,20 +1275,23 @@ public final class ClassesPanel extends JPanel implements SessionAware {
         if (selected == null || current == null || "captured-only".equals(selected.kind)) return;
         MethodInfo selectedMethod = (MethodInfo) methodSelector.getSelectedItem();
         String methodDraft = selectedMethod == null ? "" : selectedMethod.name + "\n" + selectedMethod.descriptor + "\n" + methodBody.getText();
-        dev.whitedev.jpi.ui.patch.PatchDiffPanel panel = new dev.whitedev.jpi.ui.patch.PatchDiffPanel(current, selected.id,
+        PatchDiffPanel panel = new PatchDiffPanel(current, selected.id,
                 selected.name, (DecompilerOption) decompilerSelector.getSelectedItem(), isMappedSource() ? "" : source.getText(),
                 bytecodeHex.getText(), methodDraft, () -> session == current, () -> {
-                    methodClassId = null;
-                    refreshEvents();
-                    if (list.getSelectedValue() != null && selected.id.equals(list.getSelectedValue().id)) decompile();
-                });
+            methodClassId = null;
+            refreshEvents();
+            if (list.getSelectedValue() != null && selected.id.equals(list.getSelectedValue().id)) decompile();
+        });
         JDialog dialog = new JDialog(SwingUtilities.getWindowAncestor(this), "Class diff / Patch history: " + selected.name);
         dialog.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
         dialog.setContentPane(panel);
         dialog.setSize(1200, 800);
         dialog.setLocationRelativeTo(this);
-        dialog.addWindowListener(new java.awt.event.WindowAdapter() {
-            @Override public void windowClosed(java.awt.event.WindowEvent event) { panel.close(); }
+        dialog.addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosed(WindowEvent event) {
+                panel.close();
+            }
         });
         dialog.setVisible(true);
     }
@@ -1280,11 +1329,13 @@ public final class ClassesPanel extends JPanel implements SessionAware {
                             columns[4] + " " + mappingWorkspace.classAlias(columns[1]),
                             "Class: " + columns[1] + "\nClassloader: " + columns[2]
                                     + "\nBytecode size: " + columns[3] + " bytes"));
-                } catch (NumberFormatException ignored) { }
+                } catch (NumberFormatException ignored) {
+                }
             }
             events.setText(formatted.length() == 0 ? "No class definitions captured yet." : formatted.toString());
             events.setCaretPosition(Math.max(0, events.getDocument().getLength()));
-        }, error -> { });
+        }, error -> {
+        });
     }
 
     private void dumpSelected() {
@@ -1366,10 +1417,12 @@ public final class ClassesPanel extends JPanel implements SessionAware {
             this.label = label;
         }
 
-        @Override public String toString() {
+        @Override
+        public String toString() {
             return label;
         }
     }
+
     private static final class DecompiledResult {
         final byte[] bytecode;
         final String source;
@@ -1413,7 +1466,8 @@ public final class ClassesPanel extends JPanel implements SessionAware {
             return "{\n    return 0;\n}";
         }
 
-        @Override public String toString() {
+        @Override
+        public String toString() {
             String alias = mappingWorkspace.methodAlias(owner, name, descriptor);
             String visible = alias.equals(name) ? name : alias + " [" + name + "]";
             return (patchable ? "" : "[read-only] ") + visible + descriptor + "  " + modifiers;
@@ -1443,7 +1497,8 @@ public final class ClassesPanel extends JPanel implements SessionAware {
             this.deobfuscator = deobfuscator;
         }
 
-        @Override public String toString() {
+        @Override
+        public String toString() {
             return name + "  [" + pluginId + "]";
         }
     }
@@ -1467,8 +1522,9 @@ public final class ClassesPanel extends JPanel implements SessionAware {
     }
 
     private final class ClassRenderer extends DefaultListCellRenderer {
-        @Override public Component getListCellRendererComponent(JList<?> list, Object value, int index,
-                                                                 boolean selected, boolean focus) {
+        @Override
+        public Component getListCellRendererComponent(JList<?> list, Object value, int index,
+                                                      boolean selected, boolean focus) {
             JLabel label = (JLabel) super.getListCellRendererComponent(list, value, index, selected, focus);
             LoadedClassInfo info = value instanceof LoadedClassInfo ? (LoadedClassInfo) value : null;
             if (info != null) {

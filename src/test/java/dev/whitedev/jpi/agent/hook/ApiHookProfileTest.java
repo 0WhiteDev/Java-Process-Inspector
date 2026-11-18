@@ -3,9 +3,9 @@ package dev.whitedev.jpi.agent.hook;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.util.Set;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;

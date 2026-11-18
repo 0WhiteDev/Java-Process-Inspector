@@ -1,14 +1,18 @@
 package dev.whitedev.jpi.agent.loader;
 
-import java.lang.instrument.Instrumentation;
 import dev.whitedev.jpi.agent.RuntimeAccess;
+
+import java.lang.instrument.Instrumentation;
 import java.lang.ref.ReferenceQueue;
 import java.lang.ref.WeakReference;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.charset.StandardCharsets;
+import java.security.CodeSource;
+import java.security.ProtectionDomain;
 import java.util.Base64;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
@@ -59,13 +63,17 @@ public final class ClassLoaderExplorer {
             }
             long size = -1L;
             if (loader != null && instrumentation != null) {
-                try { size = instrumentation.getObjectSize(loader); } catch (RuntimeException ignored) {}
+                try {
+                    size = instrumentation.getObjectSize(loader);
+                } catch (RuntimeException ignored) {
+                }
             }
             appendLoader(output, entry.id, entry.parent, entry.type, entry.label,
                     loader == null ? "collected" : "active", entry.firstSeen,
                     loader == null ? entry.collectedAt : entry.lastSeen, entry.count, size, entry.notice);
-            for (String location : entry.sources) output.append("U\t").append(encoded(entry.id)).append('\t')
-                    .append(encoded(location)).append('\n');
+            for (String location : entry.sources)
+                output.append("U\t").append(encoded(entry.id)).append('\t')
+                        .append(encoded(location)).append('\n');
         }
         return output.append(definitions).toString();
     }
@@ -95,7 +103,7 @@ public final class ClassLoaderExplorer {
             if (entry != null) entry.collectedAt = now;
         }
         if (history.size() > 10000) {
-            java.util.Iterator<Entry> entries = history.values().iterator();
+            Iterator<Entry> entries = history.values().iterator();
             while (history.size() > 10000 && entries.hasNext()) {
                 Entry entry = entries.next();
                 if (entry.key.get() == null) entries.remove();
@@ -113,7 +121,8 @@ public final class ClassLoaderExplorer {
                 entry.notice = "Custom getURLs override skipped; showing observed code sources";
                 return;
             }
-            for (URL url : ((URLClassLoader) loader).getURLs()) entry.sources.add("Loader URL: " + url.toExternalForm());
+            for (URL url : ((URLClassLoader) loader).getURLs())
+                entry.sources.add("Loader URL: " + url.toExternalForm());
         } catch (ReflectiveOperationException error) {
             entry.notice = "Loader URLs unavailable";
         } catch (SecurityException error) {
@@ -123,8 +132,8 @@ public final class ClassLoaderExplorer {
 
     private static String source(Class<?> type) {
         try {
-            java.security.ProtectionDomain domain = type.getProtectionDomain();
-            java.security.CodeSource source = domain == null ? null : domain.getCodeSource();
+            ProtectionDomain domain = type.getProtectionDomain();
+            CodeSource source = domain == null ? null : domain.getCodeSource();
             return source == null || source.getLocation() == null ? "" : source.getLocation().toExternalForm();
         } catch (SecurityException error) {
             return "";
@@ -145,12 +154,19 @@ public final class ClassLoaderExplorer {
 
     private static final class LoaderKey extends WeakReference<ClassLoader> {
         final int hash;
+
         LoaderKey(ClassLoader loader, ReferenceQueue<ClassLoader> queue) {
             super(loader, queue);
             hash = System.identityHashCode(loader);
         }
-        @Override public int hashCode() { return hash; }
-        @Override public boolean equals(Object other) {
+
+        @Override
+        public int hashCode() {
+            return hash;
+        }
+
+        @Override
+        public boolean equals(Object other) {
             if (this == other) return true;
             return other instanceof LoaderKey && get() != null && get() == ((LoaderKey) other).get();
         }
@@ -168,6 +184,7 @@ public final class ClassLoaderExplorer {
         long lastSeen;
         long collectedAt;
         int count;
+
         Entry(String id, LoaderKey key, String type, long now) {
             this.id = id;
             this.key = key;

@@ -8,8 +8,8 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.Objects;
+import java.util.Set;
 import java.util.TreeMap;
 
 public final class DifferenceAnalyzer {
@@ -57,8 +57,8 @@ public final class DifferenceAnalyzer {
     }
 
     private void compareTransitions(List<CfgTransition> left,
-                                                            List<CfgTransition> right,
-                                                            List<DifferenceReport.Change> changes) {
+                                    List<CfgTransition> right,
+                                    List<DifferenceReport.Change> changes) {
         Map<String, List<String>> a = transitionRoutes(left);
         Map<String, List<String>> b = transitionRoutes(right);
         Set<String> subjects = union(a.keySet(), b.keySet());

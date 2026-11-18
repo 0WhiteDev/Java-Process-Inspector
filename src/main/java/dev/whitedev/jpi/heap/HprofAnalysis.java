@@ -2,19 +2,25 @@ package dev.whitedev.jpi.heap;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
+import java.io.EOFException;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 public final class HprofAnalysis implements AutoCloseable {
-    private static final java.util.Set<Process> WORKERS = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    private static final Set<Process> WORKERS = ConcurrentHashMap.newKeySet();
+
     static {
         Runtime.getRuntime().addShutdownHook(new Thread(() -> WORKERS.forEach(Process::destroyForcibly), "jpi-heap-worker-cleanup"));
     }
+
     private final Process process;
     private final ObjectInputStream input;
     private final ObjectOutputStream output;
@@ -32,7 +38,8 @@ public final class HprofAnalysis implements AutoCloseable {
     }
 
     public static HprofAnalysis open(Path file, int memoryMiB) throws IOException {
-        if (memoryMiB < 128 || memoryMiB > 32768) throw new IllegalArgumentException("Analyzer memory must be 128 to 32768 MiB");
+        if (memoryMiB < 128 || memoryMiB > 32768)
+            throw new IllegalArgumentException("Analyzer memory must be 128 to 32768 MiB");
         Path absolute = file.toRealPath();
         Path java = Path.of(System.getProperty("java.home"), "bin", "java.exe");
         if (!Files.isRegularFile(java)) java = java.resolveSibling("java");
@@ -80,14 +87,14 @@ public final class HprofAnalysis implements AutoCloseable {
             return response;
         } catch (ClassNotFoundException error) {
             throw new IOException("Incompatible heap analyzer response", error);
-        } catch (java.io.EOFException error) {
+        } catch (EOFException error) {
             throw new IOException("Heap analyzer stopped. The snapshot may need a higher analyzer memory limit.", error);
         }
     }
 
     private static List<HprofSnapshot.ObjectSummary> summaries(Object response) throws IOException {
         if (!(response instanceof List<?> rows)) throw new IOException("Invalid heap analyzer response");
-        var result = new java.util.ArrayList<HprofSnapshot.ObjectSummary>();
+        var result = new ArrayList<HprofSnapshot.ObjectSummary>();
         for (Object row : rows) {
             if (!(row instanceof HprofSnapshot.ObjectSummary object)) throw new IOException("Invalid object summary");
             result.add(object);
@@ -95,7 +102,8 @@ public final class HprofAnalysis implements AutoCloseable {
         return List.copyOf(result);
     }
 
-    @Override public void close() {
+    @Override
+    public void close() {
         process.destroy();
         try {
             if (!process.waitFor(2, TimeUnit.SECONDS)) {
@@ -106,8 +114,14 @@ public final class HprofAnalysis implements AutoCloseable {
             Thread.currentThread().interrupt();
             process.destroyForcibly();
         }
-        try { input.close(); } catch (IOException ignored) {}
-        try { output.close(); } catch (IOException ignored) {}
+        try {
+            input.close();
+        } catch (IOException ignored) {
+        }
+        try {
+            output.close();
+        } catch (IOException ignored) {
+        }
         WORKERS.remove(process);
     }
 }

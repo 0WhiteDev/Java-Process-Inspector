@@ -9,7 +9,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class InvestigationAnalyzerTest {
-    @Test void preservesSeparateClassloaderDefinitionsWhenRankingIdenticallyNamedMethods() {
+    @Test
+    void preservesSeparateClassloaderDefinitionsWhenRankingIdenticallyNamedMethods() {
         String rows = row("STATIC", "STRING_USER", 1, "c:1", "app.Service", "run", "()V", "login")
                 + row("STATIC", "STRING_USER", 1, "c:2", "app.Service", "run", "()V", "login");
         var report = InvestigationAnalyzer.analyze("login", "", rows, "");
@@ -18,7 +19,8 @@ class InvestigationAnalyzerTest {
         assertEquals("c:2", report.entryPoints().get(1).classIdentifier());
     }
 
-    @Test void investigatesAnExplicitMethodWithoutInventingConstantMatches() {
+    @Test
+    void investigatesAnExplicitMethodWithoutInventingConstantMatches() {
         var target = new InvestigationTarget("c:8", "app.Service", "run", "()V", "", 100, 0);
         String traces = String.join("\t", "S", "trace-1", "7", "0", "0", "0", "true",
                 encoded("app.Service"), encoded("run"), encoded("()V"));

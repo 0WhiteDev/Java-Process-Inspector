@@ -10,6 +10,7 @@ public record HookProfile(String id, String name, String description, List<HookT
         targets = targets == null ? List.of() : List.copyOf(targets);
         if (!id.matches("[A-Z][A-Z0-9_]{1,63}")) throw new IllegalArgumentException("Invalid hook profile id: " + id);
         if (name.isEmpty()) throw new IllegalArgumentException("Hook profile name is required");
-        if (targets.isEmpty() || targets.size() > 256) throw new IllegalArgumentException("Hook profile needs 1 to 256 targets");
+        if (targets.isEmpty() || targets.size() > 256)
+            throw new IllegalArgumentException("Hook profile needs 1 to 256 targets");
     }
 }

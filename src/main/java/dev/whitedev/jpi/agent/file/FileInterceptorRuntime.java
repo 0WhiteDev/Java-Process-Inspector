@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileSystemException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Base64;
 
@@ -17,7 +18,8 @@ public final class FileInterceptorRuntime {
     private static volatile boolean captureContent;
     private static volatile int previewLimit = 4096;
 
-    private FileInterceptorRuntime() {}
+    private FileInterceptorRuntime() {
+    }
 
     public static Path path(Path value, Object content, String operation, String callerClass,
                             String callerMethod, String callerDescriptor) throws IOException {
@@ -126,7 +128,7 @@ public final class FileInterceptorRuntime {
                 && operation != FileOperation.TRUNCATE && operation != FileOperation.OPEN
                 && operation != FileOperation.MOVE && operation != FileOperation.COPY) return;
         Path parent = destination.getParent();
-        if (parent != null) java.nio.file.Files.createDirectories(parent);
+        if (parent != null) Files.createDirectories(parent);
     }
 
     private static Object converted(Path value, Class<?> type) {

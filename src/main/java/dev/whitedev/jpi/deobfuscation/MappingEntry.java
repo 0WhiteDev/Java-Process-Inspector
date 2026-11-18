@@ -34,23 +34,69 @@ public final class MappingEntry {
         this.enabled = enabled;
     }
 
-    public MappingKind kind() { return kind; }
-    public String owner() { return owner; }
-    public String originalName() { return originalName; }
-    public String descriptor() { return descriptor; }
-    public int parameterIndex() { return parameterIndex; }
-    public int access() { return access; }
-    public String mappedName() { return mappedName; }
-    public String comment() { return comment; }
-    public String tags() { return tags; }
-    public String color() { return color; }
-    public boolean enabled() { return enabled; }
+    public MappingKind kind() {
+        return kind;
+    }
 
-    public void setMappedName(String value) { mappedName = value(value).trim(); }
-    public void setComment(String value) { comment = value(value); }
-    public void setTags(String value) { tags = value(value); }
-    public void setColor(String value) { color = value(value).trim(); }
-    public void setEnabled(boolean value) { enabled = value; }
+    public String owner() {
+        return owner;
+    }
+
+    public String originalName() {
+        return originalName;
+    }
+
+    public String descriptor() {
+        return descriptor;
+    }
+
+    public int parameterIndex() {
+        return parameterIndex;
+    }
+
+    public int access() {
+        return access;
+    }
+
+    public String mappedName() {
+        return mappedName;
+    }
+
+    public String comment() {
+        return comment;
+    }
+
+    public String tags() {
+        return tags;
+    }
+
+    public String color() {
+        return color;
+    }
+
+    public boolean enabled() {
+        return enabled;
+    }
+
+    public void setMappedName(String value) {
+        mappedName = value(value).trim();
+    }
+
+    public void setComment(String value) {
+        comment = value(value);
+    }
+
+    public void setTags(String value) {
+        tags = value(value);
+    }
+
+    public void setColor(String value) {
+        color = value(value).trim();
+    }
+
+    public void setEnabled(boolean value) {
+        enabled = value;
+    }
 
     public String key() {
         return kind.name() + '\u0000' + owner + '\u0000' + originalName + '\u0000'

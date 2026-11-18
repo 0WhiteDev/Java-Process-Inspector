@@ -6,6 +6,8 @@ import java.util.List;
 
 public interface Deobfuscator {
     String id();
+
     String name();
+
     List<MappingSuggestion> suggest(BytecodeTarget target) throws Exception;
 }

@@ -1,5 +1,6 @@
 package dev.whitedev.jpi.ui.profiler;
 
+import dev.whitedev.jpi.profiler.ProfilerCategory;
 import dev.whitedev.jpi.profiler.ProfilerReport;
 import org.junit.jupiter.api.Test;
 
@@ -14,7 +15,8 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class FlameGraphCanvasTest {
-    @Test void laysOutAndRendersWeightedStacks() throws Exception {
+    @Test
+    void laysOutAndRendersWeightedStacks() throws Exception {
         ProfilerReport report = ProfilerReport.parse("R\t1\t1001\t1000\t20\tfalse\n"
                 + flame(12, "main\nexample.Game.run\nexample.Renderer.render")
                 + flame(8, "main\nexample.Game.run\nexample.World.tick"));
@@ -22,7 +24,7 @@ class FlameGraphCanvasTest {
 
         SwingUtilities.invokeAndWait(() -> {
             FlameGraphCanvas canvas = new FlameGraphCanvas();
-            canvas.setMetrics(report.category(dev.whitedev.jpi.profiler.ProfilerCategory.CPU).flames());
+            canvas.setMetrics(report.category(ProfilerCategory.CPU).flames());
             Dimension size = canvas.getPreferredSize();
             canvas.setSize(size);
             BufferedImage image = new BufferedImage(size.width, size.height, BufferedImage.TYPE_INT_ARGB);

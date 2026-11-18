@@ -9,7 +9,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
 class ProfilerReportTest {
-    @Test void parsesSummaryFlamesAndItems() {
+    @Test
+    void parsesSummaryFlamesAndItems() {
         String path = encoded("main\nexample.Service.run");
         String item = encoded("byte[]");
         ProfilerReport report = ProfilerReport.parse("R\t10\t2010\t2000\t42\tfalse\n"

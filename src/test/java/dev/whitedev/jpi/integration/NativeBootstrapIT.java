@@ -5,12 +5,18 @@ import dev.whitedev.jpi.attach.jvmti.NativeAgentArtifact;
 import dev.whitedev.jpi.protocol.Operation;
 import dev.whitedev.jpi.protocol.WireProtocol;
 import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.io.TempDir;
 import org.objectweb.asm.ClassReader;
+import org.objectweb.asm.tree.ClassNode;
+import org.objectweb.asm.tree.MethodInsnNode;
+
 import java.io.*;
 import java.net.*;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.util.*;
 import java.util.concurrent.*;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 @Timeout(90)
@@ -18,19 +24,23 @@ class NativeBootstrapIT {
     private static final String TOKEN = "native-owner-provisioned-test-token-12345";
     private final ImprovedAttachService service = new ImprovedAttachService(new File(System.getProperty("jpi.agent.jar", "target/jpi.jar")));
 
-    @Test void restrictedNativeOnlyJvmUsesExistingApisForInspectionPatchRollbackAndCapture() throws Exception {
+    @Test
+    void restrictedNativeOnlyJvmUsesExistingApisForInspectionPatchRollbackAndCapture() throws Exception {
         verifyRestrictedNativeInspection(false);
     }
 
-    @Test void ownerPreparedNativeCallbackProvidesFullInspectionWithoutAttachOrJavaAgent() throws Exception {
+    @Test
+    void ownerPreparedNativeCallbackProvidesFullInspectionWithoutAttachOrJavaAgent() throws Exception {
         verifyRestrictedNativeInspection(true);
     }
 
-    @Test void explicitNativeInjectionBootstrapsAnUnpreparedRestrictedJvm() throws Exception {
+    @Test
+    void explicitNativeInjectionBootstrapsAnUnpreparedRestrictedJvm() throws Exception {
         verifyRestrictedNativeInspection(false, true);
     }
 
-    @Test void restrictedNativeOnlySessionDrainsItsArchiveOnDisconnectAndCanReconnect(@org.junit.jupiter.api.io.TempDir Path directory) throws Exception {
+    @Test
+    void restrictedNativeOnlySessionDrainsItsArchiveOnDisconnectAndCanReconnect(@TempDir Path directory) throws Exception {
         int port = port();
         try (Fixture fixture = start(argument(port, 30))) {
             Path saved;
@@ -49,7 +59,8 @@ class NativeBootstrapIT {
                 boolean found = false;
                 for (String row : Files.readAllLines(saved.resolve("manifest.tsv"))) {
                     if (row.startsWith("sequence\t")) continue;
-                    if (new ClassReader(Files.readAllBytes(saved.resolve(row.split("\t", -1)[4]))).getClassName().equals("NativeArchived")) found = true;
+                    if (new ClassReader(Files.readAllBytes(saved.resolve(row.split("\t", -1)[4]))).getClassName().equals("NativeArchived"))
+                        found = true;
                 }
                 assertTrue(found, status);
                 assertEquals("pong", session.requestText(Operation.PING, ""));
@@ -57,7 +68,8 @@ class NativeBootstrapIT {
         }
     }
 
-    @Test void nativeAttachApiConnectsToAnUnpreparedRestrictedJvmWithoutStandardAttach() throws Exception {
+    @Test
+    void nativeAttachApiConnectsToAnUnpreparedRestrictedJvmWithoutStandardAttach() throws Exception {
         artifact();
         try (Fixture fixture = start(true, List.of());
              InspectorSession session = service.attachNative(descriptor(fixture))) {
@@ -69,23 +81,27 @@ class NativeBootstrapIT {
         }
     }
 
-    @Test void nativeAttachApiCanCreateANewSessionAfterTheCallbackHasCleanedUp() throws Exception {
+    @Test
+    void nativeAttachApiCanCreateANewSessionAfterTheCallbackHasCleanedUp() throws Exception {
         artifact();
         try (Fixture fixture = start(true, List.of())) {
             try (InspectorSession session = service.attachNative(descriptor(fixture))) {
                 assertEquals("scheduled", execute(session, "NativeReattachProbe",
                         "Thread probe = new Thread(() -> { try { "
-                        + "java.lang.reflect.Method ready = Class.forName(\"dev.whitedev.jpi.agent.InspectorAgent\").getMethod(\"nativeCommunicationAvailable\"); "
-                        + "for (int i=0;i<150;i++) { Thread.sleep(100); "
-                        + "if(Boolean.TRUE.equals(ready.invoke(null))) { "
-                        + "System.out.println(\"native-ready-for-reattach\"); System.out.flush(); return; } } "
-                        + "} catch(Exception error) { System.out.println(error); } }); "
-                        + "probe.setDaemon(true); probe.start(); out.print(\"scheduled\");"));
+                                + "java.lang.reflect.Method ready = Class.forName(\"dev.whitedev.jpi.agent.InspectorAgent\").getMethod(\"nativeCommunicationAvailable\"); "
+                                + "for (int i=0;i<150;i++) { Thread.sleep(100); "
+                                + "if(Boolean.TRUE.equals(ready.invoke(null))) { "
+                                + "System.out.println(\"native-ready-for-reattach\"); System.out.flush(); return; } } "
+                                + "} catch(Exception error) { System.out.println(error); } }); "
+                                + "probe.setDaemon(true); probe.start(); out.print(\"scheduled\");"));
                 session.request(Operation.JVMTI_CAPTURE_START, "");
             }
             assertEquals("native-ready-for-reattach", CompletableFuture.supplyAsync(() -> {
-                try { return fixture.process.inputReader().readLine(); }
-                catch (IOException error) { throw new CompletionException(error); }
+                try {
+                    return fixture.process.inputReader().readLine();
+                } catch (IOException error) {
+                    throw new CompletionException(error);
+                }
             }).get(20, TimeUnit.SECONDS));
             try (InspectorSession session = service.attachNative(descriptor(fixture))) {
                 assertEquals("before", runtimeValue(session));
@@ -105,7 +121,7 @@ class NativeBootstrapIT {
              Fixture fixture = injected ? startInjected(port, artifact) : start(callback ? early.jvmArgument()
                      : service.nativePreloadedAgentArgument(artifact, service.preparePreloadedAgent(port, TOKEN, 30)));
              InspectorSession session = callback
-                ? early.await(Long.toString(fixture.process.pid()), "owner-prepared native callback") : connect(port, fixture)) {
+                     ? early.await(Long.toString(fixture.process.pid()), "owner-prepared native callback") : connect(port, fixture)) {
             String info = session.requestText(Operation.SESSION_INFO, "");
             assertTrue(info.contains("attach_disabled=true\n"), info);
             assertTrue(info.contains("dynamic_agent_loading=false\n"), info);
@@ -135,7 +151,8 @@ class NativeBootstrapIT {
             String address = execute(session, "NativeAddress", "out.print(Long.toHexString(dev.whitedev.jpi.integration.RawMemoryFixture.address()));");
             assertArrayEquals(new byte[16], session.request(Operation.MEMORY_READ, address + "\n16"));
             String zero = Base64.getEncoder().encodeToString(new byte[16]);
-            byte[] changed = new byte[16]; Arrays.fill(changed, (byte) 19);
+            byte[] changed = new byte[16];
+            Arrays.fill(changed, (byte) 19);
             String bytes = Base64.getEncoder().encodeToString(changed);
             session.request(Operation.MEMORY_PATCH, address + "\n" + zero + "\n" + bytes);
             assertArrayEquals(changed, session.request(Operation.MEMORY_READ, address + "\n16"));
@@ -145,7 +162,7 @@ class NativeBootstrapIT {
 
             session.request(Operation.JVMTI_CAPTURE_START, "");
             assertEquals("captured", execute(session, "NativeBootstrapCaptured", "out.print(\"captured\");"));
-            String encoded = Base64.getEncoder().encodeToString("NativeBootstrapCaptured".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            String encoded = Base64.getEncoder().encodeToString("NativeBootstrapCaptured".getBytes(StandardCharsets.UTF_8));
             String events = session.requestText(Operation.JVMTI_CAPTURE_EVENTS, "");
             String sequence = events.lines().filter(line -> line.endsWith("\t" + encoded)).findFirst().orElseThrow().split("\t")[0];
             assertEquals("NativeBootstrapCaptured", new ClassReader(session.request(Operation.JVMTI_CAPTURE_BYTES, sequence)).getClassName());
@@ -154,7 +171,9 @@ class NativeBootstrapIT {
                 List<Future<String>> results = new ArrayList<>();
                 for (int i = 0; i < 16; i++) results.add(workers.submit(() -> session.requestText(Operation.PING, "")));
                 for (Future<String> result : results) assertEquals("pong", result.get(10, TimeUnit.SECONDS));
-            } finally { workers.shutdownNow(); }
+            } finally {
+                workers.shutdownNow();
+            }
         }
     }
 
@@ -164,10 +183,14 @@ class NativeBootstrapIT {
             service.injectNativeCommunicationAgent(Long.toString(fixture.process.pid()), artifact,
                     service.preparePreloadedAgent(port, TOKEN, 30));
             return fixture;
-        } catch (Throwable error) { fixture.close(); throw error; }
+        } catch (Throwable error) {
+            fixture.close();
+            throw error;
+        }
     }
 
-    @Test void injectedRestrictedJvmAuthenticatesReconnectsAndRecoversFromBootstrapFailure() throws Exception {
+    @Test
+    void injectedRestrictedJvmAuthenticatesReconnectsAndRecoversFromBootstrapFailure() throws Exception {
         NativeAgentArtifact artifact = artifact();
         int port = port();
         try (Fixture fixture = start(true, List.of())) {
@@ -191,7 +214,8 @@ class NativeBootstrapIT {
         }
     }
 
-    @Test void authenticatesVerifiesPidAndCleansTemporaryInstrumentationOnEofAndDisconnect() throws Exception {
+    @Test
+    void authenticatesVerifiesPidAndCleansTemporaryInstrumentationOnEofAndDisconnect() throws Exception {
         int port = port();
         try (Fixture fixture = start(argument(port, 30))) {
             assertThrows(IOException.class, () -> service.connectNativeAgent(port, "incorrect-token-12345678", descriptor(fixture)));
@@ -200,7 +224,8 @@ class NativeBootstrapIT {
                 abrupt.setSoTimeout(15000);
                 DataOutputStream output = new DataOutputStream(abrupt.getOutputStream());
                 DataInputStream input = new DataInputStream(abrupt.getInputStream());
-                output.writeUTF(TOKEN); output.flush();
+                output.writeUTF(TOKEN);
+                output.flush();
                 WireProtocol.writeRequest(output, Operation.JVMTI_CAPTURE_START, new byte[0]);
                 assertTrue(WireProtocol.readResponse(input).success());
                 WireProtocol.writeRequest(output, Operation.TRACE_START, WireProtocol.utf8(
@@ -212,12 +237,14 @@ class NativeBootstrapIT {
                 assertTrue(session.requestText(Operation.JVMTI_CAPTURE_EVENTS, "").contains("active=0\nevents=0\n"));
                 assertFalse(session.requestText(Operation.TRACE_EVENTS, "").contains("trace-"));
                 assertEquals("before", runtimeValue(session));
-                org.objectweb.asm.tree.ClassNode node = new org.objectweb.asm.tree.ClassNode();
+                ClassNode node = new ClassNode();
                 new ClassReader(session.request(Operation.JVMTI_CLASS_BYTES, AttachTarget.class.getName())).accept(node, 0);
-                for (var method : node.methods) if (method.name.equals("runtimeValue")) {
-                    for (var instruction : method.instructions) if (instruction instanceof org.objectweb.asm.tree.MethodInsnNode call)
-                        assertFalse(call.owner.startsWith("dev/whitedev/jpi/agent/trace/"), "Trace bytecode survived disconnect");
-                }
+                for (var method : node.methods)
+                    if (method.name.equals("runtimeValue")) {
+                        for (var instruction : method.instructions)
+                            if (instruction instanceof MethodInsnNode call)
+                                assertFalse(call.owner.startsWith("dev/whitedev/jpi/agent/trace/"), "Trace bytecode survived disconnect");
+                    }
                 session.request(Operation.JVMTI_CAPTURE_START, "");
             }
             try (InspectorSession session = connect(port, fixture)) {
@@ -228,46 +255,59 @@ class NativeBootstrapIT {
         }
     }
 
-    @Test void malformedAuthenticatedRequestDoesNotKillTheReconnectListener() throws Exception {
+    @Test
+    void malformedAuthenticatedRequestDoesNotKillTheReconnectListener() throws Exception {
         int port = port();
         try (Fixture fixture = start(argument(port, 30))) {
             try (Socket socket = new Socket("127.0.0.1", port)) {
                 socket.setSoTimeout(15000);
                 DataOutputStream output = new DataOutputStream(socket.getOutputStream());
-                output.writeUTF(TOKEN); output.writeInt(WireProtocol.MAGIC); output.writeShort(WireProtocol.VERSION);
-                output.writeByte(255); output.writeInt(0); output.flush();
+                output.writeUTF(TOKEN);
+                output.writeInt(WireProtocol.MAGIC);
+                output.writeShort(WireProtocol.VERSION);
+                output.writeByte(255);
+                output.writeInt(0);
+                output.flush();
                 assertEquals(-1, socket.getInputStream().read());
             }
-            try (InspectorSession session = connect(port, fixture)) { assertEquals("pong", session.requestText(Operation.PING, "")); }
+            try (InspectorSession session = connect(port, fixture)) {
+                assertEquals("pong", session.requestText(Operation.PING, ""));
+            }
         }
     }
 
-    @Test void idleNativeListenerExpiresAndReleasesItsPortWhileApplicationKeepsRunning() throws Exception {
+    @Test
+    void idleNativeListenerExpiresAndReleasesItsPortWhileApplicationKeepsRunning() throws Exception {
         int port = port();
         try (Fixture fixture = start(argument(port, 10))) {
             try (InspectorSession session = connect(port, fixture)) {
                 session.request(Operation.JVMTI_CAPTURE_START, "");
                 assertEquals("scheduled", execute(session, "NativeReleaseProbe",
                         "Thread probe = new Thread(() -> { try { "
-                        + "java.lang.reflect.Field field = Class.forName(\"dev.whitedev.jpi.agent.InspectorAgent\").getDeclaredField(\"activeServer\"); field.setAccessible(true); "
-                        + "for (int i=0;i<150;i++) { Thread.sleep(100); if(field.get(null)==null) { System.out.println(\"native-server-released\"); System.out.flush(); return; } } "
-                        + "System.out.println(\"native-server-retained\"); } catch(Exception error) { System.out.println(error); } }); "
-                        + "probe.setDaemon(true); probe.start(); out.print(\"scheduled\");"));
+                                + "java.lang.reflect.Field field = Class.forName(\"dev.whitedev.jpi.agent.InspectorAgent\").getDeclaredField(\"activeServer\"); field.setAccessible(true); "
+                                + "for (int i=0;i<150;i++) { Thread.sleep(100); if(field.get(null)==null) { System.out.println(\"native-server-released\"); System.out.flush(); return; } } "
+                                + "System.out.println(\"native-server-retained\"); } catch(Exception error) { System.out.println(error); } }); "
+                                + "probe.setDaemon(true); probe.start(); out.print(\"scheduled\");"));
             }
             String releaseMarker = CompletableFuture.supplyAsync(() -> {
-                try { return fixture.process.inputReader().readLine(); }
-                catch (IOException error) { throw new CompletionException(error); }
+                try {
+                    return fixture.process.inputReader().readLine();
+                } catch (IOException error) {
+                    throw new CompletionException(error);
+                }
             }).get(20, TimeUnit.SECONDS);
             assertEquals("native-server-released", releaseMarker);
             assertThrows(IOException.class, () -> connect(port, fixture));
             try (ServerSocket released = new ServerSocket()) {
-                released.setReuseAddress(true); released.bind(new InetSocketAddress("127.0.0.1", port));
+                released.setReuseAddress(true);
+                released.bind(new InetSocketAddress("127.0.0.1", port));
             }
             assertTrue(fixture.process.isAlive());
         }
     }
 
-    @Test void occupiedPortRollsBackBootstrapWithoutTerminatingTheApplicationOrLeakingCredentials() throws Exception {
+    @Test
+    void occupiedPortRollsBackBootstrapWithoutTerminatingTheApplicationOrLeakingCredentials() throws Exception {
         try (ServerSocket occupied = new ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"))) {
             int port = occupied.getLocalPort();
             try (Fixture fixture = start(argument(port, 30))) {
@@ -278,7 +318,8 @@ class NativeBootstrapIT {
         }
     }
 
-    @Test void invalidLibraryDigestFailsClosedAndLeavesTheApplicationRunning() throws Exception {
+    @Test
+    void invalidLibraryDigestFailsClosedAndLeavesTheApplicationRunning() throws Exception {
         int port = port();
         NativeAgentArtifact artifact = artifact();
         String argument = service.nativePreloadedAgentArgument(artifact, service.preparePreloadedAgent(port, TOKEN, 30));
@@ -288,7 +329,8 @@ class NativeBootstrapIT {
         }
     }
 
-    @Test void unconfiguredNativeLibraryDoesNotProvideACommunicationEndpointOrAttachBypass() throws Exception {
+    @Test
+    void unconfiguredNativeLibraryDoesNotProvideACommunicationEndpointOrAttachBypass() throws Exception {
         int port = port();
         try (Fixture fixture = start(artifact().startupArgument())) {
             assertThrows(IOException.class, () -> connect(port, fixture));
@@ -300,7 +342,8 @@ class NativeBootstrapIT {
         }
     }
 
-    @Test void liveNativeInitializationRecoversFromBindFailureAndRejectsDuplicateLifecycleOwnership() throws Exception {
+    @Test
+    void liveNativeInitializationRecoversFromBindFailureAndRejectsDuplicateLifecycleOwnership() throws Exception {
         NativeAgentArtifact artifact = artifact();
         try (Fixture fixture = start(false, List.of());
              ServerSocket occupied = new ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"))) {
@@ -318,11 +361,14 @@ class NativeBootstrapIT {
                 assertEquals("pong", session.requestText(Operation.PING, ""));
                 assertTrue(session.requestText(Operation.JVMTI_STATUS, "").contains("communication_bootstrap=started"));
             }
-            try (InspectorSession session = connect(port, fixture)) { assertEquals("before", runtimeValue(session)); }
+            try (InspectorSession session = connect(port, fixture)) {
+                assertEquals("before", runtimeValue(session));
+            }
         }
     }
 
-    @Test void provisionsJarFromAPathWithSpacesWithoutAnExtraClasspathArgument() throws Exception {
+    @Test
+    void provisionsJarFromAPathWithSpacesWithoutAnExtraClasspathArgument() throws Exception {
         Path directory = Files.createTempDirectory("jpi native bootstrap ");
         Path jar = directory.resolve("provisioned agent.jar");
         try {
@@ -336,10 +382,13 @@ class NativeBootstrapIT {
                 assertTrue(classpath.startsWith(System.getProperty("jpi.test.classes", "target/test-classes")), classpath);
                 assertTrue(classpath.contains("provisioned agent.jar"), classpath);
             }
-        } finally { JvmFixtureCleanup.delete(jar, directory); }
+        } finally {
+            JvmFixtureCleanup.delete(jar, directory);
+        }
     }
 
-    @Test void rejectsJavaAgentEndpointAsNativeAndKeepsExistingPreloadedApiWorking() throws Exception {
+    @Test
+    void rejectsJavaAgentEndpointAsNativeAndKeepsExistingPreloadedApiWorking() throws Exception {
         artifact();
         int port = port();
         String argument = service.preloadedAgentArgument(service.preparePreloadedAgent(port, TOKEN, 30));
@@ -355,34 +404,50 @@ class NativeBootstrapIT {
     private String argument(int port, int timeout) throws Exception {
         return service.nativePreloadedAgentArgument(artifact(), service.preparePreloadedAgent(port, TOKEN, timeout));
     }
-    private InspectorSession connect(int port, Fixture fixture) throws IOException { return service.connectNativeAgent(port, TOKEN, descriptor(fixture)); }
-    private static JvmDescriptor descriptor(Fixture fixture) { return new JvmDescriptor(Long.toString(fixture.process.pid()), "native-only owned JVM"); }
-    private static int port() throws IOException {
-        try (ServerSocket socket = new ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"))) { return socket.getLocalPort(); }
+
+    private InspectorSession connect(int port, Fixture fixture) throws IOException {
+        return service.connectNativeAgent(port, TOKEN, descriptor(fixture));
     }
+
+    private static JvmDescriptor descriptor(Fixture fixture) {
+        return new JvmDescriptor(Long.toString(fixture.process.pid()), "native-only owned JVM");
+    }
+
+    private static int port() throws IOException {
+        try (ServerSocket socket = new ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"))) {
+            return socket.getLocalPort();
+        }
+    }
+
     private NativeAgentArtifact artifact() throws Exception {
         String os = System.getProperty("os.name", "");
         Assumptions.assumeTrue(os.equals("Linux") || os.startsWith("Windows"));
         boolean bundled = getClass().getResource(NativeAgentArtifact.resourcePath()) != null;
-        if (Boolean.getBoolean("jpi.native.required")) assertTrue(bundled); else Assumptions.assumeTrue(bundled);
+        if (Boolean.getBoolean("jpi.native.required")) assertTrue(bundled);
+        else Assumptions.assumeTrue(bundled);
         return NativeAgentArtifact.extractBundled();
     }
+
     private static String execute(InspectorSession session, String name, String body) throws IOException {
         return session.requestText(Operation.EXECUTE, "public class " + name + " { public static void execute(java.io.PrintStream out) throws Exception { " + body + " } }");
     }
+
     private static String runtimeValue(InspectorSession session) throws IOException {
         return execute(session, "NativeValue", "out.print(dev.whitedev.jpi.integration.AttachTarget.runtimeValue());");
     }
+
     private void assertBootstrapFailed(Fixture fixture) throws IOException {
         String log = log(fixture.errorLog);
         assertTrue(log.contains("Communication bootstrap failed"), log);
         assertFalse(log.contains(TOKEN), log);
         assertTrue(fixture.process.isAlive());
     }
+
     private Fixture start(String argument) throws Exception {
         if (argument.startsWith("\"")) argument = argument.substring(1, argument.length() - 1);
         return start(true, List.of(argument));
     }
+
     private Fixture start(boolean restricted, List<String> arguments) throws Exception {
         String executable = System.getProperty("os.name").startsWith("Windows") ? "java.exe" : "java";
         Path log = Files.createTempFile("jpi-native-bootstrap-", ".log");
@@ -395,18 +460,35 @@ class NativeBootstrapIT {
         Fixture fixture = new Fixture(process, log);
         try {
             String pid = CompletableFuture.supplyAsync(() -> {
-                try { return process.inputReader().readLine(); }
-                catch (IOException error) { throw new CompletionException(error); }
+                try {
+                    return process.inputReader().readLine();
+                } catch (IOException error) {
+                    throw new CompletionException(error);
+                }
             }).get(20, TimeUnit.SECONDS);
             assertEquals(Long.toString(process.pid()), pid, () -> {
-                try { return log(log); } catch (IOException error) { return error.toString(); }
+                try {
+                    return log(log);
+                } catch (IOException error) {
+                    return error.toString();
+                }
             });
             return fixture;
-        } catch (Throwable error) { fixture.close(); throw error; }
+        } catch (Throwable error) {
+            fixture.close();
+            throw error;
+        }
     }
+
     private static final class Fixture implements AutoCloseable {
-        final Process process; final Path errorLog;
-        Fixture(Process process, Path errorLog) { this.process = process; this.errorLog = errorLog; }
+        final Process process;
+        final Path errorLog;
+
+        Fixture(Process process, Path errorLog) {
+            this.process = process;
+            this.errorLog = errorLog;
+        }
+
         public void close() throws Exception {
             JvmFixtureCleanup.stop(process);
             String log = log(errorLog);
@@ -416,6 +498,6 @@ class NativeBootstrapIT {
     }
 
     private static String log(Path path) throws IOException {
-        return new String(Files.readAllBytes(path), java.nio.charset.StandardCharsets.UTF_8);
+        return new String(Files.readAllBytes(path), StandardCharsets.UTF_8);
     }
 }

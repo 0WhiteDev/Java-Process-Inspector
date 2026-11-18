@@ -2,14 +2,16 @@ package dev.whitedev.jpi.agent;
 
 import dev.whitedev.jpi.JpiApplication;
 import dev.whitedev.jpi.agent.cfg.CfgRuntime;
+import dev.whitedev.jpi.agent.fingerprint.TargetFingerprintCapture;
+import dev.whitedev.jpi.agent.jvmti.NativeJvmtiBridge;
 import dev.whitedev.jpi.agent.patch.MethodBodyPatcher;
 import dev.whitedev.jpi.agent.patch.ModernMethodPatcher;
 import dev.whitedev.jpi.agent.patch.RuntimeJavaCompiler;
 import dev.whitedev.jpi.protocol.Operation;
 import javassist.CtClass;
+import org.eclipse.jdt.internal.compiler.tool.EclipseCompiler;
 import org.junit.jupiter.api.Test;
 import org.objectweb.asm.tree.ClassNode;
-import org.eclipse.jdt.internal.compiler.tool.EclipseCompiler;
 
 import java.io.DataInputStream;
 import java.io.InputStream;
@@ -18,11 +20,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class AgentBytecodeCompatibilityTest {
-    @Test void packagesAJava8AgentInsideTheJava21Application() throws Exception {
+    @Test
+    void packagesAJava8AgentInsideTheJava21Application() throws Exception {
         assertEquals(52, majorVersion(InspectorAgent.class));
         assertEquals(52, majorVersion(RuntimeAccess.class));
-        assertEquals(52, majorVersion(dev.whitedev.jpi.agent.jvmti.NativeJvmtiBridge.class));
-        assertEquals(52, majorVersion(dev.whitedev.jpi.agent.fingerprint.TargetFingerprintCapture.class));
+        assertEquals(52, majorVersion(NativeJvmtiBridge.class));
+        assertEquals(52, majorVersion(TargetFingerprintCapture.class));
         assertEquals(52, majorVersion(AgentServer.class));
         assertEquals(52, majorVersion(CfgRuntime.class));
         assertEquals(52, majorVersion(Operation.class));

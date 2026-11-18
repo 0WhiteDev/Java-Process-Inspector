@@ -10,7 +10,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class CfgGraphCanvasTest {
-    @Test void countRefreshDoesNotRepublishBlockSelection() throws Exception {
+    @Test
+    void countRefreshDoesNotRepublishBlockSelection() throws Exception {
         CfgGraphModel model = CfgGraphModel.parse(
                 "G\t" + encoded("sample.Target") + "\t" + encoded("run") + "\t"
                         + encoded("()V") + "\t1\t1\t1\t0\n"

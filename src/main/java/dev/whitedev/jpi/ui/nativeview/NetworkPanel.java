@@ -1,12 +1,11 @@
 package dev.whitedev.jpi.ui.nativeview;
 
-import dev.whitedev.jpi.ui.Async;
-import dev.whitedev.jpi.ui.SessionAware;
-import dev.whitedev.jpi.ui.Ui;
-
 import dev.whitedev.jpi.attach.InspectorSession;
 import dev.whitedev.jpi.nativeaccess.NetworkConnection;
 import dev.whitedev.jpi.nativeaccess.WindowsNetworkAccess;
+import dev.whitedev.jpi.ui.Async;
+import dev.whitedev.jpi.ui.SessionAware;
+import dev.whitedev.jpi.ui.Ui;
 import dev.whitedev.jpi.ui.timeline.RuntimeTimelineStore;
 import dev.whitedev.jpi.ui.timeline.TimelineEvent;
 import dev.whitedev.jpi.ui.timeline.TimelineSource;
@@ -31,7 +30,10 @@ public final class NetworkPanel extends JPanel implements SessionAware {
     private final RuntimeTimelineStore timeline;
     private final DefaultTableModel model = new DefaultTableModel(
             new Object[]{"Protocol", "Local endpoint", "Remote endpoint", "State"}, 0) {
-        @Override public boolean isCellEditable(int row, int column) { return false; }
+        @Override
+        public boolean isCellEditable(int row, int column) {
+            return false;
+        }
     };
     private final JTable table = new JTable(model);
     private final TableRowSorter<DefaultTableModel> sorter = new TableRowSorter<>(model);
@@ -58,14 +60,25 @@ public final class NetworkPanel extends JPanel implements SessionAware {
         filter.putClientProperty("JTextField.placeholderText", "Filter address, port, protocol, or state");
         filter.setPreferredSize(new Dimension(290, 34));
         filter.getDocument().addDocumentListener(new DocumentListener() {
-            public void insertUpdate(DocumentEvent e) { applyFilter(); }
-            public void removeUpdate(DocumentEvent e) { applyFilter(); }
-            public void changedUpdate(DocumentEvent e) { applyFilter(); }
+            public void insertUpdate(DocumentEvent e) {
+                applyFilter();
+            }
+
+            public void removeUpdate(DocumentEvent e) {
+                applyFilter();
+            }
+
+            public void changedUpdate(DocumentEvent e) {
+                applyFilter();
+            }
         });
         refresh.addActionListener(e -> refresh());
         JButton copy = Ui.secondaryButton("Copy snapshot");
         copy.addActionListener(e -> copySnapshot());
-        actions.add(filter); actions.add(live); actions.add(copy); actions.add(refresh);
+        actions.add(filter);
+        actions.add(live);
+        actions.add(copy);
+        actions.add(refresh);
         add(Ui.sectionHeader("Network activity", "Process-owned TCP/UDP endpoints and a live connection timeline", actions), BorderLayout.NORTH);
 
         table.setRowSorter(sorter);
@@ -77,33 +90,48 @@ public final class NetworkPanel extends JPanel implements SessionAware {
         card.add(split, BorderLayout.CENTER);
         add(card, BorderLayout.CENTER);
         events.setText("Attach to a JVM to observe its network endpoints. Packet contents are not captured.\n");
-        new Timer(2000, e -> { if (live.isSelected()) refresh(); }).start();
+        new Timer(2000, e -> {
+            if (live.isSelected()) refresh();
+        }).start();
     }
 
-    @Override public void setSession(InspectorSession session) {
+    @Override
+    public void setSession(InspectorSession session) {
         this.session = session;
         previous.clear();
         model.setRowCount(0);
         refresh.setEnabled(session != null && network.isSupported());
-        if (session == null) events.setText("Attach to a JVM to observe its network endpoints. Packet contents are not captured.\n");
-        else if (!network.isSupported()) events.setText("Network ownership inspection is currently available on Windows only.\n");
-        else { events.setText("Network observation started for PID " + session.target().id() + ".\n"); refresh(); }
+        if (session == null)
+            events.setText("Attach to a JVM to observe its network endpoints. Packet contents are not captured.\n");
+        else if (!network.isSupported())
+            events.setText("Network ownership inspection is currently available on Windows only.\n");
+        else {
+            events.setText("Network observation started for PID " + session.target().id() + ".\n");
+            refresh();
+        }
     }
 
     private void refresh() {
         InspectorSession current = session;
         if (current == null || loading || !network.isSupported()) return;
         final int pid;
-        try { pid = Integer.parseInt(current.target().id()); }
-        catch (NumberFormatException error) { events.append("Target PID is unavailable for this session.\n"); return; }
+        try {
+            pid = Integer.parseInt(current.target().id());
+        } catch (NumberFormatException error) {
+            events.append("Target PID is unavailable for this session.\n");
+            return;
+        }
         loading = true;
         refresh.setEnabled(false);
         Async.run(() -> network.connections(pid), value -> {
             if (session != current) return;
-            render(value); loading = false; refresh.setEnabled(true);
+            render(value);
+            loading = false;
+            refresh.setEnabled(true);
         }, error -> {
             if (session != current) return;
-            loading = false; refresh.setEnabled(true);
+            loading = false;
+            refresh.setEnabled(true);
             events.append("Network refresh failed: " + error.getMessage() + "\n");
         });
     }
@@ -111,13 +139,17 @@ public final class NetworkPanel extends JPanel implements SessionAware {
     private void render(List<NetworkConnection> connections) {
         Set<NetworkConnection> current = new HashSet<>(connections);
         if (!previous.isEmpty()) {
-            for (NetworkConnection connection : current) if (!previous.contains(connection)) appendEvent("OPEN", connection);
-            for (NetworkConnection connection : previous) if (!current.contains(connection)) appendEvent("CLOSE", connection);
+            for (NetworkConnection connection : current)
+                if (!previous.contains(connection)) appendEvent("OPEN", connection);
+            for (NetworkConnection connection : previous)
+                if (!current.contains(connection)) appendEvent("CLOSE", connection);
         }
-        previous.clear(); previous.addAll(current);
+        previous.clear();
+        previous.addAll(current);
         model.setRowCount(0);
-        for (NetworkConnection connection : connections) model.addRow(new Object[]{connection.protocol(),
-                connection.localEndpoint(), connection.remoteEndpoint(), connection.state()});
+        for (NetworkConnection connection : connections)
+            model.addRow(new Object[]{connection.protocol(),
+                    connection.localEndpoint(), connection.remoteEndpoint(), connection.state()});
     }
 
     private void appendEvent(String type, NetworkConnection connection) {

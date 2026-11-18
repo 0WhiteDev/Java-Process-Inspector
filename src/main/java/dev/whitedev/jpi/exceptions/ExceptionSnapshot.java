@@ -19,8 +19,11 @@ public record ExceptionSnapshot(long timestamp, String state, int windowSeconds,
             String[] v = line.split("\t", -1);
             switch (v[0]) {
                 case "S" -> {
-                    timestamp = Long.parseLong(v[1]); state = v[2]; window = Integer.parseInt(v[3]);
-                    dropped = Long.parseLong(v[4]); message = decode(v[5]);
+                    timestamp = Long.parseLong(v[1]);
+                    state = v[2];
+                    window = Integer.parseInt(v[3]);
+                    dropped = Long.parseLong(v[4]);
+                    message = decode(v[5]);
                 }
                 case "E" -> {
                     String type = decode(v[1]);
@@ -31,13 +34,15 @@ public record ExceptionSnapshot(long timestamp, String state, int windowSeconds,
                 case "L" -> locations.computeIfAbsent(decode(v[1]), ignored -> new ArrayList<>()).add(
                         new Location(Long.parseLong(v[2]), decode(v[3]), decode(v[4]), decode(v[5]),
                                 Integer.parseInt(v[6]), decode(v[7])));
-                default -> { }
+                default -> {
+                }
             }
         }
         List<Entry> result = new ArrayList<>();
-        for (Entry entry : entries.values()) result.add(new Entry(entry.type, entry.windowCount, entry.total,
-                entry.firstSeen, entry.lastSeen, entry.threads, entry.threadOverflow,
-                List.copyOf(locations.getOrDefault(entry.type, List.of()))));
+        for (Entry entry : entries.values())
+            result.add(new Entry(entry.type, entry.windowCount, entry.total,
+                    entry.firstSeen, entry.lastSeen, entry.threads, entry.threadOverflow,
+                    List.copyOf(locations.getOrDefault(entry.type, List.of()))));
         return new ExceptionSnapshot(timestamp, state, window, dropped, message, List.copyOf(result));
     }
 
@@ -46,8 +51,13 @@ public record ExceptionSnapshot(long timestamp, String state, int windowSeconds,
     }
 
     public record Entry(String type, long windowCount, long total, long firstSeen, long lastSeen, int threads,
-                        boolean threadOverflow, List<Location> locations) {}
+                        boolean threadOverflow, List<Location> locations) {
+    }
+
     public record Location(long count, String owner, String method, String descriptor, int line, String stack) {
-        @Override public String toString() { return owner + '.' + method + descriptor + ':' + line; }
+        @Override
+        public String toString() {
+            return owner + '.' + method + descriptor + ':' + line;
+        }
     }
 }

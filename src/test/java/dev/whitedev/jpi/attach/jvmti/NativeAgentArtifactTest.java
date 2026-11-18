@@ -13,9 +13,11 @@ import java.util.HexFormat;
 import static org.junit.jupiter.api.Assertions.*;
 
 class NativeAgentArtifactTest {
-    @TempDir Path directory;
+    @TempDir
+    Path directory;
 
-    @Test void verifiesExactBytesAndRejectsChangedOrEmptyLibraries() throws Exception {
+    @Test
+    void verifiesExactBytesAndRejectsChangedOrEmptyLibraries() throws Exception {
         Path file = directory.resolve("backend.bin");
         byte[] bytes = {1, 2, 3};
         Files.write(file, bytes);
@@ -29,7 +31,8 @@ class NativeAgentArtifactTest {
         assertThrows(IOException.class, () -> NativeAgentArtifact.verify(file, sha));
     }
 
-    @Test void rejectsRelativePathsMalformedHashesAndUnboundQueries() throws Exception {
+    @Test
+    void rejectsRelativePathsMalformedHashesAndUnboundQueries() throws Exception {
         assertThrows(IOException.class, () -> NativeJvmtiBridge.verifyLibrary("relative.dll", "0".repeat(64)));
         assertThrows(IOException.class, () -> NativeJvmtiBridge.verifyLibrary(directory.resolve("backend.dll").toString(), "wrong"));
         assertTrue(NativeJvmtiBridge.status().contains("state=not-bound"));
@@ -40,7 +43,8 @@ class NativeAgentArtifactTest {
         assertThrows(IOException.class, () -> NativeJvmtiBridge.objectSize("value"));
     }
 
-    @Test void resolvesBundledAgentForTheCurrentPlatform() throws Exception {
+    @Test
+    void resolvesBundledAgentForTheCurrentPlatform() throws Exception {
         String agent = NativeAgentArtifact.resourcePath();
         assertTrue(agent.startsWith("/native/"));
         assertTrue(agent.endsWith(System.mapLibraryName("jpi_jvmti")));

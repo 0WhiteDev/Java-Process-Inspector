@@ -1,23 +1,27 @@
 package dev.whitedev.jpi.mcp;
 
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.google.gson.ToNumberPolicy;
 import com.google.gson.reflect.TypeToken;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
-import java.util.Map;
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
 
 public final class McpJson {
     public static final Gson GSON = new GsonBuilder().disableHtmlEscaping().serializeNulls()
             .setObjectToNumberStrategy(ToNumberPolicy.LONG_OR_DOUBLE).create();
     public static final int MAX_RESULT_BYTES = 4 * 1024 * 1024;
-    private McpJson() {}
 
-    public static JsonObject object(Object value) { return GSON.toJsonTree(value).getAsJsonObject(); }
+    private McpJson() {
+    }
+
+    public static JsonObject object(Object value) {
+        return GSON.toJsonTree(value).getAsJsonObject();
+    }
 
     public static String bounded(String value, int bytes) {
         byte[] encoded = value.getBytes(StandardCharsets.UTF_8);
@@ -42,9 +46,11 @@ public final class McpJson {
                 while (array.size() > keep) array.remove(array.size() - 1);
             } else {
                 String largest = null;
-                for (var entry : tree.entrySet()) if (entry.getValue().isJsonPrimitive()
-                        && entry.getValue().getAsJsonPrimitive().isString()
-                        && (largest == null || entry.getValue().getAsString().length() > tree.get(largest).getAsString().length())) largest = entry.getKey();
+                for (var entry : tree.entrySet())
+                    if (entry.getValue().isJsonPrimitive()
+                            && entry.getValue().getAsJsonPrimitive().isString()
+                            && (largest == null || entry.getValue().getAsString().length() > tree.get(largest).getAsString().length()))
+                        largest = entry.getKey();
                 if (largest == null || tree.get(largest).getAsString().length() < 1024)
                     throw new McpException(McpErrorCode.RESULT_TOO_LARGE, "The result exceeds 4 MiB. Use a narrower query.");
                 String text = tree.get(largest).getAsString();
@@ -53,7 +59,8 @@ public final class McpJson {
             trimmed = true;
         }
         if (trimmed) tree.addProperty("truncated", true);
-        return GSON.fromJson(tree, new TypeToken<Map<String, Object>>() {}.getType());
+        return GSON.fromJson(tree, new TypeToken<Map<String, Object>>() {
+        }.getType());
     }
 
     private static JsonArray largestArray(JsonElement element, JsonArray largest) {

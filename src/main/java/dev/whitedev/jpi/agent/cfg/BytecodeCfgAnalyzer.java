@@ -8,6 +8,8 @@ import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldInsnNode;
 import org.objectweb.asm.tree.IincInsnNode;
+import org.objectweb.asm.tree.InsnList;
+import org.objectweb.asm.tree.InsnNode;
 import org.objectweb.asm.tree.IntInsnNode;
 import org.objectweb.asm.tree.InvokeDynamicInsnNode;
 import org.objectweb.asm.tree.JumpInsnNode;
@@ -22,9 +24,6 @@ import org.objectweb.asm.tree.TableSwitchInsnNode;
 import org.objectweb.asm.tree.TryCatchBlockNode;
 import org.objectweb.asm.tree.TypeInsnNode;
 import org.objectweb.asm.tree.VarInsnNode;
-import org.objectweb.asm.tree.InsnList;
-import org.objectweb.asm.tree.InsnNode;
-
 
 import java.io.IOException;
 import java.lang.reflect.Field;
@@ -50,7 +49,8 @@ public final class BytecodeCfgAnalyzer {
     private static final String HIT_DESCRIPTOR = "(Ljava/lang/String;I)V";
     private static final String[] OPCODE_NAMES = opcodeNames();
 
-    private BytecodeCfgAnalyzer() {}
+    private BytecodeCfgAnalyzer() {
+    }
 
     public static String analyze(byte[] bytecode, String methodName, String descriptor) throws IOException {
         return graph(bytecode, methodName, descriptor).encode();

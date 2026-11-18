@@ -12,5 +12,7 @@ public final class AgentLoadingRestrictedException extends IOException {
         this.vmOption = vmOption;
     }
 
-    public String vmOption() { return vmOption; }
+    public String vmOption() {
+        return vmOption;
+    }
 }

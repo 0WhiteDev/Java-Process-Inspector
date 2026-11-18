@@ -1,46 +1,49 @@
 package dev.whitedev.jpi.attach;
 
-import java.io.ByteArrayOutputStream;
-import java.io.OutputStream;
-import java.io.PipedInputStream;
-import java.io.PipedOutputStream;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.concurrent.CompletionException;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.LinkedBlockingQueue;
-import org.junit.jupiter.api.io.TempDir;
-
 import com.google.gson.JsonObject;
 import dev.whitedev.jpi.mcp.JpiMcpFacade;
+import dev.whitedev.jpi.mcp.JpiMcpServer;
+import dev.whitedev.jpi.mcp.McpAuditLog;
 import dev.whitedev.jpi.mcp.McpErrorCode;
 import dev.whitedev.jpi.mcp.McpException;
 import dev.whitedev.jpi.mcp.McpJson;
 import dev.whitedev.jpi.mcp.McpSessionState;
-import dev.whitedev.jpi.mcp.McpAuditLog;
-import dev.whitedev.jpi.mcp.JpiMcpServer;
 import dev.whitedev.jpi.mcp.tools.McpTools;
 import dev.whitedev.jpi.protocol.Operation;
 import dev.whitedev.jpi.protocol.WireProtocol;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.io.OutputStream;
+import java.io.PipedInputStream;
+import java.io.PipedOutputStream;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 class McpSessionIsolationTest {
-    @TempDir Path directory;
+    @TempDir
+    Path directory;
 
-    @Test void clientCancellationReturnsAnErrorAndLeavesTheTargetSessionUsable() throws Exception {
+    @Test
+    void clientCancellationReturnsAnErrorAndLeavesTheTargetSessionUsable() throws Exception {
         CountDownLatch requested = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
         try (Fixture fixture = new Fixture(operation -> {
@@ -57,7 +60,9 @@ class McpSessionIsolationTest {
             var replies = new LinkedBlockingQueue<JsonObject>();
             var output = new OutputStream() {
                 final ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-                @Override public synchronized void write(int value) {
+
+                @Override
+                public synchronized void write(int value) {
                     if (value == '\n') {
                         replies.add(McpJson.GSON.fromJson(bytes.toString(StandardCharsets.UTF_8), JsonObject.class));
                         bytes.reset();
@@ -95,7 +100,8 @@ class McpSessionIsolationTest {
         output.flush();
     }
 
-    @Test void discardsResultsWhenTheSessionChangesDuringARead() throws Exception {
+    @Test
+    void discardsResultsWhenTheSessionChangesDuringARead() throws Exception {
         McpSessionState state = new McpSessionState();
         CountDownLatch requested = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
@@ -107,8 +113,11 @@ class McpSessionIsolationTest {
         })) {
             state.setSession(fixture.session);
             var result = CompletableFuture.supplyAsync(() -> {
-                try { return new JpiMcpFacade(state).session(); }
-                catch (Exception error) { throw new CompletionException(error); }
+                try {
+                    return new JpiMcpFacade(state).session();
+                } catch (Exception error) {
+                    throw new CompletionException(error);
+                }
             });
             assertTrue(requested.await(3, TimeUnit.SECONDS));
             state.setSession(null);
@@ -119,9 +128,13 @@ class McpSessionIsolationTest {
         }
     }
 
-    @Test void pinsQueuedCallsAndValidatesLimitsBeforeReadingTheTarget() throws Exception {
+    @Test
+    void pinsQueuedCallsAndValidatesLimitsBeforeReadingTheTarget() throws Exception {
         McpSessionState state = new McpSessionState();
-        try (Fixture fixture = new Fixture(operation -> { fail("Invalid calls must not query the target"); return ""; })) {
+        try (Fixture fixture = new Fixture(operation -> {
+            fail("Invalid calls must not query the target");
+            return "";
+        })) {
             state.setSession(fixture.session);
             var pinned = state.snapshot();
             McpTools tools = new McpTools(new JpiMcpFacade(state));
@@ -140,7 +153,8 @@ class McpSessionIsolationTest {
         }
     }
 
-    @Test void preservesSeparateDefinitionsWithTheSameBinaryName() throws Exception {
+    @Test
+    void preservesSeparateDefinitionsWithTheSameBinaryName() throws Exception {
         try (Fixture fixture = new Fixture(operation -> switch (operation) {
             case TARGET_FINGERPRINT -> "H\t1\t1\t\tMjE=\t2\n";
             case CLASSES -> "c:1\tdemo.Auth\tdemo.Loader@1\t<unnamed>\ttrue\ttrue\tclass\t20\t1\n"
@@ -161,7 +175,8 @@ class McpSessionIsolationTest {
         }
     }
 
-    @Test void investigationReadsHistoryInsteadOfDrainingLiveTracerEvents() throws Exception {
+    @Test
+    void investigationReadsHistoryInsteadOfDrainingLiveTracerEvents() throws Exception {
         var seen = Collections.synchronizedList(new ArrayList<Operation>());
         try (Fixture fixture = new Fixture(operation -> {
             seen.add(operation);
@@ -179,7 +194,11 @@ class McpSessionIsolationTest {
         }
     }
 
-    @FunctionalInterface private interface Answer { String respond(Operation operation) throws Exception; }
+    @FunctionalInterface
+    private interface Answer {
+        String respond(Operation operation) throws Exception;
+    }
+
     private static final class Fixture implements AutoCloseable {
         final ServerSocket listener;
         final Socket peer;
@@ -202,10 +221,14 @@ class McpSessionIsolationTest {
                         WireProtocol.writeResponse(output, true, WireProtocol.utf8(answer.respond(request.operation())));
                     }
                     finished.complete(null);
-                } catch (Throwable error) { finished.completeExceptionally(error); }
+                } catch (Throwable error) {
+                    finished.completeExceptionally(error);
+                }
             });
         }
-        @Override public void close() throws Exception {
+
+        @Override
+        public void close() throws Exception {
             session.close();
             finished.get(3, TimeUnit.SECONDS);
             peer.close();

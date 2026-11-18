@@ -1,5 +1,6 @@
 package dev.whitedev.jpi.agent.patch;
 
+import javassist.CannotCompileException;
 import javassist.ClassPool;
 import javassist.CtBehavior;
 import javassist.CtClass;
@@ -10,7 +11,8 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 
 public final class MethodBodyPatcher {
-    private MethodBodyPatcher() { }
+    private MethodBodyPatcher() {
+    }
 
     public static String methods(byte[] bytecode, ClassLoader loader) throws Exception {
         CtClass type = open(bytecode, loader);
@@ -33,7 +35,7 @@ public final class MethodBodyPatcher {
     }
 
     public static byte[] patch(byte[] bytecode, ClassLoader loader, String name, String descriptor,
-                        String body) throws Exception {
+                               String body) throws Exception {
         CtClass type = open(bytecode, loader);
         try {
             CtBehavior selected = null;
@@ -52,7 +54,7 @@ public final class MethodBodyPatcher {
             }
             try {
                 selected.setBody(body);
-            } catch (javassist.CannotCompileException error) {
+            } catch (CannotCompileException error) {
                 String detail = error.getMessage() == null ? "unknown parser error" : error.getMessage();
                 if (body.contains("->") || body.contains("::")) {
                     throw new IOException("The method-only compiler does not support lambda expressions or method references. Replace them with ordinary statements, use full source, or apply class bytecode.", error);

@@ -11,6 +11,7 @@ import java.io.File;
 import java.io.PrintStream;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -21,11 +22,14 @@ import java.util.regex.Pattern;
 
 public final class SourceExecutor {
     private static final Pattern CLASS_NAME = Pattern.compile("public\\s+(?:final\\s+)?class\\s+([A-Za-z_$][A-Za-z0-9_$]*)");
-    private SourceExecutor() {}
+
+    private SourceExecutor() {
+    }
 
     public static String execute(String source) throws Exception {
         JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
-        if (compiler == null) throw new IllegalStateException("Target runtime does not include the Java compiler (run it with a JDK)");
+        if (compiler == null)
+            throw new IllegalStateException("Target runtime does not include the Java compiler (run it with a JDK)");
         Matcher matcher = CLASS_NAME.matcher(source);
         if (!matcher.find()) throw new IllegalArgumentException("Source must contain a public class");
         String className = matcher.group(1);
@@ -41,7 +45,7 @@ public final class SourceExecutor {
             if (!success) return diagnostics(diagnostics);
         }
         ClassLoader parent = Thread.currentThread().getContextClassLoader();
-        try (URLClassLoader loader = new URLClassLoader(new java.net.URL[]{directory.toURI().toURL()}, parent)) {
+        try (URLClassLoader loader = new URLClassLoader(new URL[]{directory.toURI().toURL()}, parent)) {
             Class<?> executable = Class.forName(className, true, loader);
             Method method = executable.getMethod("execute", PrintStream.class);
             ByteArrayOutputStream bytes = new ByteArrayOutputStream();

@@ -13,9 +13,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MappingFormatsTest {
-    @TempDir Path directory;
+    @TempDir
+    Path directory;
 
-    @Test void roundTripsJsonAndExportsCommonMappingFormats() throws Exception {
+    @Test
+    void roundTripsJsonAndExportsCommonMappingFormats() throws Exception {
         MappingEntry type = mapped(new MappingEntry(MappingKind.CLASS, "", "a.b.c", "", -1, 1),
                 "AuthenticationManager");
         type.setComment("Validates \"signed\" licenses\nand sessions");

@@ -1,12 +1,12 @@
 package dev.whitedev.jpi.agent.heap;
 
 import dev.whitedev.jpi.fixture.HeapObjectFixture;
-
 import org.junit.jupiter.api.Test;
 
 import java.lang.instrument.Instrumentation;
 import java.lang.reflect.Proxy;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.Base64;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -25,7 +25,7 @@ class HeapObjectInspectorTest {
         assertTrue(result.contains("C\t" + encoded(HeapObjectFixture.Child.class.getName()) + "\t"
                 + encoded(loaderLabel(HeapObjectFixture.Child.class.getClassLoader())) + "\t1\t24"), result);
         assertTrue(result.contains(encoded(HeapObjectFixture.class.getName() + ".ROOT.child")));
-        String objectLine = java.util.Arrays.stream(result.split("\n"))
+        String objectLine = Arrays.stream(result.split("\n"))
                 .filter(line -> line.startsWith("O\t"))
                 .findFirst().orElseThrow();
         String id = objectLine.split("\t", -1)[1];

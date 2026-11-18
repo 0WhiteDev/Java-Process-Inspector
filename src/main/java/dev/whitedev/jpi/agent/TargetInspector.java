@@ -1,30 +1,28 @@
 package dev.whitedev.jpi.agent;
 
-import dev.whitedev.jpi.agent.fingerprint.TargetFingerprintCapture;
-import dev.whitedev.jpi.agent.jvmti.NativeJvmtiBridge;
-import dev.whitedev.jpi.agent.search.TargetSearch;
-import java.nio.charset.StandardCharsets;
-
 import dev.whitedev.jpi.agent.analysis.ConstantPoolSearch;
 import dev.whitedev.jpi.agent.analysis.DeobfuscationInventory;
 import dev.whitedev.jpi.agent.analysis.FieldWriteAnalyzer;
 import dev.whitedev.jpi.agent.analysis.XrefAnalyzer;
 import dev.whitedev.jpi.agent.cfg.BytecodeCfgAnalyzer;
 import dev.whitedev.jpi.agent.cfg.CfgManager;
-import dev.whitedev.jpi.agent.heap.HeapDumpService;
-import dev.whitedev.jpi.agent.heap.HeapObjectInspector;
-import dev.whitedev.jpi.agent.loader.ClassLoaderExplorer;
+import dev.whitedev.jpi.agent.exception.ExceptionAnalyzer;
 import dev.whitedev.jpi.agent.field.FieldWriteManager;
 import dev.whitedev.jpi.agent.file.FileInterceptorManager;
+import dev.whitedev.jpi.agent.fingerprint.TargetFingerprintCapture;
+import dev.whitedev.jpi.agent.heap.HeapDumpService;
+import dev.whitedev.jpi.agent.heap.HeapObjectInspector;
 import dev.whitedev.jpi.agent.hook.ApiHookManager;
+import dev.whitedev.jpi.agent.jvmti.NativeJvmtiBridge;
+import dev.whitedev.jpi.agent.loader.ClassLoaderExplorer;
 import dev.whitedev.jpi.agent.patch.ClassSchema;
-import dev.whitedev.jpi.agent.patch.PatchHistory;
-import dev.whitedev.jpi.agent.profiler.JfrProfilerManager;
-import dev.whitedev.jpi.agent.exception.ExceptionAnalyzer;
-import dev.whitedev.jpi.agent.thread.ThreadAnalyzer;
 import dev.whitedev.jpi.agent.patch.MethodBodyPatcher;
 import dev.whitedev.jpi.agent.patch.ModernMethodPatcher;
+import dev.whitedev.jpi.agent.patch.PatchHistory;
 import dev.whitedev.jpi.agent.patch.RuntimeJavaCompiler;
+import dev.whitedev.jpi.agent.profiler.JfrProfilerManager;
+import dev.whitedev.jpi.agent.search.TargetSearch;
+import dev.whitedev.jpi.agent.thread.ThreadAnalyzer;
 import dev.whitedev.jpi.agent.trace.TraceManager;
 import dev.whitedev.jpi.agent.trace.TraceRuntime;
 import org.objectweb.asm.Type;
@@ -32,13 +30,13 @@ import org.objectweb.asm.Type;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-
 import java.lang.instrument.ClassDefinition;
 import java.lang.management.*;
 import java.lang.ref.WeakReference;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -109,10 +107,14 @@ final class TargetInspector {
 
     String nativeHeapStats(String payload) throws Exception {
         String[] values = payload.split("\n", -1);
-        if (values.length != 2) throw new IOException("Native heap inspection requires a class identifier and instance limit");
+        if (values.length != 2)
+            throw new IOException("Native heap inspection requires a class identifier and instance limit");
         long limit;
-        try { limit = Long.parseLong(values[1]); }
-        catch (NumberFormatException error) { throw new IOException("Instance limit must be a number", error); }
+        try {
+            limit = Long.parseLong(values[1]);
+        } catch (NumberFormatException error) {
+            throw new IOException("Instance limit must be a number", error);
+        }
         Class<?> target = resolveClass(values[0]);
         long[] stats = NativeJvmtiBridge.heapStats(target, limit);
         long classObjectSize = NativeJvmtiBridge.objectSize(target);
@@ -123,7 +125,8 @@ final class TargetInspector {
 
     private String loadedClasses(Class<?>[] loaded) {
         Arrays.sort(loaded, new Comparator<Class<?>>() {
-            @Override public int compare(Class<?> left, Class<?> right) {
+            @Override
+            public int compare(Class<?> left, Class<?> right) {
                 int byName = left.getName().compareTo(right.getName());
                 if (byName != 0) return byName;
                 return ClassRegistry.loaderLabel(left.getClassLoader())
@@ -168,15 +171,22 @@ final class TargetInspector {
         return classLoaderExplorer.snapshotWithRuntime(loaded, instrumentation);
     }
 
-    String startExceptionAnalysis(String settings) throws Exception { return exceptionAnalyzer.start(settings); }
+    String startExceptionAnalysis(String settings) throws Exception {
+        return exceptionAnalyzer.start(settings);
+    }
 
-    String stopExceptionAnalysis() { return exceptionAnalyzer.stop(); }
+    String stopExceptionAnalysis() {
+        return exceptionAnalyzer.stop();
+    }
 
     String exceptionSnapshot(String window) {
         return exceptionAnalyzer.snapshot(window.isEmpty() ? 30 : Integer.parseInt(window));
     }
 
-    String clearExceptions() { exceptionAnalyzer.clear(); return exceptionAnalyzer.snapshot(30); }
+    String clearExceptions() {
+        exceptionAnalyzer.clear();
+        return exceptionAnalyzer.snapshot(30);
+    }
 
     byte[] classBytes(String identifier) throws Exception {
         if (identifier.startsWith("b:")) {
@@ -204,12 +214,15 @@ final class TargetInspector {
             byte[] bytes = readAll(stream);
             registry.captureIfAbsent(target, bytes);
             return bytes;
-        } finally { stream.close(); }
+        } finally {
+            stream.close();
+        }
     }
 
     synchronized String redefineSource(String payload) throws Exception {
         int separator = payload.indexOf('\n');
-        if (separator <= 0 || separator == payload.length() - 1) throw new IOException("Missing class identifier or Java source");
+        if (separator <= 0 || separator == payload.length() - 1)
+            throw new IOException("Missing class identifier or Java source");
         String identifier = payload.substring(0, separator);
         String source = payload.substring(separator + 1);
         Class<?> target = resolveClass(identifier);
@@ -467,7 +480,8 @@ final class TargetInspector {
         long deadline = System.nanoTime() + 10_000_000_000L;
         for (Class<?> candidate : instrumentation.getAllLoadedClasses()) {
             if (++scanned > 10_000 || candidates.size() >= maximumClasses || System.nanoTime() > deadline) break;
-            if (!instrumentation.isModifiableClass(candidate) || candidate.isArray() || candidate.isPrimitive()) continue;
+            if (!instrumentation.isModifiableClass(candidate) || candidate.isArray() || candidate.isPrimitive())
+                continue;
             byte[] bytecode = availableBytes(candidate);
             if (bytecode == null) continue;
             try {
@@ -477,7 +491,8 @@ final class TargetInspector {
             } catch (IOException ignored) {
             }
         }
-        if (candidates.isEmpty()) throw new IOException("No loaded bytecode writes to " + field.owner + "." + field.name);
+        if (candidates.isEmpty())
+            throw new IOException("No loaded bytecode writes to " + field.owner + "." + field.name);
         for (Class<?> candidate : candidates.keySet()) {
             cfgManager.stopForClass(candidate);
             traceManager.stopForClass(candidate);
@@ -618,7 +633,8 @@ final class TargetInspector {
             } catch (IOException ignored) {
             }
         }
-        if (methodTarget || values[1].isEmpty()) output.append(TraceRuntime.dynamicGraph(target.getName(), values[1], values[2]));
+        if (methodTarget || values[1].isEmpty())
+            output.append(TraceRuntime.dynamicGraph(target.getName(), values[1], values[2]));
         return output.toString();
     }
 
@@ -661,6 +677,7 @@ final class TargetInspector {
         }
         return false;
     }
+
     String xrefSearch(String query) throws IOException {
         String needle = query == null ? "" : query.trim();
         if (needle.length() < 2) throw new IOException("Enter at least two characters");
@@ -702,7 +719,8 @@ final class TargetInspector {
 
     synchronized String applyClassBytes(String payload) throws Exception {
         int separator = payload.indexOf('\n');
-        if (separator <= 0 || separator == payload.length() - 1) throw new IOException("Missing class identifier or bytecode");
+        if (separator <= 0 || separator == payload.length() - 1)
+            throw new IOException("Missing class identifier or bytecode");
         String identifier = payload.substring(0, separator);
         byte[] replacement;
         try {
@@ -847,7 +865,8 @@ final class TargetInspector {
                     if (++count >= 1000) {
                         return out.append("...\t...\t...\tResult limited to 1000 fields\n").toString();
                     }
-                } catch (Throwable ignored) { }
+                } catch (Throwable ignored) {
+                }
             }
         }
         return out.toString();
@@ -890,7 +909,8 @@ final class TargetInspector {
         }
         final Map<String, byte[]> cache = new HashMap<String, byte[]>();
         return new RuntimeJavaCompiler.ClassPath() {
-            @Override public byte[] find(String binaryName) {
+            @Override
+            public byte[] find(String binaryName) {
                 byte[] cached = cache.get(binaryName);
                 if (cached != null) return cached;
                 Class<?> type = classes.get(binaryName);
@@ -903,7 +923,8 @@ final class TargetInspector {
                 return bytecode;
             }
 
-            @Override public Collection<String> list(String packageName, boolean recurse) {
+            @Override
+            public Collection<String> list(String packageName, boolean recurse) {
                 List<String> names = new ArrayList<String>();
                 for (String name : classes.keySet()) {
                     int separator = name.lastIndexOf('.');
@@ -935,6 +956,7 @@ final class TargetInspector {
             return null;
         }
     }
+
     private byte[] availableBytes(Class<?> type) {
         byte[] bytecode = registry.bytecodeFor(type);
         return bytecode == null ? resourceBytes(type) : bytecode;
@@ -942,9 +964,20 @@ final class TargetInspector {
 
     String searchEverything(String query) throws IOException {
         return TargetSearch.search(instrumentation.getAllLoadedClasses(), query, new TargetSearch.Source() {
-            @Override public String identifier(Class<?> type) { return index(type); }
-            @Override public String loader(Class<?> type) { return ClassRegistry.loaderLabel(type.getClassLoader()); }
-            @Override public byte[] bytes(Class<?> type) { return availableBytes(type); }
+            @Override
+            public String identifier(Class<?> type) {
+                return index(type);
+            }
+
+            @Override
+            public String loader(Class<?> type) {
+                return ClassRegistry.loaderLabel(type.getClassLoader());
+            }
+
+            @Override
+            public byte[] bytes(Class<?> type) {
+                return availableBytes(type);
+            }
         });
     }
 
@@ -985,9 +1018,11 @@ final class TargetInspector {
     }
 
     private void requireRedefinable(Class<?> target) throws IOException {
-        if (!instrumentation.isRedefineClassesSupported()) throw new IOException("This JVM does not support class redefinition");
+        if (!instrumentation.isRedefineClassesSupported())
+            throw new IOException("This JVM does not support class redefinition");
         if (!instrumentation.isModifiableClass(target)) throw new IOException("The selected class is not modifiable");
-        if (target.isArray() || target.isPrimitive()) throw new IOException("Array and primitive classes cannot be redefined");
+        if (target.isArray() || target.isPrimitive())
+            throw new IOException("Array and primitive classes cannot be redefined");
     }
 
     private void applyDefinition(Class<?> target, byte[] current, byte[] replacement, String description) throws Exception {
@@ -1034,7 +1069,8 @@ final class TargetInspector {
         try {
             Method isHidden = Class.class.getMethod("isHidden");
             if (Boolean.TRUE.equals(isHidden.invoke(type))) return "hidden";
-        } catch (Throwable ignored) { }
+        } catch (Throwable ignored) {
+        }
         return type.isInterface() ? "interface" : type.isEnum() ? "enum" : "class";
     }
 
@@ -1072,7 +1108,8 @@ final class TargetInspector {
                         .append(value).append('\n');
                 if (++count >= limit) break;
             }
-        } catch (IOException ignored) { }
+        } catch (IOException ignored) {
+        }
         return count;
     }
 

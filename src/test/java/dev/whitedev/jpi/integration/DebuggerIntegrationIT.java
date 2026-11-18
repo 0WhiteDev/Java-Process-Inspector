@@ -8,18 +8,18 @@ import dev.whitedev.jpi.debug.StackFrameManager;
 import dev.whitedev.jpi.debug.StepManager;
 import org.junit.jupiter.api.Test;
 
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
-import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.jar.Attributes;
 import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
@@ -28,11 +28,12 @@ import java.util.jar.Manifest;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class DebuggerIntegrationIT {
-    @Test void attachesToRunningJdwpProcessByPid() throws Exception {
+    @Test
+    void attachesToRunningJdwpProcessByPid() throws Exception {
         Process process = new ProcessBuilder(javaExecutable(),
                 "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=127.0.0.1:0",
                 "-jar", executableFixtureJar().getAbsolutePath()).redirectErrorStream(true).start();
@@ -49,14 +50,16 @@ class DebuggerIntegrationIT {
         }
     }
 
-    @Test void launchesSuspendedAndStopsAtAPendingMethodBreakpoint() throws Exception {
+    @Test
+    void launchesSuspendedAndStopsAtAPendingMethodBreakpoint() throws Exception {
         DebugSession session = DebugSession.launch(executableFixtureJar(), List.of(), List.of("hello"));
         Process process = session.launchedProcess();
         CountDownLatch stopped = new CountDownLatch(1);
         CountDownLatch stepped = new CountDownLatch(1);
         List<DebugEvent> events = new CopyOnWriteArrayList<>();
         session.addListener(new DebugSession.Listener() {
-            @Override public void onEvent(DebugEvent event) {
+            @Override
+            public void onEvent(DebugEvent event) {
                 events.add(event);
                 if (event.type() == DebugEvent.Type.BREAK) stopped.countDown();
                 if (event.type() == DebugEvent.Type.STEP) stepped.countDown();
@@ -103,13 +106,15 @@ class DebuggerIntegrationIT {
         }
     }
 
-    @Test void dataBreakpointsFilterObjectsConditionsAndUnchangedWrites() throws Exception {
+    @Test
+    void dataBreakpointsFilterObjectsConditionsAndUnchangedWrites() throws Exception {
         DebugSession session = DebugSession.launch(executableFixtureJar(WatchTarget.class), List.of(), List.of("hello"));
         Process process = session.launchedProcess();
         CountDownLatch ready = new CountDownLatch(1);
         LinkedBlockingQueue<DebugEvent> hits = new LinkedBlockingQueue<>();
         session.addListener(new DebugSession.Listener() {
-            @Override public void onEvent(DebugEvent event) {
+            @Override
+            public void onEvent(DebugEvent event) {
                 if (event.type() == DebugEvent.Type.BREAK) ready.countDown();
                 if (event.type() == DebugEvent.Type.DATA_BREAK) hits.add(event);
             }

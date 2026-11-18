@@ -2,8 +2,6 @@ package dev.whitedev.jpi.agent;
 
 import dev.whitedev.jpi.agent.jvmti.NativeJvmtiBridge;
 import dev.whitedev.jpi.agent.jvmti.RawMemoryCommand;
-import java.lang.management.ManagementFactory;
-
 import dev.whitedev.jpi.agent.patch.SourceExecutor;
 import dev.whitedev.jpi.protocol.Operation;
 import dev.whitedev.jpi.protocol.WireProtocol;
@@ -13,6 +11,7 @@ import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.io.IOException;
 import java.lang.instrument.Instrumentation;
+import java.lang.management.ManagementFactory;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -52,7 +51,10 @@ final class AgentServer implements Runnable {
             server.bind(new InetSocketAddress(options.host(), options.port()), 1);
             server.setSoTimeout(options.acceptTimeoutMillis());
             listener = server;
-        } catch (IOException error) { server.close(); throw error; }
+        } catch (IOException error) {
+            server.close();
+            throw error;
+        }
     }
 
     @Override
@@ -60,12 +62,16 @@ final class AgentServer implements Runnable {
         try {
             while (!closed) {
                 Socket connection = openConnection();
-                try { serve(connection); }
-                catch (EOFException ignored) { }
-                catch (IOException error) {
+                try {
+                    serve(connection);
+                } catch (EOFException ignored) {
+                } catch (IOException error) {
                     if (!closed) System.err.println("[JPI agent] Connection ended: " + error.getMessage());
                 } finally {
-                    try { connection.close(); } catch (IOException ignored) { }
+                    try {
+                        connection.close();
+                    } catch (IOException ignored) {
+                    }
                     socket = null;
                 }
                 if (!options.reconnect()) break;
@@ -74,14 +80,20 @@ final class AgentServer implements Runnable {
         } catch (IOException exception) {
             if (!closed) System.err.println("[JPI agent] Listener ended: " + exception.getMessage());
         } finally {
-            try { close(); }
-            finally { InspectorAgent.serverStopped(this); }
+            try {
+                close();
+            } finally {
+                InspectorAgent.serverStopped(this);
+            }
         }
     }
 
     private void serve(Socket connection) throws IOException {
         synchronized (this) {
-            if (closed) { connection.close(); return; }
+            if (closed) {
+                connection.close();
+                return;
+            }
             socket = connection;
         }
         connection.setTcpNoDelay(true);
@@ -143,10 +155,10 @@ final class AgentServer implements Runnable {
         registry.put(Operation.PING, payload -> WireProtocol.utf8("pong"));
         registry.put(Operation.SESSION_INFO, payload -> WireProtocol.utf8(
                 "pid=" + ManagementFactory.getRuntimeMXBean().getName().split("@", 2)[0]
-                + "\nattach_disabled=" + booleanVmOption("DisableAttachMechanism")
-                + "\ndynamic_agent_loading=" + booleanVmOption("EnableDynamicAgentLoading")
-                + "\ncommunication=" + (instrumentation.isNativeOnly() ? "native-bootstrap" : "java-agent")
-                + "\nruntime=" + (instrumentation.isNativeOnly() ? "JVMTI" : "Instrumentation") + "\n"));
+                        + "\nattach_disabled=" + booleanVmOption("DisableAttachMechanism")
+                        + "\ndynamic_agent_loading=" + booleanVmOption("EnableDynamicAgentLoading")
+                        + "\ncommunication=" + (instrumentation.isNativeOnly() ? "native-bootstrap" : "java-agent")
+                        + "\nruntime=" + (instrumentation.isNativeOnly() ? "JVMTI" : "Instrumentation") + "\n"));
         registry.put(Operation.METRICS, payload -> WireProtocol.utf8(inspector.metrics()));
         registry.put(Operation.CLASSES, payload -> WireProtocol.utf8(inspector.loadedClasses()));
         registry.put(Operation.SEARCH_EVERYTHING, payload -> WireProtocol.utf8(inspector.searchEverything(payload)));
@@ -254,7 +266,8 @@ final class AgentServer implements Runnable {
             Object bean = ManagementFactory.class.getMethod("getPlatformMXBean", Class.class).invoke(null, type);
             Object option = type.getMethod("getVMOption", String.class).invoke(bean, name);
             return String.valueOf(option.getClass().getMethod("getValue").invoke(option));
-        } catch (ReflectiveOperationException | RuntimeException ignored) { }
+        } catch (ReflectiveOperationException | RuntimeException ignored) {
+        }
         String disabled = "unknown";
         for (String argument : ManagementFactory.getRuntimeMXBean().getInputArguments()) {
             if (("-XX:+" + name).equals(argument)) disabled = "true";
@@ -268,10 +281,16 @@ final class AgentServer implements Runnable {
         closed = true;
         ServerSocket currentListener = listener;
         listener = null;
-        if (currentListener != null) try { currentListener.close(); } catch (IOException ignored) {}
+        if (currentListener != null) try {
+            currentListener.close();
+        } catch (IOException ignored) {
+        }
         Socket current = socket;
         socket = null;
-        if (current != null) try { current.close(); } catch (IOException ignored) {}
+        if (current != null) try {
+            current.close();
+        } catch (IOException ignored) {
+        }
         inspector.close();
     }
 }

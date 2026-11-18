@@ -9,8 +9,8 @@ import java.awt.Color;
 import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.FontMetrics;
-import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.Graphics;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
@@ -29,19 +29,22 @@ final class FlameGraphCanvas extends JComponent {
     private final Map<Node, Rectangle> bounds = new LinkedHashMap<>();
     private Node root = new Node("All samples");
     private Node selected;
-    private Consumer<Node> listener = ignored -> {};
+    private Consumer<Node> listener = ignored -> {
+    };
 
     FlameGraphCanvas() {
         setOpaque(true);
         setBackground(Ui.BACKGROUND);
         ToolTipManager.sharedInstance().registerComponent(this);
         MouseAdapter mouse = new MouseAdapter() {
-            @Override public void mouseMoved(MouseEvent event) {
+            @Override
+            public void mouseMoved(MouseEvent event) {
                 setCursor(nodeAt(event.getPoint()) == null ? Cursor.getDefaultCursor()
                         : Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
             }
 
-            @Override public void mouseClicked(MouseEvent event) {
+            @Override
+            public void mouseClicked(MouseEvent event) {
                 selected = nodeAt(event.getPoint());
                 listener.accept(selected);
                 repaint();
@@ -52,7 +55,8 @@ final class FlameGraphCanvas extends JComponent {
     }
 
     void setSelectionListener(Consumer<Node> value) {
-        listener = value == null ? ignored -> {} : value;
+        listener = value == null ? ignored -> {
+        } : value;
     }
 
     void setMetrics(List<ProfilerReport.Metric> metrics) {
@@ -72,12 +76,14 @@ final class FlameGraphCanvas extends JComponent {
         repaint();
     }
 
-    @Override public String getToolTipText(MouseEvent event) {
+    @Override
+    public String getToolTipText(MouseEvent event) {
         Node node = nodeAt(event.getPoint());
         return node == null ? null : node.name + " | " + node.value + " | " + node.count + " events";
     }
 
-    @Override protected void paintComponent(Graphics graphics) {
+    @Override
+    protected void paintComponent(Graphics graphics) {
         super.paintComponent(graphics);
         Graphics2D g = (Graphics2D) graphics.create();
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);

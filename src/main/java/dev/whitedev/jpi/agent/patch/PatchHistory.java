@@ -3,6 +3,7 @@ package dev.whitedev.jpi.agent.patch;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayDeque;
 import java.util.Base64;
 
@@ -63,7 +64,7 @@ public final class PatchHistory {
             StringBuilder out = new StringBuilder();
             for (byte value : digest) out.append(String.format("%02x", value & 255));
             return out.toString();
-        } catch (java.security.NoSuchAlgorithmException error) {
+        } catch (NoSuchAlgorithmException error) {
             throw new IllegalStateException(error);
         }
     }

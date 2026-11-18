@@ -6,6 +6,7 @@ import dev.whitedev.jpi.exceptions.ExceptionSnapshot;
 import dev.whitedev.jpi.protocol.Operation;
 import dev.whitedev.jpi.ui.timeline.TimelineEvent;
 import dev.whitedev.jpi.ui.timeline.TimelineSource;
+
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -13,7 +14,8 @@ import java.util.List;
 import java.util.Locale;
 
 public final class SearchEverythingService {
-    private SearchEverythingService() {}
+    private SearchEverythingService() {
+    }
 
     public static String query(String text) {
         String value = text == null ? "" : text.trim();
@@ -36,7 +38,8 @@ public final class SearchEverythingService {
                         entry.location() + "\n\n" + entry.comment(), "", entry.owner(), entry.originalName(), entry.descriptor(), entry.key()));
         }
         for (TimelineEvent event : events) {
-            if (!matches(query, event.summary() + " " + event.details() + " " + event.thread() + " " + event.subject() + " " + event.value())) continue;
+            if (!matches(query, event.summary() + " " + event.details() + " " + event.thread() + " " + event.subject() + " " + event.value()))
+                continue;
             String location = Instant.ofEpochMilli(event.timestamp()) + " | " + event.source() + " | " + event.thread();
             results.add(new SearchHit(SearchCategory.TIMELINE, event.key(), excerpt(event.summary()), location,
                     location + "\n\n" + event.details(), "", "", "", "", event.key()));
@@ -55,9 +58,11 @@ public final class SearchEverythingService {
         if (snapshot != null) for (var entry : snapshot.entries()) {
             StringBuilder details = new StringBuilder(entry.type()).append("\nWindow events: ").append(entry.windowCount())
                     .append("\nSession total: ").append(entry.total()).append("\nThreads: ").append(entry.threads());
-            for (var location : entry.locations()) details.append("\n").append(location).append("\n").append(location.stack());
-            if (matches(query, details.toString())) results.add(new SearchHit(SearchCategory.EXCEPTIONS, entry.type(), entry.type(),
-                    entry.windowCount() + " events in " + snapshot.windowSeconds() + "s", details.toString(), "", "", "", "", entry.type()));
+            for (var location : entry.locations())
+                details.append("\n").append(location).append("\n").append(location.stack());
+            if (matches(query, details.toString()))
+                results.add(new SearchHit(SearchCategory.EXCEPTIONS, entry.type(), entry.type(),
+                        entry.windowCount() + " events in " + snapshot.windowSeconds() + "s", details.toString(), "", "", "", "", entry.type()));
         }
         return results.report(snapshot == null ? List.of() : List.of("Exception Analyzer: " + snapshot.state() + ". No recording is started by search."));
     }

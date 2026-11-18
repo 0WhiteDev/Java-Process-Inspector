@@ -19,7 +19,8 @@ class PatchDiffPanelTest {
     @Test
     void keepsDiffActionsVisibleWhenTheDialogIsNarrow() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            PatchDiffPanel panel = new PatchDiffPanel(null, "A@1", "A", null, "", "", "", () -> false, () -> {});
+            PatchDiffPanel panel = new PatchDiffPanel(null, "A@1", "A", null, "", "", "", () -> false, () -> {
+            });
             try {
                 for (int width : new int[]{1200, 650, 450, 1200}) {
                     panel.setSize(width, 800);
@@ -50,7 +51,8 @@ class PatchDiffPanelTest {
         SwingUtilities.invokeAndWait(() -> {
             try {
                 AtomicBoolean connected = new AtomicBoolean(false);
-                PatchDiffPanel panel = new PatchDiffPanel(null, "A@1", "A", null, "", "", "", connected::get, () -> {});
+                PatchDiffPanel panel = new PatchDiffPanel(null, "A@1", "A", null, "", "", "", connected::get, () -> {
+                });
                 JButton rollback = (JButton) field(panel, "rollback").get(panel);
                 assertFalse(rollback.isEnabled());
                 field(panel, "entries").set(panel, List.of(new PatchEntry(1, 1, "B@2", "B", "source", 1, 1, "", "")));

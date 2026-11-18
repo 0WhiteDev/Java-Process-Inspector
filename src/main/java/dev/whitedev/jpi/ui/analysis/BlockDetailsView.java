@@ -12,9 +12,11 @@ import javax.swing.KeyStroke;
 import javax.swing.border.EmptyBorder;
 import java.awt.Component;
 import java.awt.Font;
+import java.awt.GraphicsEnvironment;
 import java.awt.Toolkit;
 import java.awt.datatransfer.StringSelection;
 import java.awt.event.ActionEvent;
+import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 import java.util.List;
 
@@ -32,8 +34,9 @@ final class BlockDetailsView extends JList<String> {
         setSelectionForeground(Ui.TEXT);
         setFixedCellHeight(19);
         setCellRenderer(new DefaultListCellRenderer() {
-            @Override public Component getListCellRendererComponent(JList<?> list, Object value, int index,
-                                                                     boolean selected, boolean focused) {
+            @Override
+            public Component getListCellRendererComponent(JList<?> list, Object value, int index,
+                                                          boolean selected, boolean focused) {
                 JComponent component = (JComponent) super.getListCellRendererComponent(
                         list, value, index, selected, focused);
                 component.setBorder(new EmptyBorder(0, 12, 0, 12));
@@ -41,10 +44,11 @@ final class BlockDetailsView extends JList<String> {
             }
         });
         getInputMap(WHEN_FOCUSED).put(KeyStroke.getKeyStroke(
-                KeyEvent.VK_C, java.awt.GraphicsEnvironment.isHeadless() ? java.awt.event.InputEvent.CTRL_DOWN_MASK
+                KeyEvent.VK_C, GraphicsEnvironment.isHeadless() ? InputEvent.CTRL_DOWN_MASK
                         : Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx()), "copy-lines");
         getActionMap().put("copy-lines", new AbstractAction() {
-            @Override public void actionPerformed(ActionEvent event) {
+            @Override
+            public void actionPerformed(ActionEvent event) {
                 copyLines();
             }
         });
@@ -67,7 +71,8 @@ final class BlockDetailsView extends JList<String> {
         }
     }
 
-    @Override public boolean getScrollableTracksViewportWidth() {
+    @Override
+    public boolean getScrollableTracksViewportWidth() {
         return getParent() instanceof JViewport && getPreferredSize().width <= getParent().getWidth();
     }
 

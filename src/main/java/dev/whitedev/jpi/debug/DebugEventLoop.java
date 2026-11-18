@@ -16,6 +16,7 @@ import com.sun.jdi.event.VMDeathEvent;
 import com.sun.jdi.event.VMDisconnectEvent;
 import com.sun.jdi.event.VMStartEvent;
 import com.sun.jdi.request.EventRequest;
+import com.sun.jdi.request.StepRequest;
 import com.sun.jdi.request.ThreadDeathRequest;
 import com.sun.jdi.request.ThreadStartRequest;
 
@@ -93,7 +94,7 @@ final class DebugEventLoop implements AutoCloseable {
                 }
             } else if (event instanceof StepEvent step) {
                 stopped = true;
-                session.steps().completed((com.sun.jdi.request.StepRequest) step.request());
+                session.steps().completed((StepRequest) step.request());
                 session.stopped(step.thread(), DebugEvent.Type.STEP, location(step.location()), "");
             } else if (event instanceof ExceptionEvent exception) {
                 stopped = true;
@@ -121,7 +122,8 @@ final class DebugEventLoop implements AutoCloseable {
         return error.getMessage() == null ? error.getClass().getSimpleName() : error.getMessage();
     }
 
-    @Override public void close() {
+    @Override
+    public void close() {
         open = false;
         if (worker != null) worker.interrupt();
     }

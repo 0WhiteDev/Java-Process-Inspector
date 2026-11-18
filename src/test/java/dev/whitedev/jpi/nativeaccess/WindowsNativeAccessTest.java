@@ -3,14 +3,17 @@ package dev.whitedev.jpi.nativeaccess;
 import com.sun.jna.Memory;
 import com.sun.jna.Pointer;
 import org.junit.jupiter.api.Test;
+
 import java.lang.management.ManagementFactory;
 import java.util.Collections;
 import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 class WindowsNativeAccessTest {
-    @Test void processSnapshotContainsTheTestJvm() throws Exception {
+    @Test
+    void processSnapshotContainsTheTestJvm() throws Exception {
         WindowsNativeAccess access = new WindowsNativeAccess();
         assumeTrue(access.isSupported());
         int ownPid = Integer.parseInt(ManagementFactory.getRuntimeMXBean().getName().split("@", 2)[0]);
@@ -18,7 +21,8 @@ class WindowsNativeAccessTest {
         assertTrue(processes.stream().anyMatch(process -> process.pid() == ownPid));
     }
 
-    @Test void writesAndReadsBackMemoryInTheCurrentProcess() throws Exception {
+    @Test
+    void writesAndReadsBackMemoryInTheCurrentProcess() throws Exception {
         WindowsNativeAccess access = new WindowsNativeAccess();
         assumeTrue(access.isSupported());
         int ownPid = Integer.parseInt(ManagementFactory.getRuntimeMXBean().getName().split("@", 2)[0]);

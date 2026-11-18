@@ -12,9 +12,11 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 class TargetFingerprintPanelTest {
-    @Test void disablesTargetActionsWhenDisconnectedAndKeepsButtonsInsideTheToolbar() throws Exception {
+    @Test
+    void disablesTargetActionsWhenDisconnectedAndKeepsButtonsInsideTheToolbar() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            TargetFingerprintPanel panel = new TargetFingerprintPanel(new DeobfuscationWorkspace(), List::of, message -> {});
+            TargetFingerprintPanel panel = new TargetFingerprintPanel(new DeobfuscationWorkspace(), List::of, message -> {
+            });
             panel.setSession(null);
             for (int width : new int[]{1200, 650, 500, 1200}) {
                 panel.setSize(width, 800);

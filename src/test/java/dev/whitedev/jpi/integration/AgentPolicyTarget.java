@@ -1,6 +1,7 @@
 package dev.whitedev.jpi.integration;
 
 import com.sun.management.HotSpotDiagnosticMXBean;
+
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.lang.management.ManagementFactory;
@@ -23,7 +24,9 @@ public final class AgentPolicyTarget {
                     Class<?> bridge = Class.forName("dev.whitedev.jpi.agent.jvmti.NativeJvmtiBridge");
                     String status = (String) bridge.getMethod("status").invoke(null);
                     response = status.startsWith("backend=JVMTI\n") ? "bound" : "not-bound";
-                } catch (ClassNotFoundException absent) { response = "no-jpi-classes"; }
+                } catch (ClassNotFoundException absent) {
+                    response = "no-jpi-classes";
+                }
             } else response = "pong";
             System.out.println("ANSWER\t" + response);
             System.out.flush();

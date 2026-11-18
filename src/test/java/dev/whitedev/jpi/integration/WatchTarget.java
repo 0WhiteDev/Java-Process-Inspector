@@ -6,7 +6,9 @@ public final class WatchTarget {
     public static int counter;
     public int health = 10;
 
-    public static void ready() { System.out.print(""); }
+    public static void ready() {
+        System.out.print("");
+    }
 
     public static void main(String[] args) {
         ready();

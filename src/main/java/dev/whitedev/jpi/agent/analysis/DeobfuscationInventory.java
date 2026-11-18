@@ -11,7 +11,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 
 public final class DeobfuscationInventory {
-    private DeobfuscationInventory() {}
+    private DeobfuscationInventory() {
+    }
 
     public static int append(StringBuilder output, byte[] bytecode, int remaining) {
         if (remaining <= 0) return 0;

@@ -2,8 +2,8 @@ package dev.whitedev.jpi.ui.provenance;
 
 import dev.whitedev.jpi.attach.InspectorSession;
 import dev.whitedev.jpi.deobfuscation.DeobfuscationWorkspace;
-import dev.whitedev.jpi.provenance.ValueTraceAnalyzer;
 import dev.whitedev.jpi.protocol.Operation;
+import dev.whitedev.jpi.provenance.ValueTraceAnalyzer;
 import dev.whitedev.jpi.ui.Async;
 import dev.whitedev.jpi.ui.SessionAware;
 import dev.whitedev.jpi.ui.Ui;
@@ -22,6 +22,7 @@ import javax.swing.JTextField;
 import javax.swing.border.EmptyBorder;
 import javax.swing.table.DefaultTableModel;
 import java.awt.BorderLayout;
+import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.GridLayout;
@@ -58,7 +59,7 @@ public final class ValueTracePanel extends JPanel implements SessionAware {
 
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
         actions.setOpaque(false);
-        value.setPreferredSize(new java.awt.Dimension(280, 32));
+        value.setPreferredSize(new Dimension(280, 32));
         value.putClientProperty("JTextField.placeholderText", "abc123, \"token\", class@identity...");
         value.addActionListener(event -> analyze());
         analyze.addActionListener(event -> analyze());
@@ -84,7 +85,8 @@ public final class ValueTracePanel extends JPanel implements SessionAware {
         analyze();
     }
 
-    @Override public void setSession(InspectorSession value) {
+    @Override
+    public void setSession(InspectorSession value) {
         session = value;
         loading = false;
         reset();
@@ -223,7 +225,8 @@ public final class ValueTracePanel extends JPanel implements SessionAware {
 
     private static DefaultTableModel model(String... columns) {
         return new DefaultTableModel(columns, 0) {
-            @Override public boolean isCellEditable(int row, int column) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
                 return false;
             }
         };

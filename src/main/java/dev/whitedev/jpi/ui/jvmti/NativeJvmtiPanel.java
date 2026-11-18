@@ -2,6 +2,7 @@ package dev.whitedev.jpi.ui.jvmti;
 
 import dev.whitedev.jpi.attach.ImprovedAttachService;
 import dev.whitedev.jpi.attach.InspectorSession;
+import dev.whitedev.jpi.attach.ProcessInjector;
 import dev.whitedev.jpi.attach.jvmti.NativeAgentArtifact;
 import dev.whitedev.jpi.protocol.Operation;
 import dev.whitedev.jpi.ui.Async;
@@ -61,7 +62,8 @@ public final class NativeJvmtiPanel extends JPanel implements SessionAware {
         top.add(fields, BorderLayout.CENTER);
         JPanel actions = new JPanel(new WrappingFlowLayout(FlowLayout.LEFT, 8, 3));
         JButton copy = Ui.secondaryButton("Copy startup JVM argument");
-        for (JButton button : List.of(bundled, external, load, inject, bind, refresh, classes, heap, copy)) actions.add(button);
+        for (JButton button : List.of(bundled, external, load, inject, bind, refresh, classes, heap, copy))
+            actions.add(button);
         top.add(actions, BorderLayout.SOUTH);
         bundled.addActionListener(event -> selectBundled());
         external.addActionListener(event -> selectExternal());
@@ -99,7 +101,8 @@ public final class NativeJvmtiPanel extends JPanel implements SessionAware {
         controls();
     }
 
-    @Override public void setSession(InspectorSession value) {
+    @Override
+    public void setSession(InspectorSession value) {
         session = value;
         rawMemory.setSession(value);
         classCapture.setSession(value);
@@ -107,8 +110,10 @@ public final class NativeJvmtiPanel extends JPanel implements SessionAware {
         busy = false;
         nativeReady = false;
         controls();
-        if (value != null) output.setText("Target attached. Refresh capabilities to check a backend loaded during early launch, or load and bind it here.\nInstrumentation remains the default.\n");
-        else output.setText("Not attached. Native libraries already loaded in a target remain resident until that JVM exits.\n");
+        if (value != null)
+            output.setText("Target attached. Refresh capabilities to check a backend loaded during early launch, or load and bind it here.\nInstrumentation remains the default.\n");
+        else
+            output.setText("Not attached. Native libraries already loaded in a target remain resident until that JVM exits.\n");
     }
 
     private void selectBundled() {
@@ -218,7 +223,7 @@ public final class NativeJvmtiPanel extends JPanel implements SessionAware {
         bundled.setEnabled(!busy && (session == null || !session.isTunneled()));
         external.setEnabled(!busy);
         load.setEnabled(session != null && !session.isTunneled() && !busy);
-        inject.setEnabled(session != null && !session.isTunneled() && !busy && dev.whitedev.jpi.attach.ProcessInjector.isSupported());
+        inject.setEnabled(session != null && !session.isTunneled() && !busy && ProcessInjector.isSupported());
         bind.setEnabled(session != null && !busy);
         refresh.setEnabled(session != null && !busy);
         classes.setEnabled(session != null && !busy && nativeReady);

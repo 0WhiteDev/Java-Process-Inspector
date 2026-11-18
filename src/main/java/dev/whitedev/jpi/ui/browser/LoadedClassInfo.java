@@ -50,7 +50,8 @@ final class LoadedClassInfo {
         return marker + value + "  -  " + shortLoader();
     }
 
-    @Override public String toString() {
+    @Override
+    public String toString() {
         return display(name);
     }
 

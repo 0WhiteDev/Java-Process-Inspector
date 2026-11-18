@@ -94,7 +94,8 @@ final class ApiHookProfile {
             for (String line : definitions.split("\n")) {
                 if (line.trim().isEmpty()) continue;
                 String[] values = line.split("\t", -1);
-                if (values.length != 5 || !"P".equals(values[0])) throw new IOException("Invalid plugin hook profile definition");
+                if (values.length != 5 || !"P".equals(values[0]))
+                    throw new IOException("Invalid plugin hook profile definition");
                 String id = normalize(decoded(values[1]));
                 String name = decoded(values[2]).trim();
                 String owner = decoded(values[3]).trim().replace('.', '/');
@@ -102,7 +103,8 @@ final class ApiHookProfile {
                 if (!id.matches("[A-Z][A-Z0-9_]{1,63}") || name.isEmpty() || owner.isEmpty() || method.isEmpty()) {
                     throw new IOException("Invalid plugin hook profile values");
                 }
-                if (available.containsKey(id)) throw new IOException("Plugin hook profile conflicts with built-in profile: " + id);
+                if (available.containsKey(id))
+                    throw new IOException("Plugin hook profile conflicts with built-in profile: " + id);
                 CustomProfile profile = custom.get(id);
                 if (profile == null) {
                     if (custom.size() >= MAX_CUSTOM_PROFILES) throw new IOException("Too many plugin hook profiles");
@@ -111,7 +113,8 @@ final class ApiHookProfile {
                 } else if (!profile.name.equals(name)) {
                     throw new IOException("Conflicting plugin hook profile name: " + id);
                 }
-                if (profile.targets.size() >= MAX_TARGETS_PER_PROFILE) throw new IOException("Too many targets for plugin hook profile: " + id);
+                if (profile.targets.size() >= MAX_TARGETS_PER_PROFILE)
+                    throw new IOException("Too many targets for plugin hook profile: " + id);
                 profile.targets.add(target(owner, method));
             }
         }

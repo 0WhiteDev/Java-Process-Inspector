@@ -5,16 +5,19 @@ import java.io.IOException;
 import java.lang.management.ManagementFactory;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.util.Locale;
 
 public final class HeapDumpService {
-    private HeapDumpService() {}
+    private HeapDumpService() {
+    }
 
     public static String dump(String requestedPath) throws Exception {
-        if (requestedPath == null || requestedPath.trim().isEmpty()) throw new IOException("Heap dump path is required");
+        if (requestedPath == null || requestedPath.trim().isEmpty())
+            throw new IOException("Heap dump path is required");
         File requested = new File(requestedPath.trim());
         if (!requested.isAbsolute()) throw new IOException("Heap dump path must be absolute");
         File target = requested.getCanonicalFile();
-        if (!target.getName().toLowerCase(java.util.Locale.ROOT).endsWith(".hprof")) {
+        if (!target.getName().toLowerCase(Locale.ROOT).endsWith(".hprof")) {
             throw new IOException("Heap dump file must use the .hprof extension");
         }
         if (target.exists()) throw new IOException("Heap dump destination already exists: " + target);

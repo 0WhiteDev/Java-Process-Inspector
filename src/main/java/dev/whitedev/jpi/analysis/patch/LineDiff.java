@@ -1,6 +1,7 @@
 package dev.whitedev.jpi.analysis.patch;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -8,7 +9,8 @@ import java.util.Map;
 public final class LineDiff {
     private static final int WINDOW = 96;
 
-    private LineDiff() {}
+    private LineDiff() {
+    }
 
     public static List<Line> compare(String before, String after) {
         if (before.length() > 2_000_000 || after.length() > 2_000_000) {
@@ -26,7 +28,8 @@ public final class LineDiff {
                 continue;
             }
             Map<String, Integer> candidates = new HashMap<>();
-            for (int index = left; index < Math.min(a.length, left + WINDOW); index++) candidates.putIfAbsent(a[index], index);
+            for (int index = left; index < Math.min(a.length, left + WINDOW); index++)
+                candidates.putIfAbsent(a[index], index);
             int matchA = -1;
             int matchB = -1;
             int distance = Integer.MAX_VALUE;
@@ -59,7 +62,7 @@ public final class LineDiff {
             for (int nearby = start; nearby < end; nearby++) visible[nearby] = true;
         }
         if (!changed) return "No differences.\n";
-        if (!hideCommon) java.util.Arrays.fill(visible, true);
+        if (!hideCommon) Arrays.fill(visible, true);
         StringBuilder out = new StringBuilder("--- " + leftName + "\n+++ " + rightName + "\n");
         int left = 1;
         int right = 1;

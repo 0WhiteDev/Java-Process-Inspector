@@ -78,7 +78,8 @@ public final class ClassSchema {
             String superName = superIndex == 0 ? "" : className(constants, superIndex);
             int interfaceCount = input.readUnsignedShort();
             List<String> interfaces = new ArrayList<>();
-            for (int index = 0; index < interfaceCount; index++) interfaces.add(className(constants, input.readUnsignedShort()));
+            for (int index = 0; index < interfaceCount; index++)
+                interfaces.add(className(constants, input.readUnsignedShort()));
             List<String> fields = members(input, constants);
             List<String> methods = members(input, constants);
             Collections.sort(interfaces);
@@ -91,12 +92,18 @@ public final class ClassSchema {
     public static void verifyCompatible(byte[] current, byte[] replacement) throws IOException {
         ClassSchema before = read(current);
         ClassSchema after = read(replacement);
-        if (!before.name.equals(after.name)) throw new IOException("Compiled class name changed from " + before.name + " to " + after.name);
-        if (!before.superName.equals(after.superName)) throw new IOException("Changing the superclass is not supported by standard HotSwap");
-        if (before.access != after.access) throw new IOException("Changing class modifiers is not supported by standard HotSwap");
-        if (!before.interfaces.equals(after.interfaces)) throw new IOException("Changing implemented interfaces is not supported by standard HotSwap");
-        if (!before.fields.equals(after.fields)) throw new IOException("Adding, removing, or changing fields is not supported by standard HotSwap");
-        if (!before.methods.equals(after.methods)) throw new IOException("Adding, removing, or changing method signatures is not supported by standard HotSwap");
+        if (!before.name.equals(after.name))
+            throw new IOException("Compiled class name changed from " + before.name + " to " + after.name);
+        if (!before.superName.equals(after.superName))
+            throw new IOException("Changing the superclass is not supported by standard HotSwap");
+        if (before.access != after.access)
+            throw new IOException("Changing class modifiers is not supported by standard HotSwap");
+        if (!before.interfaces.equals(after.interfaces))
+            throw new IOException("Changing implemented interfaces is not supported by standard HotSwap");
+        if (!before.fields.equals(after.fields))
+            throw new IOException("Adding, removing, or changing fields is not supported by standard HotSwap");
+        if (!before.methods.equals(after.methods))
+            throw new IOException("Adding, removing, or changing method signatures is not supported by standard HotSwap");
     }
 
     private static List<String> members(DataInputStream input, Object[] constants) throws IOException {

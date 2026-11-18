@@ -14,6 +14,7 @@ import dev.whitedev.jpi.ui.Ui;
 import dev.whitedev.jpi.ui.layout.WrappingFlowLayout;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 import org.fife.ui.rsyntaxtextarea.SyntaxConstants;
+import org.objectweb.asm.ClassReader;
 
 import javax.swing.*;
 import javax.swing.event.DocumentEvent;
@@ -26,6 +27,7 @@ import java.awt.Color;
 import java.awt.FlowLayout;
 import java.awt.Toolkit;
 import java.awt.datatransfer.StringSelection;
+import java.io.IOException;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -60,8 +62,15 @@ public final class PatchDiffPanel extends JPanel {
     private final RSyntaxTextArea bytecodeDiff = diffEditor();
     private final JTabbedPane tabs = new JTabbedPane();
     private final DefaultTableModel historyModel = new DefaultTableModel(new String[]{"Patch", "Time", "Class", "Change", "Before bytes", "After bytes"}, 0) {
-        @Override public boolean isCellEditable(int row, int column) { return false; }
-        @Override public Class<?> getColumnClass(int column) { return column == 0 ? Long.class : column >= 4 ? Integer.class : String.class; }
+        @Override
+        public boolean isCellEditable(int row, int column) {
+            return false;
+        }
+
+        @Override
+        public Class<?> getColumnClass(int column) {
+            return column == 0 ? Long.class : column >= 4 ? Integer.class : String.class;
+        }
     };
     private final JTable history = new JTable(historyModel);
     private List<PatchEntry> entries = List.of();
@@ -87,7 +96,8 @@ public final class PatchDiffPanel extends JPanel {
         this.onRollback = onRollback;
         setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
         JPanel controls = new JPanel(new WrappingFlowLayout(FlowLayout.LEFT, 6, 3));
-        for (JComponent control : new JComponent[]{pair, hideCommon, refresh, update, compile, method, hex, copy}) controls.add(control);
+        for (JComponent control : new JComponent[]{pair, hideCommon, refresh, update, compile, method, hex, copy})
+            controls.add(control);
         add(controls, BorderLayout.NORTH);
         draft.setText(sourceDraft);
         tabs.addTab("Source diff", CodeEditors.scrollPane(sourceDiff));
@@ -124,9 +134,21 @@ public final class PatchDiffPanel extends JPanel {
         copy.addActionListener(event -> Toolkit.getDefaultToolkit().getSystemClipboard().setContents(
                 new StringSelection(tabs.getSelectedIndex() == 1 ? bytecodeDiff.getText() : sourceDiff.getText()), null));
         draft.getDocument().addDocumentListener(new DocumentListener() {
-            @Override public void insertUpdate(DocumentEvent event) { changed(); }
-            @Override public void removeUpdate(DocumentEvent event) { changed(); }
-            @Override public void changedUpdate(DocumentEvent event) { changed(); }
+            @Override
+            public void insertUpdate(DocumentEvent event) {
+                changed();
+            }
+
+            @Override
+            public void removeUpdate(DocumentEvent event) {
+                changed();
+            }
+
+            @Override
+            public void changedUpdate(DocumentEvent event) {
+                changed();
+            }
+
             private void changed() {
                 modified = null;
                 bytecodeDiff.setText("Modified source changed. Compile a new preview before comparing its bytecode.");
@@ -167,8 +189,9 @@ public final class PatchDiffPanel extends JPanel {
             sources.clear();
             historyModel.setRowCount(0);
             DateTimeFormatter format = DateTimeFormatter.ofPattern("HH:mm:ss").withZone(ZoneId.systemDefault());
-            for (PatchEntry entry : entries) historyModel.addRow(new Object[]{entry.id(), format.format(Instant.ofEpochMilli(entry.timestamp())),
-                    entry.name(), entry.description(), entry.beforeSize(), entry.afterSize()});
+            for (PatchEntry entry : entries)
+                historyModel.addRow(new Object[]{entry.id(), format.format(Instant.ofEpochMilli(entry.timestamp())),
+                        entry.name(), entry.description(), entry.beforeSize(), entry.afterSize()});
             if (!entries.isEmpty()) history.setRowSelectionInterval(entries.size() - 1, entries.size() - 1);
             busy = false;
             render();
@@ -206,7 +229,7 @@ public final class PatchDiffPanel extends JPanel {
                 right = session.request(Operation.CLASS_VERSION, entry.identifier() + "\nafter:" + entry.id());
                 try {
                     rollbackSnapshot = session.request(Operation.CLASS_VERSION, entry.identifier() + "\ncurrent");
-                } catch (java.io.IOException unavailable) {
+                } catch (IOException unavailable) {
                     rollbackSnapshot = null;
                 }
                 owner = entry.name();
@@ -249,7 +272,8 @@ public final class PatchDiffPanel extends JPanel {
         String cached = sources.get(hash);
         if (cached != null) return cached;
         String text = service.decompile(decompiler, owner, bytes);
-        if (text.length() > 2_000_000) throw new IllegalArgumentException("Decompiled source exceeds the 2 million character diff limit");
+        if (text.length() > 2_000_000)
+            throw new IllegalArgumentException("Decompiled source exceeds the 2 million character diff limit");
         if (sources.size() < 8) sources.put(hash, text);
         return text;
     }
@@ -277,10 +301,12 @@ public final class PatchDiffPanel extends JPanel {
         if (busy) return;
         try {
             String text = hexDraft.replaceAll("\\s", "");
-            if (text.isEmpty() || (text.length() & 1) != 0 || !text.matches("[0-9a-fA-F]+")) throw new IllegalArgumentException("Invalid hex draft");
+            if (text.isEmpty() || (text.length() & 1) != 0 || !text.matches("[0-9a-fA-F]+"))
+                throw new IllegalArgumentException("Invalid hex draft");
             byte[] bytes = new byte[text.length() / 2];
-            for (int index = 0; index < bytes.length; index++) bytes[index] = (byte) Integer.parseInt(text.substring(index * 2, index * 2 + 2), 16);
-            new org.objectweb.asm.ClassReader(bytes);
+            for (int index = 0; index < bytes.length; index++)
+                bytes[index] = (byte) Integer.parseInt(text.substring(index * 2, index * 2 + 2), 16);
+            new ClassReader(bytes);
             modified = bytes;
             pair.setSelectedIndex(1);
             render();
@@ -291,7 +317,8 @@ public final class PatchDiffPanel extends JPanel {
 
     private void rollback() {
         PatchEntry entry = selected();
-        if (busy || entry == null || rollbackCurrent == null || rollbackEntry != entry.id() || !connected.getAsBoolean()) return;
+        if (busy || entry == null || rollbackCurrent == null || rollbackEntry != entry.id() || !connected.getAsBoolean())
+            return;
         String message = "Restore " + entry.identifier() + " to the state BEFORE patch #" + entry.id()
                 + "?\nLater changes to this class will be replaced. Active probes on this class will stop.";
         if (JOptionPane.showConfirmDialog(this, message, "Rollback patch", JOptionPane.OK_CANCEL_OPTION,
@@ -325,7 +352,8 @@ public final class PatchDiffPanel extends JPanel {
 
     private void controls() {
         boolean ready = !busy && !closed && connected.getAsBoolean();
-        for (JComponent control : new JComponent[]{pair, hideCommon, refresh, update, compile, hex, history, copy}) control.setEnabled(ready);
+        for (JComponent control : new JComponent[]{pair, hideCommon, refresh, update, compile, hex, history, copy})
+            control.setEnabled(ready);
         method.setEnabled(ready && !methodDraft.isEmpty());
         rollback.setEnabled(ready && rollbackCurrent != null && selected() != null && rollbackEntry == selected().id());
         draft.setEditable(ready);
@@ -349,14 +377,20 @@ public final class PatchDiffPanel extends JPanel {
                 int end = Math.min(editor.getDocument().getLength(), editor.getLineEndOffset(line));
                 if (start >= end) continue;
                 char prefix = text.charAt(start);
-                if (prefix == '+' || prefix == '-') editor.getHighlighter().addHighlight(start, end, prefix == '+' ? added : removed);
+                if (prefix == '+' || prefix == '-')
+                    editor.getHighlighter().addHighlight(start, end, prefix == '+' ? added : removed);
             }
         } catch (BadLocationException error) {
             throw new IllegalStateException(error);
         }
     }
 
-    private record Versions(byte[] original, byte[] current, List<PatchEntry> entries) {}
-    private record Comparison(String source, String bytecode, String label, byte[] rollbackCurrent, long patchId) {}
-    private record Preview(byte[] bytes, String source) {}
+    private record Versions(byte[] original, byte[] current, List<PatchEntry> entries) {
+    }
+
+    private record Comparison(String source, String bytecode, String label, byte[] rollbackCurrent, long patchId) {
+    }
+
+    private record Preview(byte[] bytes, String source) {
+    }
 }

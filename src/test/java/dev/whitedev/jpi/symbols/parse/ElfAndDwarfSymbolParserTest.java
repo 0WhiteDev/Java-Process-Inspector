@@ -14,9 +14,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ElfAndDwarfSymbolParserTest {
-    @TempDir Path directory;
+    @TempDir
+    Path directory;
 
-    @Test void readsElfSymbolsAndDebugSourceStrings() throws Exception {
+    @Test
+    void readsElfSymbolsAndDebugSourceStrings() throws Exception {
         byte[] bytes = new byte[0x500];
         ByteBuffer data = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN);
         bytes[0] = 0x7f;
@@ -56,7 +58,8 @@ class ElfAndDwarfSymbolParserTest {
         assertTrue(parsed.sourceFiles().contains("/src/demo.cpp"));
     }
 
-    @Test void decodesDwarfFourLineProgram() throws Exception {
+    @Test
+    void decodesDwarfFourLineProgram() throws Exception {
         byte[] bytes = dwarfLine();
         Path file = directory.resolve("debug-line.bin");
         Files.write(file, bytes);

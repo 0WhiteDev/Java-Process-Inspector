@@ -7,7 +7,8 @@ import java.util.Collections;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class FileRuleEngineTest {
-    @Test void exactAndSpecificRulesWinOverGenericRules() {
+    @Test
+    void exactAndSpecificRulesWinOverGenericRules() {
         FileRuleEngine engine = new FileRuleEngine();
         engine.put(new FileRule("generic", Collections.singleton(FileOperation.WRITE), "**", "*",
                 FileDecision.BLOCK, ""));

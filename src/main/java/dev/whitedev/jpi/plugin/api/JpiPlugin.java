@@ -17,5 +17,6 @@ public interface JpiPlugin {
 
     void initialize(JpiContext context) throws Exception;
 
-    default void shutdown() throws Exception {}
+    default void shutdown() throws Exception {
+    }
 }

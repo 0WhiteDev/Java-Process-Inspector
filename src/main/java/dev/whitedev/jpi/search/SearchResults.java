@@ -14,15 +14,20 @@ final class SearchResults {
     private final Map<SearchCategory, SearchReport.Count> counts = new EnumMap<>(SearchCategory.class);
 
     void add(SearchHit hit) {
-        SearchReport.Count previous = counts.getOrDefault(hit.category(), new SearchReport.Count(0, false));
+        SearchCategory category = hit.category();
+        SearchReport.Count previous = counts.getOrDefault(category, new SearchReport.Count(0, false));
         if (previous.matches() >= LIMIT) {
-            counts.put(hit.category(), new SearchReport.Count(previous.matches() + 1, true));
+            counts.put(category, new SearchReport.Count(previous.matches() + 1, true));
             return;
         }
-        if (!keys.add(hit.category() + ":" + hit.key())) return;
-        counts.put(hit.category(), new SearchReport.Count(previous.matches() + 1, previous.matches() >= LIMIT));
-        if (previous.matches() < LIMIT) hits.add(hit);
+        if (!keys.add(category + ":" + hit.key())) {
+            return;
+        }
+        counts.put(category, new SearchReport.Count(previous.matches() + 1, false));
+        hits.add(hit);
     }
 
-    SearchReport report(List<String> notices) { return new SearchReport(hits, counts, notices); }
+    SearchReport report(List<String> notices) {
+        return new SearchReport(hits, counts, notices);
+    }
 }

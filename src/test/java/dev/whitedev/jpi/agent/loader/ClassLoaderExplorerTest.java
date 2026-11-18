@@ -57,7 +57,10 @@ class ClassLoaderExplorerTest {
     }
 
     private static final class Loader extends URLClassLoader {
-        Loader(ClassLoader parent) throws Exception { super(new URL[]{new URL("file:/loader-fixture.jar")}, parent); }
+        Loader(ClassLoader parent) throws Exception {
+            super(new URL[]{new URL("file:/loader-fixture.jar")}, parent);
+        }
+
         Class<?> define(String name) {
             ClassWriter writer = new ClassWriter(0);
             writer.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC, name.replace('.', '/'), null, "java/lang/Object", null);
@@ -65,7 +68,15 @@ class ClassLoaderExplorerTest {
             byte[] bytes = writer.toByteArray();
             return defineClass(name, bytes, 0, bytes.length);
         }
-        @Override public boolean equals(Object value) { return value instanceof Loader; }
-        @Override public int hashCode() { return 1; }
+
+        @Override
+        public boolean equals(Object value) {
+            return value instanceof Loader;
+        }
+
+        @Override
+        public int hashCode() {
+            return 1;
+        }
     }
 }

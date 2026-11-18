@@ -9,6 +9,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -29,12 +30,14 @@ public final class TraceRuntime {
     private static final ArrayDeque<TraceEvent> EVENTS = new ArrayDeque<TraceEvent>();
     private static final ArrayDeque<TraceEvent> HISTORY = new ArrayDeque<TraceEvent>();
     private static final ThreadLocal<ArrayDeque<Long>> CALL_STACK = new ThreadLocal<ArrayDeque<Long>>() {
-        @Override protected ArrayDeque<Long> initialValue() {
+        @Override
+        protected ArrayDeque<Long> initialValue() {
             return new ArrayDeque<Long>();
         }
     };
 
-    private TraceRuntime() {}
+    private TraceRuntime() {
+    }
 
     public static long enter(String probeId, Object receiver, Object[] arguments) {
         try {
@@ -159,7 +162,8 @@ public final class TraceRuntime {
     public static String graphSnapshot() {
         List<DynamicEdge> edges = new ArrayList<DynamicEdge>(GRAPH.values());
         Collections.sort(edges, new Comparator<DynamicEdge>() {
-            @Override public int compare(DynamicEdge left, DynamicEdge right) {
+            @Override
+            public int compare(DynamicEdge left, DynamicEdge right) {
                 return left.key().compareTo(right.key());
             }
         });
@@ -279,7 +283,7 @@ public final class TraceRuntime {
     }
 
     private static long capturedParent(ArrayDeque<Long> stack) {
-        java.util.Iterator<Long> values = stack.descendingIterator();
+        Iterator<Long> values = stack.descendingIterator();
         while (values.hasNext()) {
             Long token = values.next();
             ActiveCall call = CALLS.get(token);
@@ -531,13 +535,15 @@ public final class TraceRuntime {
             this.descriptor = descriptor;
         }
 
-        @Override public int compareTo(MethodKey other) {
+        @Override
+        public int compareTo(MethodKey other) {
             int result = className.compareTo(other.className);
             if (result == 0) result = methodName.compareTo(other.methodName);
             return result == 0 ? descriptor.compareTo(other.descriptor) : result;
         }
 
-        @Override public boolean equals(Object value) {
+        @Override
+        public boolean equals(Object value) {
             if (this == value) return true;
             if (!(value instanceof MethodKey)) return false;
             MethodKey other = (MethodKey) value;
@@ -545,7 +551,8 @@ public final class TraceRuntime {
                     && descriptor.equals(other.descriptor);
         }
 
-        @Override public int hashCode() {
+        @Override
+        public int hashCode() {
             int result = className.hashCode();
             result = 31 * result + methodName.hashCode();
             return 31 * result + descriptor.hashCode();
@@ -592,7 +599,8 @@ public final class TraceRuntime {
             this.reflective = reflective;
         }
 
-        @Override public boolean equals(Object value) {
+        @Override
+        public boolean equals(Object value) {
             if (this == value) return true;
             if (!(value instanceof EdgeKey)) return false;
             EdgeKey other = (EdgeKey) value;
@@ -602,7 +610,8 @@ public final class TraceRuntime {
                     && calleeDescriptor.equals(other.calleeDescriptor);
         }
 
-        @Override public int hashCode() {
+        @Override
+        public int hashCode() {
             int result = callerClass.hashCode();
             result = 31 * result + callerMethod.hashCode();
             result = 31 * result + callerDescriptor.hashCode();

@@ -6,12 +6,15 @@ import dev.whitedev.jpi.exceptions.ExceptionSnapshot;
 import dev.whitedev.jpi.ui.timeline.TimelineEvent;
 import dev.whitedev.jpi.ui.timeline.TimelineSource;
 import org.junit.jupiter.api.Test;
+
 import java.util.ArrayList;
 import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 class SearchEverythingServiceTest {
-    @Test void combinesWorkspaceAnnotationsRecordedNetworkActivityAndExistingExceptions() {
+    @Test
+    void combinesWorkspaceAnnotationsRecordedNetworkActivityAndExistingExceptions() {
         MappingEntry mapping = new MappingEntry(MappingKind.METHOD, "a.b", "a", "()V", -1, 0);
         mapping.setMappedName("authenticate");
         mapping.setComment("Authentication request signer");
@@ -27,9 +30,11 @@ class SearchEverythingServiceTest {
         assertTrue(SearchEverythingService.local("auth missing", List.of(mapping), List.of(event)).hits().isEmpty());
     }
 
-    @Test void boundsLargeLocalCollectionsAndKeepsNavigationKeysIntact() {
+    @Test
+    void boundsLargeLocalCollectionsAndKeepsNavigationKeysIntact() {
         List<TimelineEvent> events = new ArrayList<>();
-        for (int i = 0; i < 1000; i++) events.add(new TimelineEvent("event-" + i, i, TimelineSource.NETWORK, "", "", "", "auth", "details"));
+        for (int i = 0; i < 1000; i++)
+            events.add(new TimelineEvent("event-" + i, i, TimelineSource.NETWORK, "", "", "", "auth", "details"));
         var report = SearchEverythingService.local("auth", List.of(), events);
         assertEquals(400, report.hits().size());
         assertTrue(report.counts().get(SearchCategory.NETWORK).partial());

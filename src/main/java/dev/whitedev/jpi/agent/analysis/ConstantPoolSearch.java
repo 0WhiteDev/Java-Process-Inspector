@@ -11,7 +11,8 @@ public final class ConstantPoolSearch {
     private static final int CLASS_MAGIC = 0xCAFEBABE;
     private static final int MAX_VALUE_LENGTH = 4_096;
 
-    private ConstantPoolSearch() { }
+    private ConstantPoolSearch() {
+    }
 
     public static List<String> find(byte[] bytecode, String query, int limit) throws IOException {
         String needle = query.toLowerCase(Locale.ROOT);

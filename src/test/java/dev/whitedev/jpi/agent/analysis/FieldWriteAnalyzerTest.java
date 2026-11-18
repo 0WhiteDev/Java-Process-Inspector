@@ -10,7 +10,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class FieldWriteAnalyzerTest {
-    @Test void findsStaticAndInstanceWritesWithWriterMethods() throws Exception {
+    @Test
+    void findsStaticAndInstanceWritesWithWriterMethods() throws Exception {
         byte[] bytecode = bytes(Fixture.class);
         String owner = Type.getInternalName(Fixture.class);
 

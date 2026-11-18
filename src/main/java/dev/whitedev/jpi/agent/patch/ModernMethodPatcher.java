@@ -7,6 +7,7 @@ import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
+import org.objectweb.asm.tree.FieldNode;
 import org.objectweb.asm.tree.InvokeDynamicInsnNode;
 import org.objectweb.asm.tree.MethodNode;
 
@@ -33,10 +34,11 @@ public final class ModernMethodPatcher {
             "throw", "throws", "transient", "try", "void", "volatile", "while", "record", "sealed",
             "permits", "non-sealed", "var", "yield"));
 
-    private ModernMethodPatcher() { }
+    private ModernMethodPatcher() {
+    }
 
     public static byte[] patch(byte[] original, Class<?> target, String methodName, String descriptor,
-                        String body, RuntimeJavaCompiler.ClassPath classPath) throws Exception {
+                               String body, RuntimeJavaCompiler.ClassPath classPath) throws Exception {
         ClassNode originalNode = read(original);
         MethodNode originalMethod = method(originalNode, methodName, descriptor);
         if (originalMethod == null) throw new IOException("Method not found: " + methodName + descriptor);
@@ -96,7 +98,7 @@ public final class ModernMethodPatcher {
         source.append("public class ").append(simpleName).append(" {").append((char) 10);
 
         Set<String> fieldNames = new LinkedHashSet<String>();
-        for (org.objectweb.asm.tree.FieldNode field : type.fields) {
+        for (FieldNode field : type.fields) {
             appendField(source, fieldNames, field.name, Type.getType(field.desc), (field.access & Opcodes.ACC_STATIC) != 0);
         }
         appendInheritedFields(source, fieldNames, target.getSuperclass());
@@ -104,7 +106,8 @@ public final class ModernMethodPatcher {
         Set<String> methodKeys = new LinkedHashSet<String>();
         String selectedJavaKey = javaMethodKey(selected.name, Type.getArgumentTypes(selected.desc));
         for (MethodNode method : type.methods) {
-            if (method.name.startsWith("<") || method.name.startsWith("lambda$") || !validIdentifier(method.name)) continue;
+            if (method.name.startsWith("<") || method.name.startsWith("lambda$") || !validIdentifier(method.name))
+                continue;
             Type[] arguments = Type.getArgumentTypes(method.desc);
             String key = javaMethodKey(method.name, arguments);
             if (key.equals(selectedJavaKey) || !methodKeys.add(key)) continue;
@@ -137,7 +140,8 @@ public final class ModernMethodPatcher {
                 for (Field field : current.getDeclaredFields()) {
                     appendField(source, names, field.getName(), Type.getType(field.getType()), Modifier.isStatic(field.getModifiers()));
                 }
-            } catch (Throwable ignored) { }
+            } catch (Throwable ignored) {
+            }
         }
     }
 
@@ -163,7 +167,8 @@ public final class ModernMethodPatcher {
                     appendStub(source, method.getName(), Type.getType(method.getReturnType()), parameters,
                             Modifier.isStatic(method.getModifiers()));
                 }
-            } catch (Throwable ignored) { }
+            } catch (Throwable ignored) {
+            }
         }
     }
 
@@ -188,16 +193,24 @@ public final class ModernMethodPatcher {
 
     private static String defaultValue(Type type) {
         switch (type.getSort()) {
-            case Type.VOID: return null;
-            case Type.BOOLEAN: return "false";
-            case Type.CHAR: return "(char) 0";
+            case Type.VOID:
+                return null;
+            case Type.BOOLEAN:
+                return "false";
+            case Type.CHAR:
+                return "(char) 0";
             case Type.BYTE:
             case Type.SHORT:
-            case Type.INT: return "0";
-            case Type.LONG: return "0L";
-            case Type.FLOAT: return "0F";
-            case Type.DOUBLE: return "0D";
-            default: return "null";
+            case Type.INT:
+                return "0";
+            case Type.LONG:
+                return "0L";
+            case Type.FLOAT:
+                return "0F";
+            case Type.DOUBLE:
+                return "0D";
+            default:
+                return "null";
         }
     }
 
@@ -220,7 +233,7 @@ public final class ModernMethodPatcher {
         boolean string = false;
         boolean character = false;
         boolean escaped = false;
-        for (int index = 0; index < trimmed.length();) {
+        for (int index = 0; index < trimmed.length(); ) {
             char value = trimmed.charAt(index);
             if (escaped) {
                 output.append(value);

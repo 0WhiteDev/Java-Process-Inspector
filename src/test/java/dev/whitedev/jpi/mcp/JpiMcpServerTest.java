@@ -1,10 +1,9 @@
 package dev.whitedev.jpi.mcp;
 
-import java.util.Collections;
-
 import com.google.gson.JsonObject;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+
 import java.io.ByteArrayOutputStream;
 import java.io.OutputStream;
 import java.io.PipedInputStream;
@@ -12,16 +11,20 @@ import java.io.PipedOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 class JpiMcpServerTest {
-    @TempDir Path directory;
+    @TempDir
+    Path directory;
 
-    @Test void discoversOnlyAnalysisToolsAndHandlesMissingSessionsWithoutLosingTransport() throws Exception {
+    @Test
+    void discoversOnlyAnalysisToolsAndHandlesMissingSessionsWithoutLosingTransport() throws Exception {
         try (Client client = new Client(directory)) {
             client.initialize();
             JsonObject tools = client.request(2, "tools/list", Map.of()).getAsJsonObject("result");
@@ -54,7 +57,8 @@ class JpiMcpServerTest {
         }
     }
 
-    @Test void rejectsInvalidInitializationAndSupportsVersionNegotiation() throws Exception {
+    @Test
+    void rejectsInvalidInitializationAndSupportsVersionNegotiation() throws Exception {
         try (Client client = new Client(directory)) {
             assertEquals(-32600, client.request(1, "tools/list", Map.of()).getAsJsonObject("error").get("code").getAsInt());
             var init = client.request(2, "initialize", Map.of("protocolVersion", "unknown", "clientInfo", Map.of("name", "test-client", "version", "1"), "capabilities", Map.of()));
@@ -66,7 +70,8 @@ class JpiMcpServerTest {
         }
     }
 
-    @Test void limitsUnicodeOutputAndTruncatesOversizedCollections() {
+    @Test
+    void limitsUnicodeOutputAndTruncatesOversizedCollections() {
         assertEquals("😀", McpJson.bounded("😀test", 4));
         assertEquals("", McpJson.bounded("😀test", 3));
         String value = "x".repeat(3000);
@@ -88,33 +93,47 @@ class JpiMcpServerTest {
             audit = new McpAuditLog(directory);
             OutputStream output = new OutputStream() {
                 final ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-                @Override public synchronized void write(int value) {
-                    if (value == '\n') { responses.add(buffer.toString(StandardCharsets.UTF_8)); buffer.reset(); }
-                    else buffer.write(value);
+
+                @Override
+                public synchronized void write(int value) {
+                    if (value == '\n') {
+                        responses.add(buffer.toString(StandardCharsets.UTF_8));
+                        buffer.reset();
+                    } else buffer.write(value);
                 }
             };
             server = new JpiMcpServer(input, output, new McpSessionState(), audit);
             thread = Thread.ofVirtual().start(server::run);
         }
+
         void initialize() throws Exception {
             assertTrue(request(1, "initialize", Map.of("protocolVersion", JpiMcpServer.VERSION,
                     "clientInfo", Map.of("name", "test-client", "version", "1"), "capabilities", Map.of())).has("result"));
             write(McpJson.GSON.toJson(Map.of("jsonrpc", "2.0", "method", "notifications/initialized")) + "\n");
         }
+
         JsonObject call(int id, String tool, Map<String, Object> arguments) throws Exception {
             return request(id, "tools/call", Map.of("name", tool, "arguments", arguments)).getAsJsonObject("result");
         }
+
         JsonObject request(int id, String method, Map<String, Object> params) throws Exception {
             write(McpJson.GSON.toJson(Map.of("jsonrpc", "2.0", "id", id, "method", method, "params", params)) + "\n");
             return next();
         }
-        void write(String value) throws Exception { requests.write(value.getBytes(StandardCharsets.UTF_8)); requests.flush(); }
+
+        void write(String value) throws Exception {
+            requests.write(value.getBytes(StandardCharsets.UTF_8));
+            requests.flush();
+        }
+
         JsonObject next() throws Exception {
             String value = responses.poll(5, TimeUnit.SECONDS);
             assertNotNull(value, "MCP response timed out");
             return McpJson.GSON.fromJson(value, JsonObject.class);
         }
-        @Override public void close() throws Exception {
+
+        @Override
+        public void close() throws Exception {
             requests.close();
             thread.join(2000);
             server.close();

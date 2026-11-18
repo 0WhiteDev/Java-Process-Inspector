@@ -8,7 +8,8 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class CodeEditorsTest {
-    @Test void configuresAJavaEditorWithNavigationFeatures() {
+    @Test
+    void configuresAJavaEditorWithNavigationFeatures() {
         RSyntaxTextArea editor = CodeEditors.javaEditor(true);
         RTextScrollPane scrollPane = CodeEditors.scrollPane(editor);
 

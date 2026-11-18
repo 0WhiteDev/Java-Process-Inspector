@@ -9,19 +9,28 @@ public record AssistantReport(InvestigationReport investigation, String constant
                               List<Edge> edges, List<Chain> chains, List<InvestigationTarget> probes,
                               List<Finding> findings, List<String> notices, int analyzedMethods, boolean partial) {
     public record Method(String identifier, String owner, String name, String descriptor) {
-        public String key() { return identifier + "\u0000" + owner + "\u0000" + name + "\u0000" + descriptor; }
-        public String display() { return owner + "." + name + descriptor; }
+        public String key() {
+            return identifier + "\u0000" + owner + "\u0000" + name + "\u0000" + descriptor;
+        }
+
+        public String display() {
+            return owner + "." + name + descriptor;
+        }
+
         public InvestigationTarget target() {
             return new InvestigationTarget(identifier, owner, name, descriptor, "", 0, 0);
         }
     }
 
     public record Edge(Method caller, Method callee, boolean staticReference, long observedHits,
-                       boolean reflective, boolean failed) { }
+                       boolean reflective, boolean failed) {
+    }
 
-    public record Chain(List<Method> methods, int confidence, int observedEdges, int edgeCount) { }
+    public record Chain(List<Method> methods, int confidence, int observedEdges, int edgeCount) {
+    }
 
-    public record Finding(String category, Method caller, Method api, boolean observed, long hits) { }
+    public record Finding(String category, Method caller, Method api, boolean observed, long hits) {
+    }
 
     public String markdown() {
         StringBuilder text = new StringBuilder("# Investigation Assistant\n\nQuery: `")
@@ -44,22 +53,26 @@ public record AssistantReport(InvestigationReport investigation, String constant
                     .append(". This is a connected call graph path, not proof of one complete execution.\n\n");
         }
         text.append("## API evidence\n\n");
-        if (findings.isEmpty()) text.append("No supported Crypto or Network API reference found within the scan bounds.\n\n");
-        for (Finding finding : findings) text.append("- ").append(finding.category).append(": `")
-                .append(finding.caller.display()).append("` calls `").append(finding.api.display()).append("` (")
-                .append(finding.observed ? "observed, " + finding.hits + " hits" : "static reference")
-                .append(")\n");
+        if (findings.isEmpty())
+            text.append("No supported Crypto or Network API reference found within the scan bounds.\n\n");
+        for (Finding finding : findings)
+            text.append("- ").append(finding.category).append(": `")
+                    .append(finding.caller.display()).append("` calls `").append(finding.api.display()).append("` (")
+                    .append(finding.observed ? "observed, " + finding.hits + " hits" : "static reference")
+                    .append(")\n");
         text.append("\n## Suggested trace points\n\n");
-        for (InvestigationTarget probe : probes) text.append("- `").append(probe.displayName())
-                .append("` [").append(probe.classIdentifier()).append("]\n");
+        for (InvestigationTarget probe : probes)
+            text.append("- `").append(probe.displayName())
+                    .append("` [").append(probe.classIdentifier()).append("]\n");
         text.append("\n## Call graph\n\n");
-        for (Edge edge : edges) text.append("- `").append(edge.caller.display()).append("` -> `")
-                .append(edge.callee.display()).append("` [")
-                .append(edge.caller.identifier()).append(" -> ").append(edge.callee.identifier()).append(", ")
-                .append(edge.staticReference ? "static" : "observed")
-                .append(edge.observedHits > 0 ? ", observed " + edge.observedHits + "x" : "")
-                .append(edge.reflective ? ", reflection" : "").append(edge.failed ? ", exception evidence" : "")
-                .append("]\n");
+        for (Edge edge : edges)
+            text.append("- `").append(edge.caller.display()).append("` -> `")
+                    .append(edge.callee.display()).append("` [")
+                    .append(edge.caller.identifier()).append(" -> ").append(edge.callee.identifier()).append(", ")
+                    .append(edge.staticReference ? "static" : "observed")
+                    .append(edge.observedHits > 0 ? ", observed " + edge.observedHits + "x" : "")
+                    .append(edge.reflective ? ", reflection" : "").append(edge.failed ? ", exception evidence" : "")
+                    .append("]\n");
         text.append("\n## Limits and notices\n\n")
                 .append("Confidence is a deterministic ranking score, not a probability. Static edges do not establish call order. ")
                 .append("Runtime edges cover active probes and may be name-aggregated across classloaders. ")

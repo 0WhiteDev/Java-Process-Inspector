@@ -23,7 +23,8 @@ public final class FileCallSiteTransformer {
     private static final String PRIMARY_SUFFIX = "Ljava/lang/Object;Ljava/lang/String;Ljava/lang/String;"
             + "Ljava/lang/String;Ljava/lang/String;)";
 
-    private FileCallSiteTransformer() {}
+    private FileCallSiteTransformer() {
+    }
 
     public static Result transform(byte[] source) {
         ClassReader reader = new ClassReader(source);
@@ -32,7 +33,7 @@ public final class FileCallSiteTransformer {
         int sites = 0;
         for (MethodNode method : type.methods) {
             if ((method.access & (Opcodes.ACC_ABSTRACT | Opcodes.ACC_NATIVE)) != 0) continue;
-            for (AbstractInsnNode instruction = method.instructions.getFirst(); instruction != null;) {
+            for (AbstractInsnNode instruction = method.instructions.getFirst(); instruction != null; ) {
                 AbstractInsnNode next = instruction.getNext();
                 if (instruction instanceof MethodInsnNode) {
                     MethodInsnNode call = (MethodInsnNode) instruction;
@@ -117,7 +118,8 @@ public final class FileCallSiteTransformer {
             if (paths.contains(Integer.valueOf(index))) continue;
             String descriptor = arguments[index].getDescriptor();
             if ("[B".equals(descriptor) || "Ljava/lang/CharSequence;".equals(descriptor)
-                    || "Ljava/lang/String;".equals(descriptor) || "Ljava/nio/ByteBuffer;".equals(descriptor)) return index;
+                    || "Ljava/lang/String;".equals(descriptor) || "Ljava/nio/ByteBuffer;".equals(descriptor))
+                return index;
         }
         return -1;
     }
@@ -158,7 +160,8 @@ public final class FileCallSiteTransformer {
         }
         if (FILE.equals(call.owner) && ("delete".equals(call.name) || "createNewFile".equals(call.name)
                 || "mkdir".equals(call.name) || "mkdirs".equals(call.name) || "renameTo".equals(call.name))) {
-            for (int index = 0; index < arguments.length; index++) if (isPath(arguments[index])) paths.add(Integer.valueOf(index));
+            for (int index = 0; index < arguments.length; index++)
+                if (isPath(arguments[index])) paths.add(Integer.valueOf(index));
             FileOperation operation = "delete".equals(call.name) ? FileOperation.DELETE
                     : "renameTo".equals(call.name) ? FileOperation.MOVE : FileOperation.CREATE;
             return new Site(operation, true, paths);
@@ -175,13 +178,15 @@ public final class FileCallSiteTransformer {
     }
 
     private static FileOperation filesOperation(String name) {
-        if (name.startsWith("read") || "lines".equals(name) || "newBufferedReader".equals(name)) return FileOperation.READ;
+        if (name.startsWith("read") || "lines".equals(name) || "newBufferedReader".equals(name))
+            return FileOperation.READ;
         if (name.startsWith("write") || "newBufferedWriter".equals(name)) return FileOperation.WRITE;
         if (name.startsWith("create")) return FileOperation.CREATE;
         if (name.startsWith("delete")) return FileOperation.DELETE;
         if ("move".equals(name)) return FileOperation.MOVE;
         if ("copy".equals(name)) return FileOperation.COPY;
-        if (name.startsWith("newInput") || name.startsWith("newOutput") || name.startsWith("newByteChannel")) return FileOperation.OPEN;
+        if (name.startsWith("newInput") || name.startsWith("newOutput") || name.startsWith("newByteChannel"))
+            return FileOperation.OPEN;
         return null;
     }
 

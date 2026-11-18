@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Random;
+import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -40,6 +41,6 @@ class LineDiffTest {
     }
 
     private static String randomText(Random random) {
-        return String.join("\n", java.util.stream.IntStream.range(0, 200).mapToObj(index -> "line" + random.nextInt(15)).toList());
+        return String.join("\n", IntStream.range(0, 200).mapToObj(index -> "line" + random.nextInt(15)).toList());
     }
 }

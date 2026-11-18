@@ -45,7 +45,9 @@ public final class WatchesPanel extends JPanel {
     private boolean saving;
     private boolean evaluating;
 
-    public WatchesPanel() { this(WatchExpressionStore.defaultStore()); }
+    public WatchesPanel() {
+        this(WatchExpressionStore.defaultStore());
+    }
 
     public WatchesPanel(WatchExpressionStore store) {
         super(new BorderLayout(0, 8));
@@ -53,7 +55,11 @@ public final class WatchesPanel extends JPanel {
         setOpaque(false);
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0));
         actions.setOpaque(false);
-        actions.add(add); actions.add(edit); actions.add(remove); actions.add(refresh); actions.add(arm);
+        actions.add(add);
+        actions.add(edit);
+        actions.add(remove);
+        actions.add(refresh);
+        actions.add(arm);
         add(actions, BorderLayout.NORTH);
         watches.setFillsViewportHeight(true);
         watches.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
@@ -64,7 +70,8 @@ public final class WatchesPanel extends JPanel {
         JPanel dataActions = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0));
         dataActions.setOpaque(false);
         dataActions.add(new JLabel("Active data breakpoints (session only)"));
-        dataActions.add(toggle); dataActions.add(removeData);
+        dataActions.add(toggle);
+        dataActions.add(removeData);
         breakpoints.add(dataActions, BorderLayout.NORTH);
         breakpoints.add(Ui.scroll(data), BorderLayout.CENTER);
         JSplitPane split = new JSplitPane(JSplitPane.VERTICAL_SPLIT, Ui.scroll(watches), breakpoints);
@@ -82,8 +89,11 @@ public final class WatchesPanel extends JPanel {
         removeData.addActionListener(event -> changeData(true));
         watches.getSelectionModel().addListSelectionListener(event -> controls());
         data.getSelectionModel().addListSelectionListener(event -> controls());
-        try { expressions = store.load(); }
-        catch (Exception error) { status.setText("Could not load watches: " + error.getMessage()); }
+        try {
+            expressions = store.load();
+        } catch (Exception error) {
+            status.setText("Could not load watches: " + error.getMessage());
+        }
         resetValues();
         controls();
     }
@@ -128,11 +138,18 @@ public final class WatchesPanel extends JPanel {
 
     private void save(List<String> updated) {
         final List<String> validated;
-        try { validated = WatchExpressionStore.validate(updated); }
-        catch (Exception error) { Ui.error(this, error); return; }
+        try {
+            validated = WatchExpressionStore.validate(updated);
+        } catch (Exception error) {
+            Ui.error(this, error);
+            return;
+        }
         saving = true;
         controls();
-        Async.run(() -> { store.save(validated); return validated; }, values -> {
+        Async.run(() -> {
+            store.save(validated);
+            return validated;
+        }, values -> {
             expressions = values;
             saving = false;
             setContext(session, frame);
@@ -146,7 +163,8 @@ public final class WatchesPanel extends JPanel {
     private void resetValues() {
         int selected = watches.getSelectedRow();
         watchesModel.setRowCount(0);
-        for (String expression : expressions) watchesModel.addRow(new Object[]{expression, "", suspended() ? "Waiting for evaluation" : "Not suspended / no frame"});
+        for (String expression : expressions)
+            watchesModel.addRow(new Object[]{expression, "", suspended() ? "Waiting for evaluation" : "Not suspended / no frame"});
         if (selected >= 0 && selected < watches.getRowCount()) watches.setRowSelectionInterval(selected, selected);
     }
 
@@ -166,8 +184,11 @@ public final class WatchesPanel extends JPanel {
             List<Result> results = new ArrayList<>();
             for (String expression : requested) {
                 if (current.state() != DebugState.SUSPENDED) break;
-                try { results.add(new Result(current.evaluator().evaluate(selected.threadId(), selected.index(), expression), "OK")); }
-                catch (Exception error) { results.add(new Result("", error.getMessage() == null ? error.getClass().getSimpleName() : error.getMessage())); }
+                try {
+                    results.add(new Result(current.evaluator().evaluate(selected.threadId(), selected.index(), expression), "OK"));
+                } catch (Exception error) {
+                    results.add(new Result("", error.getMessage() == null ? error.getClass().getSimpleName() : error.getMessage()));
+                }
             }
             return results;
         }, results -> {
@@ -199,7 +220,8 @@ public final class WatchesPanel extends JPanel {
         form.add(mode);
         form.add(new JLabel("Comparison against proposed new value, e.g. < 5 or == false"));
         form.add(condition);
-        form.add(new JLabel("Suspend policy")); form.add(policy);
+        form.add(new JLabel("Suspend policy"));
+        form.add(policy);
         form.add(new JLabel("Stops before the write. Hot fields can cause significant debugger overhead."));
         if (JOptionPane.showConfirmDialog(this, form, "Arm data breakpoint", JOptionPane.OK_CANCEL_OPTION,
                 JOptionPane.PLAIN_MESSAGE) != JOptionPane.OK_OPTION) return;
@@ -224,16 +246,19 @@ public final class WatchesPanel extends JPanel {
             if (remove) current.dataBreakpoints().remove(id);
             else current.dataBreakpoints().setEnabled(id, !enabled);
             return true;
-        }, ignored -> { if (session == current) refreshData(); }, error -> Ui.error(this, error));
+        }, ignored -> {
+            if (session == current) refreshData();
+        }, error -> Ui.error(this, error));
     }
 
     private void refreshData() {
         int selected = data.getSelectedRow();
         dataModel.setRowCount(0);
         if (session == null || session.state() == DebugState.DISCONNECTED) return;
-        for (var view : session.dataBreakpoints().snapshot()) dataModel.addRow(new Object[]{view.id(), view.enabled(),
-                view.expression(), view.field(), view.objectId() < 0 ? "static" : "@" + view.objectId(), view.condition(),
-                view.suspendPolicy(), view.hits(), view.lastWrite(), view.error()});
+        for (var view : session.dataBreakpoints().snapshot())
+            dataModel.addRow(new Object[]{view.id(), view.enabled(),
+                    view.expression(), view.field(), view.objectId() < 0 ? "static" : "@" + view.objectId(), view.condition(),
+                    view.suspendPolicy(), view.hits(), view.lastWrite(), view.error()});
         if (selected >= 0 && selected < data.getRowCount()) data.setRowSelectionInterval(selected, selected);
         controls();
     }
@@ -251,9 +276,13 @@ public final class WatchesPanel extends JPanel {
 
     private static DefaultTableModel model(String... columns) {
         return new DefaultTableModel(columns, 0) {
-            @Override public boolean isCellEditable(int row, int column) { return false; }
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return false;
+            }
         };
     }
 
-    private record Result(String value, String status) {}
+    private record Result(String value, String status) {
+    }
 }

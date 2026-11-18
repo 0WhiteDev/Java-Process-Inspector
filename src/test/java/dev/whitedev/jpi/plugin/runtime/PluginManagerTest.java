@@ -11,6 +11,7 @@ import dev.whitedev.jpi.plugin.api.ui.JpiTab;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import javax.swing.JComponent;
 import javax.swing.JLabel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -23,9 +24,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PluginManagerTest {
-    @TempDir Path directory;
+    @TempDir
+    Path directory;
 
-    @Test void loadsServicePluginAndRemovesEveryContributionOnClose() throws Exception {
+    @Test
+    void loadsServicePluginAndRemovesEveryContributionOnClose() throws Exception {
         Path plugins = directory.resolve("plugins");
         Files.createDirectories(plugins);
         serviceJar(plugins.resolve("sample.jar"), SamplePlugin.class.getName());
@@ -57,19 +60,47 @@ class PluginManagerTest {
     }
 
     public static final class SamplePlugin implements JpiPlugin {
-        @Override public String id() { return "test.sample"; }
-        @Override public String name() { return "Sample plugin"; }
+        @Override
+        public String id() {
+            return "test.sample";
+        }
 
-        @Override public void initialize(JpiContext context) {
+        @Override
+        public String name() {
+            return "Sample plugin";
+        }
+
+        @Override
+        public void initialize(JpiContext context) {
             context.registerTab(new JpiTab() {
-                @Override public String id() { return "sample.tab"; }
-                @Override public String title() { return "Sample"; }
-                @Override public javax.swing.JComponent createComponent(JpiContext value) { return new JLabel("Sample"); }
+                @Override
+                public String id() {
+                    return "sample.tab";
+                }
+
+                @Override
+                public String title() {
+                    return "Sample";
+                }
+
+                @Override
+                public JComponent createComponent(JpiContext value) {
+                    return new JLabel("Sample");
+                }
             });
             context.registerBytecodeAnalyzer(new BytecodeAnalyzer() {
-                @Override public String id() { return "sample.analyzer"; }
-                @Override public String name() { return "Sample analyzer"; }
-                @Override public AnalysisResult analyze(BytecodeTarget target) {
+                @Override
+                public String id() {
+                    return "sample.analyzer";
+                }
+
+                @Override
+                public String name() {
+                    return "Sample analyzer";
+                }
+
+                @Override
+                public AnalysisResult analyze(BytecodeTarget target) {
                     return new AnalysisResult("Bytes", String.valueOf(target.bytecode().length));
                 }
             });

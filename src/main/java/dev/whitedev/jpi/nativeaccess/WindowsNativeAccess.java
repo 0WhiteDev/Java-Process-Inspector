@@ -28,7 +28,9 @@ public final class WindowsNativeAccess {
     private static final int MAX_RESULTS = 50_000;
     private static final int CHUNK_SIZE = 1024 * 1024;
 
-    public boolean isSupported() { return Platform.isWindows(); }
+    public boolean isSupported() {
+        return Platform.isWindows();
+    }
 
     public List<ProcessInfo> processes() throws IOException {
         requireWindows();
@@ -42,7 +44,9 @@ public final class WindowsNativeAccess {
                     result.add(new ProcessInfo(entry.th32ProcessID.intValue(), trim(entry.szExeFile)));
                 } while (KERNEL.Process32Next(snapshot, entry));
             }
-        } finally { KERNEL.CloseHandle(snapshot); }
+        } finally {
+            KERNEL.CloseHandle(snapshot);
+        }
         result.sort(Comparator.comparingInt(ProcessInfo::pid));
         return result;
     }
@@ -68,7 +72,8 @@ public final class WindowsNativeAccess {
     public void injectDll(int pid, File library) throws IOException {
         requireWindows();
         File dll = library.getCanonicalFile();
-        if (!dll.isFile() || !dll.getName().toLowerCase(Locale.ROOT).endsWith(".dll")) throw new IOException("Select an existing DLL file");
+        if (!dll.isFile() || !dll.getName().toLowerCase(Locale.ROOT).endsWith(".dll"))
+            throw new IOException("Select an existing DLL file");
         int rights = WinNT.PROCESS_CREATE_THREAD | WinNT.PROCESS_QUERY_INFORMATION | WinNT.PROCESS_VM_OPERATION
                 | WinNT.PROCESS_VM_WRITE | WinNT.PROCESS_VM_READ;
         WinNT.HANDLE process = KERNEL.OpenProcess(rights, false, pid);
@@ -86,8 +91,10 @@ public final class WindowsNativeAccess {
         try {
             remote = KERNEL.VirtualAllocEx(process, null, new SIZE_T(path.length), WinNT.MEM_COMMIT | WinNT.MEM_RESERVE, WinNT.PAGE_READWRITE);
             if (remote == null) throw error("Could not allocate memory in target process");
-            Memory local = new Memory(path.length); local.write(0, path, 0, path.length);
-            if (!KERNEL.WriteProcessMemory(process, remote, local, path.length, new IntByReference())) throw error("Could not write DLL path");
+            Memory local = new Memory(path.length);
+            local.write(0, path, 0, path.length);
+            if (!KERNEL.WriteProcessMemory(process, remote, local, path.length, new IntByReference()))
+                throw error("Could not write DLL path");
             Pointer loadLibrary = NativeLibrary.getInstance("kernel32").getFunction("LoadLibraryW");
             WinNT.HANDLE thread = KERNEL.CreateRemoteThread(process, null, 0, loadLibrary, remote, 0, new DWORDByReference());
             if (thread == null) throw error("Could not start LoadLibraryW in target process");
@@ -98,7 +105,9 @@ public final class WindowsNativeAccess {
                 if (!KERNEL.GetExitCodeThread(thread, exitCode) || exitCode.getValue() == 0) {
                     throw error("LoadLibraryW rejected the DLL");
                 }
-            } finally { KERNEL.CloseHandle(thread); }
+            } finally {
+                KERNEL.CloseHandle(thread);
+            }
         } finally {
             if (remote != null) KERNEL.VirtualFreeEx(process, remote, new SIZE_T(0), WinNT.MEM_RELEASE);
             KERNEL.CloseHandle(process);
@@ -108,7 +117,11 @@ public final class WindowsNativeAccess {
     public List<MemoryMatch> scanMemory(int pid, String value, MemoryDataType type) throws IOException {
         requireWindows();
         byte[] needle;
-        try { needle = type.encode(value); } catch (RuntimeException e) { throw new IOException("Invalid " + type + " value: " + value, e); }
+        try {
+            needle = type.encode(value);
+        } catch (RuntimeException e) {
+            throw new IOException("Invalid " + type + " value: " + value, e);
+        }
         if (needle.length == 0) throw new IOException("Search value cannot be empty");
         WinNT.HANDLE process = KERNEL.OpenProcess(WinNT.PROCESS_QUERY_INFORMATION | WinNT.PROCESS_VM_READ, false, pid);
         if (process == null) throw error("Could not open process " + pid);
@@ -130,26 +143,38 @@ public final class WindowsNativeAccess {
                 if (next <= address) break;
                 address = next;
             }
-        } finally { KERNEL.CloseHandle(process); }
+        } finally {
+            KERNEL.CloseHandle(process);
+        }
         return matches;
     }
 
     public void writeMemory(int pid, List<MemoryMatch> matches, String value, MemoryDataType type) throws IOException {
         requireWindows();
         byte[] encoded;
-        try { encoded = type.encode(value); } catch (RuntimeException e) { throw new IOException("Invalid " + type + " value: " + value, e); }
+        try {
+            encoded = type.encode(value);
+        } catch (RuntimeException e) {
+            throw new IOException("Invalid " + type + " value: " + value, e);
+        }
         WinNT.HANDLE process = KERNEL.OpenProcess(WinNT.PROCESS_VM_OPERATION | WinNT.PROCESS_VM_WRITE, false, pid);
         if (process == null) throw error("Could not open process " + pid);
         try {
             for (MemoryMatch match : matches) {
-                if (type == MemoryDataType.STRING && encoded.length > match.byteSize()) throw new IOException("Replacement string is too long");
+                if (type == MemoryDataType.STRING && encoded.length > match.byteSize())
+                    throw new IOException("Replacement string is too long");
                 int length = type == MemoryDataType.STRING ? match.byteSize() : encoded.length;
-                Memory buffer = new Memory(length); buffer.clear(); buffer.write(0, encoded, 0, encoded.length);
+                Memory buffer = new Memory(length);
+                buffer.clear();
+                buffer.write(0, encoded, 0, encoded.length);
                 IntByReference written = new IntByReference();
                 if (!KERNEL.WriteProcessMemory(process, Pointer.createConstant(match.address()), buffer, length, written)
-                        || written.getValue() != length) throw error("Could not write address 0x" + Long.toHexString(match.address()));
+                        || written.getValue() != length)
+                    throw error("Could not write address 0x" + Long.toHexString(match.address()));
             }
-        } finally { KERNEL.CloseHandle(process); }
+        } finally {
+            KERNEL.CloseHandle(process);
+        }
     }
 
     private static void scanRegion(WinNT.HANDLE process, long base, long size, byte[] needle,
@@ -165,7 +190,8 @@ public final class WindowsNativeAccess {
             if (read >= needle.length) {
                 byte[] data = buffer.getByteArray(0, read);
                 for (int index = 0; index <= read - needle.length && matches.size() < MAX_RESULTS; index++) {
-                    if (matches(data, index, needle)) matches.add(new MemoryMatch(base + offset + index, value, needle.length));
+                    if (matches(data, index, needle))
+                        matches.add(new MemoryMatch(base + offset + index, value, needle.length));
                 }
             }
             long advance = read > 0 ? read : requested;
@@ -186,7 +212,18 @@ public final class WindowsNativeAccess {
                 || page == WinNT.PAGE_EXECUTE_READ || page == WinNT.PAGE_EXECUTE_READWRITE || page == 0x80;
     }
 
-    private static String trim(char[] value) { int length = 0; while (length < value.length && value[length] != 0) length++; return new String(value, 0, length); }
-    private static void requireWindows() { if (!Platform.isWindows()) throw new UnsupportedOperationException("This operation is available on Windows only"); }
-    private static IOException error(String message) { return new IOException(message + " (Windows error " + KERNEL.GetLastError() + ")"); }
+    private static String trim(char[] value) {
+        int length = 0;
+        while (length < value.length && value[length] != 0) length++;
+        return new String(value, 0, length);
+    }
+
+    private static void requireWindows() {
+        if (!Platform.isWindows())
+            throw new UnsupportedOperationException("This operation is available on Windows only");
+    }
+
+    private static IOException error(String message) {
+        return new IOException(message + " (Windows error " + KERNEL.GetLastError() + ")");
+    }
 }

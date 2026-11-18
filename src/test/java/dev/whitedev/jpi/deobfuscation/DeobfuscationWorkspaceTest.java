@@ -10,7 +10,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class DeobfuscationWorkspaceTest {
-    @Test void autoMapsInventoryAndResolvesAliasesWithoutChangingTextualContent() {
+    @Test
+    void autoMapsInventoryAndResolvesAliasesWithoutChangingTextualContent() {
         MappingInventory inventory = MappingInventory.parse(
                 "C\t" + encoded("a.b.c") + "\t1\n"
                         + "F\t" + encoded("a.b.c") + "\t" + encoded("b") + "\t" + encoded("Ljava/lang/String;") + "\t1\n"
@@ -32,7 +33,8 @@ class DeobfuscationWorkspaceTest {
         assertEquals(3, translated.replacements());
     }
 
-    @Test void autoMapOnlyChangesTheRequestedInventoryScope() {
+    @Test
+    void autoMapOnlyChangesTheRequestedInventoryScope() {
         MappingInventory first = MappingInventory.parse("C\t" + encoded("first.Scope") + "\t1\n");
         MappingInventory second = MappingInventory.parse("C\t" + encoded("second.Scope") + "\t1\n");
         DeobfuscationWorkspace workspace = new DeobfuscationWorkspace();
@@ -42,7 +44,9 @@ class DeobfuscationWorkspaceTest {
         assertEquals("first.Scope", workspace.classAlias("first.Scope"));
         assertEquals("class_1", workspace.classAlias("second.Scope"));
     }
-    @Test void packageMappingIsOptionalAndAmbiguousAliasesAreNotTranslated() {
+
+    @Test
+    void packageMappingIsOptionalAndAmbiguousAliasesAreNotTranslated() {
         DeobfuscationWorkspace workspace = new DeobfuscationWorkspace();
         MappingEntry first = new MappingEntry(MappingKind.CLASS, "", "a.First", "", -1, 0);
         MappingEntry second = new MappingEntry(MappingKind.CLASS, "", "b.Second", "", -1, 0);

@@ -9,7 +9,8 @@ public final class CfgRuntime {
     private static final ConcurrentHashMap<String, CounterState> STATES =
             new ConcurrentHashMap<String, CounterState>();
 
-    private CfgRuntime() {}
+    private CfgRuntime() {
+    }
 
     public static void hit(String probeId, int block) {
         CounterState state = STATES.get(probeId);

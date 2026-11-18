@@ -7,6 +7,7 @@ import dev.whitedev.jpi.mcp.McpErrorCode;
 import dev.whitedev.jpi.mcp.McpException;
 import dev.whitedev.jpi.mcp.McpJson;
 import dev.whitedev.jpi.mcp.McpSessionState;
+
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -34,7 +35,9 @@ public final class McpTools {
         add("jpi_investigate", "Use the existing Investigation Assistant to rank query-related methods and correlate available evidence. Scores are heuristic candidates, not proof. Installs no probes.", "query", string(2, 200), "maxResults", integer(20, 1, 100));
     }
 
-    public List<JsonObject> definitions() { return List.copyOf(definitions.values()); }
+    public List<JsonObject> definitions() {
+        return List.copyOf(definitions.values());
+    }
 
     public Map<String, Object> call(String name, JsonObject arguments) throws Exception {
         return call(name, arguments, null);
@@ -44,10 +47,12 @@ public final class McpTools {
         JsonObject definition = definitions.get(name);
         if (definition == null) throw new McpException(McpErrorCode.INVALID_ARGUMENT, "Unknown JPI tool: " + name);
         JsonObject schema = definition.getAsJsonObject("inputSchema");
-        for (var entry : arguments.entrySet()) if (!schema.getAsJsonObject("properties").has(entry.getKey()))
-            throw new McpException(McpErrorCode.INVALID_ARGUMENT, "Unknown argument: " + entry.getKey());
-        for (var field : schema.getAsJsonArray("required")) if (!arguments.has(field.getAsString()))
-            throw new McpException(McpErrorCode.INVALID_ARGUMENT, "Missing argument: " + field.getAsString());
+        for (var entry : arguments.entrySet())
+            if (!schema.getAsJsonObject("properties").has(entry.getKey()))
+                throw new McpException(McpErrorCode.INVALID_ARGUMENT, "Unknown argument: " + entry.getKey());
+        for (var field : schema.getAsJsonArray("required"))
+            if (!arguments.has(field.getAsString()))
+                throw new McpException(McpErrorCode.INVALID_ARGUMENT, "Missing argument: " + field.getAsString());
         return expected == null ? facade.execute(name, arguments) : facade.execute(name, arguments, expected);
     }
 
@@ -75,10 +80,27 @@ public final class McpTools {
         definitions.put(name, definition);
     }
 
-    private static JsonObject string(int min, int max) { return McpJson.object(Map.of("type", "string", "minLength", min, "maxLength", max)); }
-    private static JsonObject integer(int fallback, int min, int max) { return McpJson.object(Map.of("type", "integer", "default", fallback, "minimum", min, "maximum", max)); }
-    private static JsonObject id() { return string(3, 1024); }
-    private static JsonObject method() { return string(1, 512); }
-    private static JsonObject descriptor() { return string(3, 4096); }
-    private static JsonObject engine() { return McpJson.object(Map.of("type", "string", "default", "default", "enum", List.of("default", "cfr", "vineflower", "procyon"))); }
+    private static JsonObject string(int min, int max) {
+        return McpJson.object(Map.of("type", "string", "minLength", min, "maxLength", max));
+    }
+
+    private static JsonObject integer(int fallback, int min, int max) {
+        return McpJson.object(Map.of("type", "integer", "default", fallback, "minimum", min, "maximum", max));
+    }
+
+    private static JsonObject id() {
+        return string(3, 1024);
+    }
+
+    private static JsonObject method() {
+        return string(1, 512);
+    }
+
+    private static JsonObject descriptor() {
+        return string(3, 4096);
+    }
+
+    private static JsonObject engine() {
+        return McpJson.object(Map.of("type", "string", "default", "default", "enum", List.of("default", "cfr", "vineflower", "procyon")));
+    }
 }

@@ -4,6 +4,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.InputStream;
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
@@ -12,11 +13,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class BytecodeCfgAnalyzerTest {
-    @AfterEach void clearRuntime() {
+    @AfterEach
+    void clearRuntime() {
         CfgRuntime.clear();
     }
 
-    @Test void buildsBasicBlocksEdgesAndDominatorsFromBytecode() throws Exception {
+    @Test
+    void buildsBasicBlocksEdgesAndDominatorsFromBytecode() throws Exception {
         String graph = BytecodeCfgAnalyzer.analyze(
                 fixtureBytes(), "classify", "(I)I");
 
@@ -42,7 +45,8 @@ class BytecodeCfgAnalyzerTest {
         assertTrue(foundConditionalOpcode);
     }
 
-    @Test void instrumentsBlocksAndCollectsBranchSpecificCounts() throws Exception {
+    @Test
+    void instrumentsBlocksAndCollectsBranchSpecificCounts() throws Exception {
         String probeId = "cfg-test";
         BytecodeCfgAnalyzer.Instrumented instrumented = BytecodeCfgAnalyzer.instrument(
                 fixtureBytes(), "classify", "(I)I", probeId);
@@ -50,7 +54,7 @@ class BytecodeCfgAnalyzerTest {
 
         FixtureLoader loader = new FixtureLoader(getClass().getClassLoader());
         Class<?> type = loader.define(CfgFixture.class.getName(), instrumented.bytecode);
-        java.lang.reflect.Constructor<?> constructor = type.getDeclaredConstructor();
+        Constructor<?> constructor = type.getDeclaredConstructor();
         constructor.setAccessible(true);
         Object fixture = constructor.newInstance();
         Method classify = type.getDeclaredMethod("classify", int.class);

@@ -1,12 +1,11 @@
 package dev.whitedev.jpi.mcp;
 
-import java.io.ByteArrayInputStream;
-
 import dev.whitedev.jpi.mcp.dto.ClassSummary;
 import dev.whitedev.jpi.mcp.dto.MethodSummary;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.MethodNode;
 
+import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -17,7 +16,8 @@ import java.util.List;
 import java.util.Map;
 
 final class McpAnalysis {
-    private McpAnalysis() {}
+    private McpAnalysis() {
+    }
 
     static String decode(String value) {
         return new String(Base64.getDecoder().decode(value), StandardCharsets.UTF_8);
@@ -50,7 +50,9 @@ final class McpAnalysis {
                 method.name, method.desc, modifiers(method.access), instructions, method.tryCatchBlocks.size());
     }
 
-    static String methodId(String id, String name, String descriptor) { return "m:" + id + ':' + name + ':' + descriptor; }
+    static String methodId(String id, String name, String descriptor) {
+        return "m:" + id + ':' + name + ':' + descriptor;
+    }
 
     static Map<String, Object> frame(String raw) {
         Map<String, Object> result = new LinkedHashMap<>();
@@ -70,8 +72,10 @@ final class McpAnalysis {
         if (!location.equals("Native Method") && !location.equals("Unknown Source")) {
             int colon = location.lastIndexOf(':');
             result.put("fileName", colon < 0 ? location : location.substring(0, colon));
-            if (colon >= 0) try { result.put("line", Integer.parseInt(location.substring(colon + 1))); }
-            catch (NumberFormatException ignored) {}
+            if (colon >= 0) try {
+                result.put("line", Integer.parseInt(location.substring(colon + 1)));
+            } catch (NumberFormatException ignored) {
+            }
         }
         return result;
     }
@@ -84,7 +88,10 @@ final class McpAnalysis {
             switch (input.readUnsignedByte()) {
                 case 1 -> constants[i] = input.readUTF();
                 case 3, 4, 9, 10, 11, 12, 17, 18 -> input.skipNBytes(4);
-                case 5, 6 -> { input.skipNBytes(8); i++; }
+                case 5, 6 -> {
+                    input.skipNBytes(8);
+                    i++;
+                }
                 case 7, 8, 16, 19, 20 -> input.skipNBytes(2);
                 case 15 -> input.skipNBytes(3);
                 default -> throw new IOException("Unsupported class constant");
@@ -93,7 +100,10 @@ final class McpAnalysis {
         input.skipNBytes(6);
         input.skipNBytes(2L * input.readUnsignedShort());
         int fields = input.readUnsignedShort();
-        for (int i = 0; i < fields; i++) { input.skipNBytes(6); skipAttributes(input); }
+        for (int i = 0; i < fields; i++) {
+            input.skipNBytes(6);
+            skipAttributes(input);
+        }
         int methods = input.readUnsignedShort();
         for (int i = 0; i < methods; i++) {
             input.readUnsignedShort();
@@ -115,7 +125,10 @@ final class McpAnalysis {
 
     private static void skipAttributes(DataInputStream input) throws IOException {
         int count = input.readUnsignedShort();
-        for (int i = 0; i < count; i++) { input.readUnsignedShort(); input.skipNBytes(Integer.toUnsignedLong(input.readInt())); }
+        for (int i = 0; i < count; i++) {
+            input.readUnsignedShort();
+            input.skipNBytes(Integer.toUnsignedLong(input.readInt()));
+        }
     }
 
     static List<Map<String, Object>> references(String raw) {
@@ -142,9 +155,11 @@ final class McpAnalysis {
                     "startLine", Integer.parseInt(v[4]), "endLine", Integer.parseInt(v[5]),
                     "reachable", Boolean.parseBoolean(v[6]), "immediateDominator", v[7],
                     "dominators", decode(v[8]), "instructions", decode(v[9]))));
-            if (v.length == 5 && v[0].equals("E")) edges.add(Map.of("from", v[1], "to", v[2], "type", v[3], "label", decode(v[4])));
+            if (v.length == 5 && v[0].equals("E"))
+                edges.add(Map.of("from", v[1], "to", v[2], "type", v[3], "label", decode(v[4])));
         }
-        if (blocks.isEmpty()) throw new McpException(McpErrorCode.BACKEND_UNAVAILABLE, "No CFG was returned for this method.");
+        if (blocks.isEmpty())
+            throw new McpException(McpErrorCode.BACKEND_UNAVAILABLE, "No CFG was returned for this method.");
         return new LinkedHashMap<>(Map.of("entryBlock", blocks.getFirst().get("id"), "blocks", blocks,
                 "edges", edges, "complexity", complexity, "truncated", false));
     }

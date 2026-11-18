@@ -112,16 +112,28 @@ final class CallGraphModel {
 
     enum HeatMetric {
         CALLS("Calls") {
-            @Override long value(Node node) { return node.calls; }
+            @Override
+            long value(Node node) {
+                return node.calls;
+            }
         },
         TOTAL_TIME("Total time") {
-            @Override long value(Node node) { return Math.max(0L, node.totalNanos); }
+            @Override
+            long value(Node node) {
+                return Math.max(0L, node.totalNanos);
+            }
         },
         AVERAGE_TIME("Average time") {
-            @Override long value(Node node) { return node.averageNanos(); }
+            @Override
+            long value(Node node) {
+                return node.averageNanos();
+            }
         },
         EXCEPTIONS("Exceptions") {
-            @Override long value(Node node) { return node.exceptions; }
+            @Override
+            long value(Node node) {
+                return node.exceptions;
+            }
         };
 
         private final String label;
@@ -132,7 +144,8 @@ final class CallGraphModel {
 
         abstract long value(Node node);
 
-        @Override public String toString() {
+        @Override
+        public String toString() {
             return label;
         }
     }

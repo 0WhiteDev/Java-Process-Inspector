@@ -3,17 +3,24 @@ package dev.whitedev.jpi.integration;
 import dev.whitedev.jpi.attach.*;
 import dev.whitedev.jpi.attach.jvmti.NativeAgentArtifact;
 import dev.whitedev.jpi.protocol.Operation;
+import dev.whitedev.jpi.protocol.WireProtocol;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
-import org.junit.jupiter.api.Assumptions;
+
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.File;
 import java.io.IOException;
-import java.net.ServerSocket;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.ServerSocket;
+import java.net.Socket;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.*;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 @Timeout(90)
@@ -21,7 +28,8 @@ class DisabledAttachIT {
     private final AttachService service = new AttachService(new File(System.getProperty("jpi.agent.jar", "target/jpi.jar")));
     private static final String TOKEN = "owner-provisioned-test-token-12345";
 
-    @Test void connectsToRunningRestrictedJvmRejectsWrongCredentialsAndReconnects() throws Exception {
+    @Test
+    void connectsToRunningRestrictedJvmRejectsWrongCredentialsAndReconnects() throws Exception {
         int port = port();
         var prepared = service.preparePreloadedAgent(port, TOKEN, 30);
         Process target = start(List.of(service.preloadedAgentArgument(prepared)));
@@ -36,37 +44,47 @@ class DisabledAttachIT {
                 ExecutorService workers = Executors.newFixedThreadPool(4);
                 try {
                     List<Future<String>> results = new ArrayList<>();
-                    for (int i = 0; i < 16; i++) results.add(workers.submit(() -> session.requestText(Operation.PING, "")));
+                    for (int i = 0; i < 16; i++)
+                        results.add(workers.submit(() -> session.requestText(Operation.PING, "")));
                     for (Future<String> result : results) assertEquals("pong", result.get(10, TimeUnit.SECONDS));
-                } finally { workers.shutdownNow(); }
+                } finally {
+                    workers.shutdownNow();
+                }
             }
-            try (java.net.Socket abrupt = new java.net.Socket("127.0.0.1", port)) {
+            try (Socket abrupt = new Socket("127.0.0.1", port)) {
                 abrupt.setSoTimeout(10000);
-                java.io.DataOutputStream output = new java.io.DataOutputStream(abrupt.getOutputStream());
-                output.writeUTF(TOKEN); output.flush();
-                dev.whitedev.jpi.protocol.WireProtocol.writeRequest(output, Operation.PING, new byte[0]);
-                assertEquals("pong", dev.whitedev.jpi.protocol.WireProtocol.readResponse(
-                        new java.io.DataInputStream(abrupt.getInputStream())).text());
+                DataOutputStream output = new DataOutputStream(abrupt.getOutputStream());
+                output.writeUTF(TOKEN);
+                output.flush();
+                WireProtocol.writeRequest(output, Operation.PING, new byte[0]);
+                assertEquals("pong", WireProtocol.readResponse(
+                        new DataInputStream(abrupt.getInputStream())).text());
             }
             try (InspectorSession reconnected = service.connectPreloadedAgent(port, TOKEN, descriptor)) {
                 assertEquals("pong", reconnected.requestText(Operation.PING, ""));
                 assertTrue(reconnected.requestText(Operation.CLASSES, "").contains(AttachTarget.class.getName()));
             }
             assertTrue(target.isAlive());
-        } finally { stop(target); }
+        } finally {
+            stop(target);
+        }
         assertAgentStopped(target, port);
     }
 
-    @Test void noPreloadedAgentProducesActionableFailureWithoutChangingTarget() throws Exception {
+    @Test
+    void noPreloadedAgentProducesActionableFailureWithoutChangingTarget() throws Exception {
         Process target = start(List.of());
         try {
             IOException error = assertThrows(IOException.class, () -> service.attach(descriptor(target)));
             assertTrue(error.getMessage().contains("preloaded"), error.toString());
             assertTrue(target.isAlive());
-        } finally { stop(target); }
+        } finally {
+            stop(target);
+        }
     }
 
-    @Test void idleListenerExpiresWithoutTerminatingTheJvm() throws Exception {
+    @Test
+    void idleListenerExpiresWithoutTerminatingTheJvm() throws Exception {
         int port = port();
         var prepared = service.preparePreloadedAgent(port, TOKEN, 10);
         Process target = start(List.of(service.preloadedAgentArgument(prepared)));
@@ -77,10 +95,13 @@ class DisabledAttachIT {
             Thread.sleep(11000);
             assertThrows(IOException.class, () -> service.connectPreloadedAgent(port, TOKEN, descriptor(target)));
             assertTrue(target.isAlive());
-        } finally { stop(target); }
+        } finally {
+            stop(target);
+        }
     }
 
-    @Test void startupNativeAgentRemainsBoundAcrossRestrictedJvmConnections() throws Exception {
+    @Test
+    void startupNativeAgentRemainsBoundAcrossRestrictedJvmConnections() throws Exception {
         String os = System.getProperty("os.name", "");
         Assumptions.assumeTrue(os.startsWith("Windows") || os.equals("Linux"), "No bundled native backend for this platform");
         boolean present = getClass().getResource(NativeAgentArtifact.resourcePath()) != null;
@@ -107,7 +128,9 @@ class DisabledAttachIT {
                     }
                 }
             }
-        } finally { stop(target); }
+        } finally {
+            stop(target);
+        }
     }
 
     private Process start(List<String> arguments) throws Exception {
@@ -118,34 +141,48 @@ class DisabledAttachIT {
         Process process = new ProcessBuilder(command).redirectError(ProcessBuilder.Redirect.DISCARD).start();
         try {
             String pid = CompletableFuture.supplyAsync(() -> {
-                try { return process.inputReader().readLine(); }
-                catch (IOException error) { throw new CompletionException(error); }
+                try {
+                    return process.inputReader().readLine();
+                } catch (IOException error) {
+                    throw new CompletionException(error);
+                }
             }).get(15, TimeUnit.SECONDS);
             assertEquals(Long.toString(process.pid()), pid);
             return process;
-        } catch (Throwable error) { stop(process); throw error; }
+        } catch (Throwable error) {
+            stop(process);
+            throw error;
+        }
     }
 
-    private static JvmDescriptor descriptor(Process target) { return new JvmDescriptor(Long.toString(target.pid()), "restricted fixture"); }
-    private static int port() throws IOException {
-        try (ServerSocket socket = new ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"))) { return socket.getLocalPort(); }
+    private static JvmDescriptor descriptor(Process target) {
+        return new JvmDescriptor(Long.toString(target.pid()), "restricted fixture");
     }
+
+    private static int port() throws IOException {
+        try (ServerSocket socket = new ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"))) {
+            return socket.getLocalPort();
+        }
+    }
+
     private static void stop(Process target) throws Exception {
         JvmFixtureCleanup.stop(target);
     }
 
     private static void assertAgentStopped(Process target, int port) throws Exception {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
-        for (;;) {
-            try (java.net.Socket socket = new java.net.Socket()) {
-                socket.connect(new java.net.InetSocketAddress("127.0.0.1", port), 250);
+        for (; ; ) {
+            try (Socket socket = new Socket()) {
+                socket.connect(new InetSocketAddress("127.0.0.1", port), 250);
                 socket.setSoTimeout(250);
-                var output = new java.io.DataOutputStream(socket.getOutputStream());
+                var output = new DataOutputStream(socket.getOutputStream());
                 output.writeUTF(TOKEN);
-                dev.whitedev.jpi.protocol.WireProtocol.writeRequest(output, Operation.SESSION_INFO, new byte[0]);
-                var response = dev.whitedev.jpi.protocol.WireProtocol.readResponse(new java.io.DataInputStream(socket.getInputStream()));
+                WireProtocol.writeRequest(output, Operation.SESSION_INFO, new byte[0]);
+                var response = WireProtocol.readResponse(new DataInputStream(socket.getInputStream()));
                 if (!response.success() || !response.text().startsWith("pid=" + target.pid() + "\n")) return;
-            } catch (IOException expected) { return; }
+            } catch (IOException expected) {
+                return;
+            }
             if (System.nanoTime() >= deadline) fail("Terminated fixture JVM still serves authenticated requests");
             Thread.sleep(20);
         }

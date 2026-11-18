@@ -21,12 +21,29 @@ public final class ExtensionRegistry {
     private final List<RegisteredExtension<HookProfile>> hookProfiles = new CopyOnWriteArrayList<>();
     private final List<Runnable> listeners = new CopyOnWriteArrayList<>();
 
-    public List<RegisteredExtension<JpiTab>> tabs() { return List.copyOf(tabs); }
-    public List<RegisteredExtension<BytecodeAnalyzer>> analyzers() { return List.copyOf(analyzers); }
-    public List<RegisteredExtension<DecompilerProvider>> decompilers() { return List.copyOf(decompilers); }
-    public List<RegisteredExtension<Deobfuscator>> deobfuscators() { return List.copyOf(deobfuscators); }
-    public List<RegisteredExtension<PluginExporter>> exporters() { return List.copyOf(exporters); }
-    public List<RegisteredExtension<HookProfile>> hookProfiles() { return List.copyOf(hookProfiles); }
+    public List<RegisteredExtension<JpiTab>> tabs() {
+        return List.copyOf(tabs);
+    }
+
+    public List<RegisteredExtension<BytecodeAnalyzer>> analyzers() {
+        return List.copyOf(analyzers);
+    }
+
+    public List<RegisteredExtension<DecompilerProvider>> decompilers() {
+        return List.copyOf(decompilers);
+    }
+
+    public List<RegisteredExtension<Deobfuscator>> deobfuscators() {
+        return List.copyOf(deobfuscators);
+    }
+
+    public List<RegisteredExtension<PluginExporter>> exporters() {
+        return List.copyOf(exporters);
+    }
+
+    public List<RegisteredExtension<HookProfile>> hookProfiles() {
+        return List.copyOf(hookProfiles);
+    }
 
     public Registration addListener(Runnable listener) {
         if (listener == null) throw new IllegalArgumentException("Listener is required");
@@ -76,7 +93,8 @@ public final class ExtensionRegistry {
         return new Registration() {
             private boolean closed;
 
-            @Override public synchronized void close() {
+            @Override
+            public synchronized void close() {
                 if (closed) return;
                 closed = true;
                 if (target.remove(registered)) changed();
@@ -90,7 +108,8 @@ public final class ExtensionRegistry {
 
     private static String normalize(String value) {
         String id = value == null ? "" : value.trim().toLowerCase();
-        if (!id.matches("[a-z0-9][a-z0-9._-]{1,127}")) throw new IllegalArgumentException("Invalid extension id: " + value);
+        if (!id.matches("[a-z0-9][a-z0-9._-]{1,127}"))
+            throw new IllegalArgumentException("Invalid extension id: " + value);
         return id;
     }
 }

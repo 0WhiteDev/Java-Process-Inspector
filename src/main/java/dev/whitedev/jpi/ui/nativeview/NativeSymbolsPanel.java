@@ -24,6 +24,8 @@ import javax.swing.ListSelectionModel;
 import javax.swing.RowFilter;
 import javax.swing.SwingConstants;
 import javax.swing.border.EmptyBorder;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import javax.swing.table.AbstractTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
@@ -36,6 +38,7 @@ import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.GridLayout;
 import java.awt.Insets;
+import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -112,7 +115,9 @@ public final class NativeSymbolsPanel extends JPanel implements SessionAware {
         });
     }
 
-    @Override public void setSession(InspectorSession session) {}
+    @Override
+    public void setSession(InspectorSession session) {
+    }
 
     private JPanel inputCard() {
         JPanel card = Ui.card(new GridBagLayout());
@@ -241,7 +246,8 @@ public final class NativeSymbolsPanel extends JPanel implements SessionAware {
         String query = search.getText().trim().toLowerCase(Locale.ROOT);
         Object selectedKind = kind.getSelectedItem();
         sorter.setRowFilter(new RowFilter<>() {
-            @Override public boolean include(Entry<? extends SymbolTableModel, ? extends Integer> entry) {
+            @Override
+            public boolean include(Entry<? extends SymbolTableModel, ? extends Integer> entry) {
                 NativeSymbol symbol = model.symbol(entry.getIdentifier());
                 if (selectedKind instanceof SymbolKind value && symbol.kind() != value) return false;
                 if (query.isEmpty()) return true;
@@ -271,7 +277,8 @@ public final class NativeSymbolsPanel extends JPanel implements SessionAware {
 
     private void browseBinary() {
         JFileChooser chooser = chooser();
-        if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) binary.setText(chooser.getSelectedFile().getAbsolutePath());
+        if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION)
+            binary.setText(chooser.getSelectedFile().getAbsolutePath());
     }
 
     private void browseAdditional() {
@@ -279,7 +286,7 @@ public final class NativeSymbolsPanel extends JPanel implements SessionAware {
         chooser.setMultiSelectionEnabled(true);
         if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) return;
         StringBuilder value = new StringBuilder(additional.getText().trim());
-        for (java.io.File file : chooser.getSelectedFiles()) {
+        for (File file : chooser.getSelectedFiles()) {
             if (value.length() > 0) value.append(';');
             value.append(file.getAbsolutePath());
         }
@@ -289,7 +296,7 @@ public final class NativeSymbolsPanel extends JPanel implements SessionAware {
     private void export() {
         if (report == null) return;
         JFileChooser chooser = new JFileChooser();
-        chooser.setSelectedFile(new java.io.File("native-symbols.csv"));
+        chooser.setSelectedFile(new File("native-symbols.csv"));
         if (chooser.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) return;
         Path output = chooser.getSelectedFile().toPath();
         try {
@@ -386,10 +393,23 @@ public final class NativeSymbolsPanel extends JPanel implements SessionAware {
             return symbols.get(row);
         }
 
-        @Override public int getRowCount() { return symbols.size(); }
-        @Override public int getColumnCount() { return COLUMNS.length; }
-        @Override public String getColumnName(int column) { return COLUMNS[column]; }
-        @Override public Object getValueAt(int row, int column) {
+        @Override
+        public int getRowCount() {
+            return symbols.size();
+        }
+
+        @Override
+        public int getColumnCount() {
+            return COLUMNS.length;
+        }
+
+        @Override
+        public String getColumnName(int column) {
+            return COLUMNS[column];
+        }
+
+        @Override
+        public Object getValueAt(int row, int column) {
             NativeSymbol value = symbols.get(row);
             return switch (column) {
                 case 0 -> address(value.address());
@@ -403,12 +423,26 @@ public final class NativeSymbolsPanel extends JPanel implements SessionAware {
         }
     }
 
-    private static final class DocumentChange implements javax.swing.event.DocumentListener {
+    private static final class DocumentChange implements DocumentListener {
         private final Runnable action;
 
-        DocumentChange(Runnable action) { this.action = action; }
-        @Override public void insertUpdate(javax.swing.event.DocumentEvent event) { action.run(); }
-        @Override public void removeUpdate(javax.swing.event.DocumentEvent event) { action.run(); }
-        @Override public void changedUpdate(javax.swing.event.DocumentEvent event) { action.run(); }
+        DocumentChange(Runnable action) {
+            this.action = action;
+        }
+
+        @Override
+        public void insertUpdate(DocumentEvent event) {
+            action.run();
+        }
+
+        @Override
+        public void removeUpdate(DocumentEvent event) {
+            action.run();
+        }
+
+        @Override
+        public void changedUpdate(DocumentEvent event) {
+            action.run();
+        }
     }
 }

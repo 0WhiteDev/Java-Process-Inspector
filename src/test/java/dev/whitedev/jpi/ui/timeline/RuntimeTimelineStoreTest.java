@@ -8,7 +8,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class RuntimeTimelineStoreTest {
-    @Test void correlatesEventsThroughRootCallThreadAndTime() {
+    @Test
+    void correlatesEventsThroughRootCallThreadAndTime() {
         RuntimeTimelineStore store = new RuntimeTimelineStore();
         store.publish(event("trace:10", 100L, TimelineSource.TRACE, "worker", "10", ""));
         store.publish(event("trace:11", 110L, TimelineSource.TRACE, "worker", "11", "10"));
@@ -22,7 +23,8 @@ class RuntimeTimelineStoreTest {
         assertEquals("time", find(store.snapshot(), "network:1").correlationBasis());
     }
 
-    @Test void correlatesMarkerAddedBeforeTheObservedCall() {
+    @Test
+    void correlatesMarkerAddedBeforeTheObservedCall() {
         RuntimeTimelineStore store = new RuntimeTimelineStore();
         store.publish(event("marker:1", 1_000L, TimelineSource.MARKER, "", "", ""));
         store.publish(event("trace:20", 1_400L, TimelineSource.TRACE, "target", "20", ""));
@@ -30,7 +32,8 @@ class RuntimeTimelineStoreTest {
         assertEquals("#20", find(store.snapshot(), "marker:1").correlation());
     }
 
-    @Test void boundsEventsAndDeduplicatesStableKeys() {
+    @Test
+    void boundsEventsAndDeduplicatesStableKeys() {
         RuntimeTimelineStore store = new RuntimeTimelineStore(2);
         store.publish(event("one", 1L, TimelineSource.NETWORK, "", "", ""));
         store.publish(event("two", 2L, TimelineSource.NETWORK, "", "", ""));

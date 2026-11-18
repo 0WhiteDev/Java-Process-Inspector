@@ -36,38 +36,56 @@ final class PluginContext implements JpiContext, AutoCloseable {
         Files.createDirectories(dataDirectory);
     }
 
-    @Override public int apiVersion() { return PluginManager.API_VERSION; }
-    @Override public Path dataDirectory() { return dataDirectory; }
-    @Override public Optional<JpiSession> session() { return Optional.ofNullable(session); }
+    @Override
+    public int apiVersion() {
+        return PluginManager.API_VERSION;
+    }
 
-    @Override public Registration onSessionChanged(Consumer<Optional<JpiSession>> listener) {
+    @Override
+    public Path dataDirectory() {
+        return dataDirectory;
+    }
+
+    @Override
+    public Optional<JpiSession> session() {
+        return Optional.ofNullable(session);
+    }
+
+    @Override
+    public Registration onSessionChanged(Consumer<Optional<JpiSession>> listener) {
         if (listener == null) throw new IllegalArgumentException("Session listener is required");
         sessionListeners.add(listener);
         Registration registration = () -> sessionListeners.remove(listener);
         return track(registration);
     }
 
-    @Override public Registration registerTab(JpiTab tab) {
+    @Override
+    public Registration registerTab(JpiTab tab) {
         return trackExtension(registry.registerTab(pluginId, tab));
     }
 
-    @Override public Registration registerBytecodeAnalyzer(BytecodeAnalyzer analyzer) {
+    @Override
+    public Registration registerBytecodeAnalyzer(BytecodeAnalyzer analyzer) {
         return trackExtension(registry.registerAnalyzer(pluginId, analyzer));
     }
 
-    @Override public Registration registerDecompiler(DecompilerProvider decompiler) {
+    @Override
+    public Registration registerDecompiler(DecompilerProvider decompiler) {
         return trackExtension(registry.registerDecompiler(pluginId, decompiler));
     }
 
-    @Override public Registration registerDeobfuscator(Deobfuscator deobfuscator) {
+    @Override
+    public Registration registerDeobfuscator(Deobfuscator deobfuscator) {
         return trackExtension(registry.registerDeobfuscator(pluginId, deobfuscator));
     }
 
-    @Override public Registration registerExporter(PluginExporter exporter) {
+    @Override
+    public Registration registerExporter(PluginExporter exporter) {
         return trackExtension(registry.registerExporter(pluginId, exporter));
     }
 
-    @Override public Registration registerHookProfile(HookProfile profile) {
+    @Override
+    public Registration registerHookProfile(HookProfile profile) {
         return trackExtension(registry.registerHookProfile(pluginId, profile));
     }
 
@@ -97,7 +115,8 @@ final class PluginContext implements JpiContext, AutoCloseable {
         return registration;
     }
 
-    @Override public synchronized void close() {
+    @Override
+    public synchronized void close() {
         for (int index = registrations.size() - 1; index >= 0; index--) {
             try {
                 registrations.get(index).close();

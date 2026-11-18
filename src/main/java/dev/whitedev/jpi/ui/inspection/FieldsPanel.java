@@ -1,14 +1,13 @@
 package dev.whitedev.jpi.ui.inspection;
 
-import dev.whitedev.jpi.ui.context.AnalysisTarget;
-import dev.whitedev.jpi.ui.context.ContextActions;
-
 import dev.whitedev.jpi.attach.InspectorSession;
 import dev.whitedev.jpi.deobfuscation.DeobfuscationWorkspace;
 import dev.whitedev.jpi.protocol.Operation;
 import dev.whitedev.jpi.ui.Async;
 import dev.whitedev.jpi.ui.SessionAware;
 import dev.whitedev.jpi.ui.Ui;
+import dev.whitedev.jpi.ui.context.AnalysisTarget;
+import dev.whitedev.jpi.ui.context.ContextActions;
 import dev.whitedev.jpi.ui.timeline.RuntimeTimelineStore;
 import dev.whitedev.jpi.ui.timeline.TimelineEvent;
 import dev.whitedev.jpi.ui.timeline.TimelineSource;
@@ -30,7 +29,10 @@ public final class FieldsPanel extends JPanel implements SessionAware {
     private final JTextField filter = new JTextField();
     private final DefaultTableModel model = new DefaultTableModel(
             new Object[]{"Class", "Field", "Type", "Value"}, 0) {
-        @Override public boolean isCellEditable(int row, int column) { return false; }
+        @Override
+        public boolean isCellEditable(int row, int column) {
+            return false;
+        }
     };
     private final JButton inspect = Ui.primaryButton("Inspect fields");
     private final JButton traceWrites = Ui.secondaryButton("Trace writes");
@@ -46,11 +48,13 @@ public final class FieldsPanel extends JPanel implements SessionAware {
     private boolean loading;
 
     public FieldsPanel(DeobfuscationWorkspace workspace) {
-        this(workspace, new RuntimeTimelineStore(), null, () -> { });
+        this(workspace, new RuntimeTimelineStore(), null, () -> {
+        });
     }
 
     public FieldsPanel(DeobfuscationWorkspace workspace, RuntimeTimelineStore timeline) {
-        this(workspace, timeline, null, () -> { });
+        this(workspace, timeline, null, () -> {
+        });
     }
 
     public FieldsPanel(DeobfuscationWorkspace workspace, RuntimeTimelineStore timeline,
@@ -63,7 +67,7 @@ public final class FieldsPanel extends JPanel implements SessionAware {
         setBorder(new EmptyBorder(4, 0, 0, 0));
         setOpaque(false);
         add(Ui.sectionHeader("Static fields",
-                "Inspect existing static state without constructing target application classes", null),
+                        "Inspect existing static state without constructing target application classes", null),
                 BorderLayout.NORTH);
 
         JPanel body = new JPanel(new BorderLayout(0, 12));
@@ -104,7 +108,8 @@ public final class FieldsPanel extends JPanel implements SessionAware {
         watchTimer.start();
     }
 
-    @Override public void setSession(InspectorSession session) {
+    @Override
+    public void setSession(InspectorSession session) {
         this.session = session;
         loading = false;
         previousValues.clear();

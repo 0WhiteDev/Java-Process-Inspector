@@ -1,9 +1,10 @@
 package dev.whitedev.jpi.agent.field;
 
+import dev.whitedev.jpi.agent.RuntimeAccess;
+
 import java.io.IOException;
 import java.lang.instrument.ClassDefinition;
 import java.lang.instrument.Instrumentation;
-import dev.whitedev.jpi.agent.RuntimeAccess;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -18,7 +19,8 @@ public final class FieldWriteManager {
     private static final AtomicLong IDS = new AtomicLong();
     private final RuntimeAccess instrumentation;
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(new ThreadFactory() {
-        @Override public Thread newThread(Runnable task) {
+        @Override
+        public Thread newThread(Runnable task) {
             Thread thread = new Thread(task, "jpi-field-write-expiration");
             thread.setDaemon(true);
             thread.setContextClassLoader(FieldWriteRuntime.class.getClassLoader());
@@ -67,7 +69,8 @@ public final class FieldWriteManager {
         }
         active = created;
         probe.expiration = scheduler.schedule(new Runnable() {
-            @Override public void run() {
+            @Override
+            public void run() {
                 stopAll();
             }
         }, config.stopAfterMillis, TimeUnit.MILLISECONDS);
@@ -134,7 +137,8 @@ public final class FieldWriteManager {
         } catch (ClassNotFoundException error) {
             throw new IOException("The writer classloader cannot access the JPI field runtime", error);
         }
-        if (visible != FieldWriteRuntime.class) throw new IOException("The writer resolves an incompatible field runtime");
+        if (visible != FieldWriteRuntime.class)
+            throw new IOException("The writer resolves an incompatible field runtime");
     }
 
     private static String message(Throwable error) {

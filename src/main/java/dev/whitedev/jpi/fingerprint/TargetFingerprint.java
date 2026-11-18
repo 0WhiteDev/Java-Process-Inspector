@@ -4,6 +4,7 @@ import dev.whitedev.jpi.debug.BreakpointSpec;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Comparator;
@@ -21,12 +22,19 @@ public record TargetFingerprint(long capturedAt, String mainClass, String javaVe
     }
 
     public record Member(String name, String descriptor, boolean method, List<Integer> lines) {
-        public Member { lines = List.copyOf(lines); }
+        public Member {
+            lines = List.copyOf(lines);
+        }
     }
 
     public record Definition(String key, String name, String loader, String hash, String status, List<Member> members) {
-        public Definition { members = List.copyOf(members); }
-        public boolean inspected() { return !hash.isEmpty(); }
+        public Definition {
+            members = List.copyOf(members);
+        }
+
+        public boolean inspected() {
+            return !hash.isEmpty();
+        }
     }
 
     public String id() {
@@ -37,7 +45,7 @@ public record TargetFingerprint(long capturedAt, String mainClass, String javaVe
         try {
             return "JPI-" + HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
                     .digest(canonical.toString().getBytes(StandardCharsets.UTF_8)));
-        } catch (java.security.NoSuchAlgorithmException error) {
+        } catch (NoSuchAlgorithmException error) {
             throw new IllegalStateException(error);
         }
     }
@@ -56,7 +64,10 @@ public record TargetFingerprint(long capturedAt, String mainClass, String javaVe
         List<BreakpointSpec> breakpoints = new ArrayList<>();
         for (int index = 1; index < rows.length; index++) {
             String[] values = rows[index].split("\t", -1);
-            if (values[0].equals("T")) { truncated = true; continue; }
+            if (values[0].equals("T")) {
+                truncated = true;
+                continue;
+            }
             if (values[0].equals("B") && values.length == 9) {
                 if (breakpoints.size() >= 1000) throw new IllegalArgumentException("Too many saved breakpoints");
                 breakpoints.add(new BreakpointSpec(decode(values[1]), decode(values[2]), decode(values[3]),
@@ -69,7 +80,8 @@ public record TargetFingerprint(long capturedAt, String mainClass, String javaVe
                 current = values;
                 members = new ArrayList<>();
             } else if ((values[0].equals("M") || values[0].equals("F")) && values.length == 5 && current != null) {
-                if (!values[1].equals(current[1])) throw new IllegalArgumentException("Member owner does not match definition");
+                if (!values[1].equals(current[1]))
+                    throw new IllegalArgumentException("Member owner does not match definition");
                 List<Integer> lines = new ArrayList<>();
                 for (String line : values[4].split(",")) if (!line.isEmpty()) lines.add(Integer.parseInt(line));
                 members.add(new Member(decode(values[2]), decode(values[3]), values[0].equals("M"), lines));
@@ -82,7 +94,8 @@ public record TargetFingerprint(long capturedAt, String mainClass, String javaVe
     }
 
     public static String withBreakpoints(String wire, List<BreakpointSpec> breakpoints) {
-        if (!parse(wire).breakpoints().isEmpty()) throw new IllegalArgumentException("Capture already contains saved breakpoints");
+        if (!parse(wire).breakpoints().isEmpty())
+            throw new IllegalArgumentException("Capture already contains saved breakpoints");
         if (breakpoints.size() > 1000) throw new IllegalArgumentException("At most 1000 breakpoints can be saved");
         StringBuilder result = new StringBuilder(wire);
         for (var breakpoint : breakpoints) {
@@ -102,7 +115,8 @@ public record TargetFingerprint(long capturedAt, String mainClass, String javaVe
     }
 
     private static Definition definition(String[] values, List<Member> members) {
-        if (!values[4].isEmpty() && !values[4].matches("[a-f0-9]{64}")) throw new IllegalArgumentException("Invalid bytecode hash");
+        if (!values[4].isEmpty() && !values[4].matches("[a-f0-9]{64}"))
+            throw new IllegalArgumentException("Invalid bytecode hash");
         return new Definition(decode(values[1]), decode(values[2]), decode(values[3]), values[4], decode(values[5]), members);
     }
 

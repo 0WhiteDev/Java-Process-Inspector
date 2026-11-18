@@ -36,10 +36,13 @@ public final class InvestigationAssistant {
                 throw new IllegalArgumentException("Invalid investigation limits");
         }
 
-        public static Limits defaults() { return new Limits(5, 16, 3, 80, 200, Duration.ofSeconds(30)); }
+        public static Limits defaults() {
+            return new Limits(5, 16, 3, 80, 200, Duration.ofSeconds(30));
+        }
     }
 
-    public record Progress(int step, String detail) { }
+    public record Progress(int step, String detail) {
+    }
 
     private final Requests requests;
     private final Limits limits;
@@ -50,7 +53,8 @@ public final class InvestigationAssistant {
     }
 
     public AssistantReport run(String query, Consumer<Progress> progress, BooleanSupplier cancelled) throws Exception {
-        if (query == null || query.trim().length() < 2) throw new IllegalArgumentException("Enter at least two characters");
+        if (query == null || query.trim().length() < 2)
+            throw new IllegalArgumentException("Enter at least two characters");
         query = query.trim();
         long started = System.nanoTime();
         check(cancelled);
@@ -103,7 +107,8 @@ public final class InvestigationAssistant {
             }
             Pending pending = queue.removeFirst();
             Method method = pending.method;
-            if (!scanned.add(method.key()) || boundary(method.owner()) || method.identifier().equals(method.owner())) continue;
+            if (!scanned.add(method.key()) || boundary(method.owner()) || method.identifier().equals(method.owner()))
+                continue;
             count++;
             progress.accept(new Progress(4, "Call graph: inspecting " + count + "/" + limits.requests + " methods"));
             String payload = method.identifier() + "\n" + method.name() + "\n" + method.descriptor()
@@ -120,7 +125,8 @@ public final class InvestigationAssistant {
                         String owner = decode(values[5]);
                         String name = decode(values[6]);
                         String descriptor = decode(values[7]);
-                        if (owner.isEmpty() || owner.startsWith("<") || name.isEmpty() || !descriptor.startsWith("(")) continue;
+                        if (owner.isEmpty() || owner.startsWith("<") || name.isEmpty() || !descriptor.startsWith("("))
+                            continue;
                         String identifier = "STATIC".equals(values[1]) && owner.equals(method.owner())
                                 ? method.identifier() : resolve(decode(values[4]), owner, definitions, graph);
                         Method related = new Method(identifier, owner, name, descriptor);
@@ -133,7 +139,8 @@ public final class InvestigationAssistant {
                             graph.partial = true;
                             graph.notice("Depth limit reached; some application methods were not expanded.");
                         }
-                    } catch (IllegalArgumentException ignored) { }
+                    } catch (IllegalArgumentException ignored) {
+                    }
                 }
             } catch (CancellationException error) {
                 throw error;
@@ -147,8 +154,9 @@ public final class InvestigationAssistant {
         progress.accept(new Progress(4, "Generated call graph: " + graph.nodes.size() + " nodes, " + edges.size() + " edges"));
         List<Finding> findings = new ArrayList<>();
         LinkedHashMap<String, InvestigationTarget> probes = new LinkedHashMap<>();
-        for (InvestigationTarget seed : seeds) probes.put(
-                new Method(seed.classIdentifier(), seed.className(), seed.methodName(), seed.descriptor()).key(), seed);
+        for (InvestigationTarget seed : seeds)
+            probes.put(
+                    new Method(seed.classIdentifier(), seed.className(), seed.methodName(), seed.descriptor()).key(), seed);
         for (Edge edge : edges) {
             String category = category(edge.callee().owner());
             if (category.isEmpty()) continue;
@@ -164,7 +172,8 @@ public final class InvestigationAssistant {
                 : "Detected " + crypto + " crypto API references"));
         progress.accept(new Progress(7, network == 0 ? "No supported network API found within scan bounds"
                 : "Found " + network + " network caller references"));
-        if (seeds.isEmpty()) graph.notice("No method-level string users found. Try a shorter marker or inspect available bytecode.");
+        if (seeds.isEmpty())
+            graph.notice("No method-level string users found. Try a shorter marker or inspect available bytecode.");
         if (base.entryPoints().size() > seeds.size()) {
             graph.partial = true;
             graph.notice("Only the top " + seeds.size() + " ranked entry points were expanded.");
@@ -201,7 +210,8 @@ public final class InvestigationAssistant {
         List<Chain> paths = new ArrayList<>();
         List<Method> roots = nodes.values().stream().filter(node -> !incoming.contains(node.key())).toList();
         if (roots.isEmpty()) roots = nodes.values().stream().filter(node -> seeds.contains(node.key())).toList();
-        for (Method root : roots) walk(root, outgoing, seeds, targets, new ArrayList<>(), new ArrayList<>(), paths, new int[]{0});
+        for (Method root : roots)
+            walk(root, outgoing, seeds, targets, new ArrayList<>(), new ArrayList<>(), paths, new int[]{0});
         return paths.stream().sorted(Comparator.comparingInt(Chain::confidence).reversed()
                         .thenComparing(chain -> chain.methods().stream().map(Method::key).reduce("", String::concat)))
                 .limit(8).toList();
@@ -210,14 +220,15 @@ public final class InvestigationAssistant {
     private static void walk(Method node, Map<String, List<Edge>> outgoing, Set<String> seeds,
                              List<InvestigationTarget> targets, List<Method> path, List<Edge> evidence,
                              List<Chain> results, int[] visited) {
-        if (++visited[0] > 512 || results.size() >= 128 || path.stream().anyMatch(value -> value.key().equals(node.key()))) return;
+        if (++visited[0] > 512 || results.size() >= 128 || path.stream().anyMatch(value -> value.key().equals(node.key())))
+            return;
         path.add(node);
         List<Edge> next = outgoing.getOrDefault(node.key(), List.of());
         boolean terminal = next.isEmpty() || path.size() >= 7 || !category(node.owner()).isEmpty();
         if (terminal && path.size() > 1 && path.stream().anyMatch(value -> seeds.contains(value.key()))) {
             int score = targets.stream().filter(target -> path.stream().anyMatch(value ->
-                    value.identifier().equals(target.classIdentifier()) && value.owner().equals(target.className())
-                            && value.name().equals(target.methodName()) && value.descriptor().equals(target.descriptor())))
+                            value.identifier().equals(target.classIdentifier()) && value.owner().equals(target.className())
+                                    && value.name().equals(target.methodName()) && value.descriptor().equals(target.descriptor())))
                     .mapToInt(InvestigationTarget::confidence).max().orElse(50) * 3 / 4;
             if (path.stream().anyMatch(value -> "Network".equals(category(value.owner())))) score += 12;
             if (path.stream().anyMatch(value -> "Crypto".equals(category(value.owner())))) score += 8;
@@ -236,11 +247,13 @@ public final class InvestigationAssistant {
 
     static String category(String owner) {
         if (owner.startsWith("javax.crypto.") || Set.of("java.security.MessageDigest", "java.security.Signature",
-                "java.security.KeyFactory", "java.security.KeyPairGenerator", "java.security.SecureRandom").contains(owner)) return "Crypto";
+                "java.security.KeyFactory", "java.security.KeyPairGenerator", "java.security.SecureRandom").contains(owner))
+            return "Crypto";
         if (Set.of("java.net.Socket", "java.net.SocketChannel", "java.nio.channels.SocketChannel", "java.net.URL",
                 "java.net.URLConnection", "java.net.HttpURLConnection", "java.net.DatagramSocket").contains(owner)
                 || owner.startsWith("java.net.http.") || owner.startsWith("okhttp3.")
-                || owner.startsWith("org.apache.http.client.") || owner.startsWith("org.apache.hc.client5.http.")) return "Network";
+                || owner.startsWith("org.apache.http.client.") || owner.startsWith("org.apache.hc.client5.http."))
+            return "Network";
         return "";
     }
 
@@ -262,7 +275,8 @@ public final class InvestigationAssistant {
         if (cancelled.getAsBoolean()) throw new CancellationException("Investigation cancelled");
     }
 
-    private record Pending(Method method, int depth) { }
+    private record Pending(Method method, int depth) {
+    }
 
     private static final class Graph {
         final Limits limits;
@@ -271,11 +285,16 @@ public final class InvestigationAssistant {
         final Set<String> notices = new LinkedHashSet<>();
         boolean partial;
 
-        Graph(Limits limits) { this.limits = limits; }
+        Graph(Limits limits) {
+            this.limits = limits;
+        }
 
         boolean node(Method method) {
             if (nodes.containsKey(method.key())) return true;
-            if (nodes.size() >= limits.nodes) { limited(); return false; }
+            if (nodes.size() >= limits.nodes) {
+                limited();
+                return false;
+            }
             nodes.put(method.key(), method);
             return true;
         }
@@ -284,7 +303,10 @@ public final class InvestigationAssistant {
             if (!Set.of("STATIC", "DYNAMIC", "REFLECTIVE", "FAILED").contains(layer) || hits < 0) return false;
             String key = caller.key() + "\u0001" + callee.key();
             Edge old = edges.get(key);
-            if (old == null && edges.size() >= limits.edges) { limited(); return false; }
+            if (old == null && edges.size() >= limits.edges) {
+                limited();
+                return false;
+            }
             if (!node(caller) || !node(callee)) return false;
             edges.put(key, new Edge(caller, callee, "STATIC".equals(layer) || old != null && old.staticReference(),
                     Math.max(old == null ? 0 : old.observedHits(), "STATIC".equals(layer) ? 0 : hits),
@@ -293,7 +315,13 @@ public final class InvestigationAssistant {
             return true;
         }
 
-        void notice(String message) { if (notices.size() < 32) notices.add(message); }
-        void limited() { partial = true; notice("Call graph node or edge limit reached; some references were omitted."); }
+        void notice(String message) {
+            if (notices.size() < 32) notices.add(message);
+        }
+
+        void limited() {
+            partial = true;
+            notice("Call graph node or edge limit reached; some references were omitted.");
+        }
     }
 }

@@ -55,16 +55,27 @@ public final class TunnelAgentDialog extends JDialog {
         JPanel root = new JPanel(new BorderLayout(0, 14));
         root.setBorder(new EmptyBorder(16, 18, 16, 18));
         root.add(Ui.sectionHeader("Agent server and tunneled client",
-                "Start the agent on the target, forward its loopback port, then connect JPI to the local endpoint", null),
+                        "Start the agent on the target, forward its loopback port, then connect JPI to the local endpoint", null),
                 BorderLayout.NORTH);
         root.add(form(), BorderLayout.CENTER);
         root.add(actions(), BorderLayout.SOUTH);
         setContentPane(root);
 
         DocumentListener update = new DocumentListener() {
-            @Override public void insertUpdate(DocumentEvent event) { refreshCommands(); }
-            @Override public void removeUpdate(DocumentEvent event) { refreshCommands(); }
-            @Override public void changedUpdate(DocumentEvent event) { refreshCommands(); }
+            @Override
+            public void insertUpdate(DocumentEvent event) {
+                refreshCommands();
+            }
+
+            @Override
+            public void removeUpdate(DocumentEvent event) {
+                refreshCommands();
+            }
+
+            @Override
+            public void changedUpdate(DocumentEvent event) {
+                refreshCommands();
+            }
         };
         remoteJar.getDocument().addDocumentListener(update);
         remotePid.getDocument().addDocumentListener(update);
@@ -158,7 +169,8 @@ public final class TunnelAgentDialog extends JDialog {
             String pid = remotePid.getText().trim();
             String token = authToken.getText().trim();
             service.prepareTunnelAgent(((Number) agentPort.getValue()).intValue(), token, ((Number) timeout.getValue()).intValue());
-            if (localPreloaded.isSelected() && !pid.matches("[1-9][0-9]*")) throw new IllegalArgumentException("Local preloaded connections require a target PID");
+            if (localPreloaded.isSelected() && !pid.matches("[1-9][0-9]*"))
+                throw new IllegalArgumentException("Local preloaded connections require a target PID");
             result = new ConnectionRequest(port, token, pid, displayName.getText().trim(), localPreloaded.isSelected());
             dispose();
         } catch (RuntimeException error) {
@@ -180,7 +192,9 @@ public final class TunnelAgentDialog extends JDialog {
             int seconds = ((Number) timeout.getValue()).intValue();
             prepared = persistent.isSelected() ? service.preparePreloadedAgent(port, authToken.getText().trim(), seconds)
                     : service.prepareTunnelAgent(port, authToken.getText().trim(), seconds);
-        } catch (IllegalArgumentException error) { return; }
+        } catch (IllegalArgumentException error) {
+            return;
+        }
         String jar = remoteJar.getText().trim().isEmpty() ? "jpi.jar" : remoteJar.getText().trim();
         String rawArgument = "-javaagent:" + jar + "=" + prepared.options();
         earlyArgument.setText(quoteAgentArgument(rawArgument));
@@ -251,7 +265,8 @@ public final class TunnelAgentDialog extends JDialog {
         return '"' + value.replace("\"", "\\\"") + '"';
     }
 
-    public record ConnectionRequest(int localPort, String token, String pid, String displayName, boolean localPreloaded) {
+    public record ConnectionRequest(int localPort, String token, String pid, String displayName,
+                                    boolean localPreloaded) {
         public ConnectionRequest(int localPort, String token, String pid, String displayName) {
             this(localPort, token, pid, displayName, false);
         }

@@ -1,13 +1,21 @@
 package dev.whitedev.jpi.attach;
 
-import java.io.File;
-import java.io.IOException;
+import dev.whitedev.jpi.agent.AgentOptions.Mode;
+import dev.whitedev.jpi.agent.AgentOptions;
 import dev.whitedev.jpi.attach.jvmti.NativeAgentArtifact;
 import dev.whitedev.jpi.protocol.Operation;
 
+import java.io.File;
+import java.io.IOException;
+
 public final class ImprovedAttachService extends AttachService {
-    public ImprovedAttachService() { super(); }
-    public ImprovedAttachService(File agentJar) { super(agentJar); }
+    public ImprovedAttachService() {
+        super();
+    }
+
+    public ImprovedAttachService(File agentJar) {
+        super(agentJar);
+    }
 
     public InspectorSession attachNative(JvmDescriptor target) throws Exception {
         if (target == null) throw new IllegalArgumentException("A local target is required");
@@ -27,7 +35,9 @@ public final class ImprovedAttachService extends AttachService {
         } catch (Exception error) {
             if (session != null) session.close();
             throw error;
-        } finally { channel.close(); }
+        } finally {
+            channel.close();
+        }
     }
 
     public void injectNativeCommunicationAgent(String pid, NativeAgentArtifact artifact, PreparedTunnelAgent prepared) throws Exception {
@@ -48,8 +58,8 @@ public final class ImprovedAttachService extends AttachService {
 
     private String nativeCommunicationOptions(NativeAgentArtifact verified, PreparedTunnelAgent prepared) throws Exception {
         if (prepared == null) throw new IllegalArgumentException("Prepared listener is required");
-        dev.whitedev.jpi.agent.AgentOptions options = dev.whitedev.jpi.agent.AgentOptions.parse(prepared.options());
-        if (options.mode() != dev.whitedev.jpi.agent.AgentOptions.Mode.LISTEN)
+        AgentOptions options = AgentOptions.parse(prepared.options());
+        if (options.mode() != Mode.LISTEN)
             throw new IllegalArgumentException("A preloaded listener configuration is required");
         return nativeCommunicationOptions(verified, prepared.options());
     }
@@ -63,11 +73,15 @@ public final class ImprovedAttachService extends AttachService {
             if (!session.requestText(Operation.JVMTI_STATUS, "").startsWith("backend=JVMTI\n"))
                 throw new IOException("Native endpoint has no bound JVMTI runtime");
             return session;
-        } catch (IOException error) { session.close(); throw error; }
+        } catch (IOException error) {
+            session.close();
+            throw error;
+        }
     }
 
     public String enableNativeBackendWithInjection(InspectorSession session, NativeAgentArtifact artifact) throws IOException {
-        if (session == null || session.isTunneled()) throw new IOException("Injection requires a local inspection session");
+        if (session == null || session.isTunneled())
+            throw new IOException("Injection requires a local inspection session");
         NativeAgentArtifact verified = NativeAgentArtifact.verify(artifact.library(), artifact.sha256());
         if (session.requestText(Operation.JVMTI_STATUS, "").startsWith("backend=JVMTI\n")) {
             return session.requestText(Operation.JVMTI_BIND, verified.bindingOptions());
@@ -77,7 +91,8 @@ public final class ImprovedAttachService extends AttachService {
             throw new AgentLoadingRestrictedException(session.target().id(), "-XX:+DisableAttachMechanism");
         if (info.contains("\ndynamic_agent_loading=false\n"))
             throw new AgentLoadingRestrictedException(session.target().id(), "-XX:-EnableDynamicAgentLoading");
-        if (!info.startsWith("pid=" + session.target().id() + "\n")) throw new IOException("Inspection session belongs to a different JVM");
+        if (!info.startsWith("pid=" + session.target().id() + "\n"))
+            throw new IOException("Inspection session belongs to a different JVM");
         boolean runtimeAllowsLoading = info.contains("\nattach_disabled=false\n") && info.contains("\ndynamic_agent_loading=true\n");
         loadNativeAgentWithInjection(session.target().id(), verified, runtimeAllowsLoading);
         return session.requestText(Operation.JVMTI_BIND, verified.bindingOptions());
@@ -90,14 +105,24 @@ public final class ImprovedAttachService extends AttachService {
     private void loadNativeAgentWithInjection(String pid, NativeAgentArtifact artifact, boolean runtimeAllowsLoading) throws IOException {
         JvmAgentPolicy policy = JvmAgentPolicy.inspect(pid);
         policy.rejectObservedRestrictions(pid);
-        if (!runtimeAllowsLoading) { loadNativeAgent(pid, artifact); return; }
-        if (!ProcessInjector.isSupported()) { loadNativeAgent(pid, artifact); return; }
-        try { new ProcessInjector().inject(pid, artifact); }
-        catch (AgentLoadingRestrictedException restricted) { throw restricted; }
-        catch (IndeterminateInjectionException uncertain) { throw uncertain; }
-        catch (IOException injectionError) {
-            try { loadNativeAgent(pid, artifact); }
-            catch (IOException attachError) {
+        if (!runtimeAllowsLoading) {
+            loadNativeAgent(pid, artifact);
+            return;
+        }
+        if (!ProcessInjector.isSupported()) {
+            loadNativeAgent(pid, artifact);
+            return;
+        }
+        try {
+            new ProcessInjector().inject(pid, artifact);
+        } catch (AgentLoadingRestrictedException restricted) {
+            throw restricted;
+        } catch (IndeterminateInjectionException uncertain) {
+            throw uncertain;
+        } catch (IOException injectionError) {
+            try {
+                loadNativeAgent(pid, artifact);
+            } catch (IOException attachError) {
                 IOException combined = new IOException("Native injection and Attach API loading both failed. Injection: "
                         + injectionError.getMessage() + " Attach API: " + attachError.getMessage(), attachError);
                 combined.addSuppressed(injectionError);

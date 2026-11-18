@@ -4,12 +4,13 @@ import com.sun.jdi.IncompatibleThreadStateException;
 import com.sun.jdi.InvalidTypeException;
 import com.sun.jdi.Method;
 import com.sun.jdi.ThreadReference;
+import com.sun.jdi.VMDisconnectedException;
 import com.sun.jdi.Value;
 import com.sun.jdi.VirtualMachine;
-import com.sun.jdi.VMDisconnectedException;
-
-import java.util.List;
 import dev.whitedev.jpi.debug.watch.DataBreakpointManager;
+
+import java.io.File;
+import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -66,7 +67,7 @@ public final class DebugSession implements AutoCloseable {
         }
     }
 
-    public static DebugSession launch(java.io.File jar, List<String> vmArguments,
+    public static DebugSession launch(File jar, List<String> vmArguments,
                                       List<String> applicationArguments) throws Exception {
         JdiConnector.LaunchResult launch = new JdiConnector().launch(jar, vmArguments, applicationArguments);
         try {
@@ -114,7 +115,9 @@ public final class DebugSession implements AutoCloseable {
         return evaluator;
     }
 
-    public DataBreakpointManager dataBreakpoints() { return dataBreakpoints; }
+    public DataBreakpointManager dataBreakpoints() {
+        return dataBreakpoints;
+    }
 
     public DataBreakpointManager.View watchField(long threadId, int frameIndex, String expression,
                                                  String condition, BreakpointSpec.SuspendPolicy policy) throws Exception {
@@ -182,7 +185,8 @@ public final class DebugSession implements AutoCloseable {
 
     public String forceEarlyReturn(long threadId, int frameIndex, String input) throws Exception {
         requireSuspended();
-        if (!capabilities.forceEarlyReturn()) throw new IllegalStateException("The target JVM does not support force early return");
+        if (!capabilities.forceEarlyReturn())
+            throw new IllegalStateException("The target JVM does not support force early return");
         if (frameIndex != 0) throw new IllegalArgumentException("Force return is available only for the top frame");
         ThreadReference thread = threads.find(threadId);
         Method method = thread.frame(0).location().method();
@@ -242,7 +246,8 @@ public final class DebugSession implements AutoCloseable {
         if (closed.get()) throw new IllegalStateException("Debugger is disconnected");
     }
 
-    @Override public void close() {
+    @Override
+    public void close() {
         if (!closed.compareAndSet(false, true)) return;
         events.close();
         try {

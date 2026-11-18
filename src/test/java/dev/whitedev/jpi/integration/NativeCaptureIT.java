@@ -4,23 +4,30 @@ import dev.whitedev.jpi.attach.*;
 import dev.whitedev.jpi.attach.jvmti.NativeAgentArtifact;
 import dev.whitedev.jpi.protocol.Operation;
 import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.io.TempDir;
+import org.objectweb.asm.Attribute;
+import org.objectweb.asm.ByteVector;
 import org.objectweb.asm.ClassReader;
-import java.io.*;
-import java.nio.file.Path;
-import java.nio.file.Files;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Opcodes;
-import org.junit.jupiter.api.io.TempDir;
+
+import java.io.*;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.*;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 @Timeout(90)
 class NativeCaptureIT {
-    @TempDir Path archiveParent;
+    @TempDir
+    Path archiveParent;
     private final AttachService service = new AttachService(new File(System.getProperty("jpi.agent.jar", "target/jpi.jar")));
 
-    @Test void capturesNewClassesAndOneShotRetransformationDoesNotDisableTheStream() throws Exception {
+    @Test
+    void capturesNewClassesAndOneShotRetransformationDoesNotDisableTheStream() throws Exception {
         try (Fixture fixture = start()) {
             InspectorSession session = fixture.session;
             assertTrue(session.requestText(Operation.JVMTI_CAPTURE_START, "").contains("active=1"));
@@ -36,13 +43,14 @@ class NativeCaptureIT {
             assertTrue(stopped.contains("active=0"));
             define(session, "ContinuousAfterStop");
             String after = session.requestText(Operation.JVMTI_CAPTURE_EVENTS, "");
-            assertFalse(after.contains(Base64.getEncoder().encodeToString("ContinuousAfterStop".getBytes(java.nio.charset.StandardCharsets.UTF_8))));
+            assertFalse(after.contains(Base64.getEncoder().encodeToString("ContinuousAfterStop".getBytes(StandardCharsets.UTF_8))));
             assertThrows(IOException.class, () -> session.request(Operation.JVMTI_CAPTURE_BYTES, "0"));
             assertEquals("pong", session.requestText(Operation.PING, ""));
         }
     }
 
-    @Test void boundsTheBufferAndReportsEvictions() throws Exception {
+    @Test
+    void boundsTheBufferAndReportsEvictions() throws Exception {
         try (Fixture fixture = start()) {
             InspectorSession session = fixture.session;
             session.request(Operation.JVMTI_CAPTURE_START, "");
@@ -59,7 +67,8 @@ class NativeCaptureIT {
         }
     }
 
-    @Test void archivesDecodedTransientClassesAndDuplicateNamesBeyondThePreviewBuffer() throws Exception {
+    @Test
+    void archivesDecodedTransientClassesAndDuplicateNamesBeyondThePreviewBuffer() throws Exception {
         Path unicodeDirectory = Files.createDirectory(archiveParent.resolve("źródło_測試"));
         try (Fixture fixture = start()) {
             InspectorSession session = fixture.session;
@@ -74,8 +83,8 @@ class NativeCaptureIT {
             String encoded = encrypted(first, 93);
             assertEquals("done", session.requestText(Operation.EXECUTE,
                     "public class ArchiveBurst { public static void execute(java.io.PrintStream out) throws Exception { "
-                    + "for(int i=0;i<300;i++) dev.whitedev.jpi.integration.TransientClassFixture.load(\"" + encoded
-                    + "\",93); out.print(\"done\"); }}"));
+                            + "for(int i=0;i<300;i++) dev.whitedev.jpi.integration.TransientClassFixture.load(\"" + encoded
+                            + "\",93); out.print(\"done\"); }}"));
             String stopped = session.requestText(Operation.JVMTI_CAPTURE_STOP, "");
             assertEquals(0, metric(stopped, "archive_errors"), stopped);
             assertTrue(metric(stopped, "dropped") > 0, stopped);
@@ -87,22 +96,26 @@ class NativeCaptureIT {
             List<String> manifest = Files.readAllLines(directory.resolve("manifest.tsv"));
             for (String row : manifest.subList(1, manifest.size())) {
                 String[] fields = row.split("\t", -1);
-                if (new ClassReader(Files.readAllBytes(directory.resolve(fields[4]))).getClassName().equals("TransientDecoded")) saved.add(fields);
+                if (new ClassReader(Files.readAllBytes(directory.resolve(fields[4]))).getClassName().equals("TransientDecoded"))
+                    saved.add(fields);
             }
             assertTrue(saved.size() >= 2, stopped);
             Map<Long, String> files = new HashMap<>();
-            for (String[] row : saved) assertNull(files.put(Long.parseLong(row[0]), row[4]), "Duplicate capture sequence");
+            for (String[] row : saved)
+                assertNull(files.put(Long.parseLong(row[0]), row[4]), "Duplicate capture sequence");
             assertTrue(files.containsKey(firstSequence), stopped);
             assertTrue(files.containsKey(secondSequence), stopped);
             assertNotEquals(files.get(firstSequence), files.get(secondSequence));
             assertArrayEquals(first, Files.readAllBytes(directory.resolve(files.get(firstSequence))), stopped);
             assertArrayEquals(second, Files.readAllBytes(directory.resolve(files.get(secondSequence))), stopped);
-            for (String[] row : saved) assertEquals("TransientDecoded", new ClassReader(Files.readAllBytes(directory.resolve(row[4]))).getClassName());
+            for (String[] row : saved)
+                assertEquals("TransientDecoded", new ClassReader(Files.readAllBytes(directory.resolve(row[4]))).getClassName());
             assertEquals("pong", session.requestText(Operation.PING, ""));
         }
     }
 
-    @Test void archiveQuotaDoesNotDisableCaptureAndInvalidSettingsPreserveTheCurrentStream() throws Exception {
+    @Test
+    void archiveQuotaDoesNotDisableCaptureAndInvalidSettingsPreserveTheCurrentStream() throws Exception {
         try (Fixture fixture = start()) {
             InspectorSession session = fixture.session;
             session.request(Operation.JVMTI_CAPTURE_START, "");
@@ -135,27 +148,33 @@ class NativeCaptureIT {
         ClassWriter writer = new ClassWriter(0);
         writer.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC, name, null, "java/lang/Object", null);
         var method = writer.visitMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC, "value", "()Ljava/lang/String;", null, null);
-        method.visitCode(); method.visitLdcInsn(value); method.visitInsn(Opcodes.ARETURN); method.visitMaxs(1, 0); method.visitEnd();
-        if (oversized) writer.visitAttribute(new org.objectweb.asm.Attribute("JpiCaptureLimit") {
-            @Override protected org.objectweb.asm.ByteVector write(ClassWriter cw, byte[] code, int length, int stack, int locals) {
+        method.visitCode();
+        method.visitLdcInsn(value);
+        method.visitInsn(Opcodes.ARETURN);
+        method.visitMaxs(1, 0);
+        method.visitEnd();
+        if (oversized) writer.visitAttribute(new Attribute("JpiCaptureLimit") {
+            @Override
+            protected ByteVector write(ClassWriter cw, byte[] code, int length, int stack, int locals) {
                 byte[] padding = new byte[4 * 1024 * 1024];
-                return new org.objectweb.asm.ByteVector().putByteArray(padding, 0, padding.length);
+                return new ByteVector().putByteArray(padding, 0, padding.length);
             }
         });
         writer.visitEnd();
         return writer.toByteArray();
     }
 
-    @Test void oversizedClassesAreReportedAsArchiveDropsWithoutBreakingClassLoading() throws Exception {
+    @Test
+    void oversizedClassesAreReportedAsArchiveDropsWithoutBreakingClassLoading() throws Exception {
         Path file = archiveParent.resolve("oversized.class");
         Files.write(file, payload("OversizedDecoded", "oversized", true));
         try (Fixture fixture = start()) {
             InspectorSession session = fixture.session;
             session.request(Operation.JVMTI_CAPTURE_ARCHIVE_START, archiveParent + "\n67108864");
-            String path = Base64.getEncoder().encodeToString(file.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            String path = Base64.getEncoder().encodeToString(file.toString().getBytes(StandardCharsets.UTF_8));
             assertEquals("oversized", session.requestText(Operation.EXECUTE,
                     "public class LoadOversized { public static void execute(java.io.PrintStream out) throws Exception { "
-                    + "out.print(dev.whitedev.jpi.integration.TransientClassFixture.loadFile(\"" + path + "\")); }}"));
+                            + "out.print(dev.whitedev.jpi.integration.TransientClassFixture.loadFile(\"" + path + "\")); }}"));
             String status = session.requestText(Operation.JVMTI_CAPTURE_STOP, "");
             assertTrue(metric(status, "dropped") > 0, status);
             assertTrue(metric(status, "archive_dropped") > 0, status);
@@ -164,7 +183,8 @@ class NativeCaptureIT {
         }
     }
 
-    @Test void archiveWriteFailureIsReportedWithoutBreakingTheSessionAndCanBeRestarted() throws Exception {
+    @Test
+    void archiveWriteFailureIsReportedWithoutBreakingTheSessionAndCanBeRestarted() throws Exception {
         try (Fixture fixture = start()) {
             InspectorSession session = fixture.session;
             assertEquals("warm", load(session, payload("WarmWriter", "warm"), 0));
@@ -208,14 +228,15 @@ class NativeCaptureIT {
 
     static Path archiveDirectory(String status) {
         String hex = status.lines().filter(line -> line.startsWith("archive_directory_hex=")).findFirst().orElseThrow().split("=", 2)[1];
-        return Path.of(new String(HexFormat.of().parseHex(hex), java.nio.charset.StandardCharsets.UTF_8));
+        return Path.of(new String(HexFormat.of().parseHex(hex), StandardCharsets.UTF_8));
     }
 
     private static long sequenceForBytes(InspectorSession session, String status, byte[] expected) throws IOException {
         List<String> rows = status.lines().filter(line -> line.split("\t", -1).length == 4).toList();
         for (int i = rows.size() - 1; i >= 0; i--) {
             long sequence = Long.parseLong(rows.get(i).split("\t", -1)[0]);
-            if (Arrays.equals(expected, session.request(Operation.JVMTI_CAPTURE_BYTES, Long.toString(sequence)))) return sequence;
+            if (Arrays.equals(expected, session.request(Operation.JVMTI_CAPTURE_BYTES, Long.toString(sequence))))
+                return sequence;
         }
         throw new AssertionError("Expected captured bytes were not present in the snapshot");
     }
@@ -224,7 +245,8 @@ class NativeCaptureIT {
         String os = System.getProperty("os.name", "");
         Assumptions.assumeTrue(os.equals("Linux") || os.startsWith("Windows"));
         boolean bundled = getClass().getResource(NativeAgentArtifact.resourcePath()) != null;
-        if (Boolean.getBoolean("jpi.native.required")) assertTrue(bundled); else Assumptions.assumeTrue(bundled);
+        if (Boolean.getBoolean("jpi.native.required")) assertTrue(bundled);
+        else Assumptions.assumeTrue(bundled);
         NativeAgentArtifact artifact = NativeAgentArtifact.extractBundled();
         try (AttachService.PreparedAgentSession prepared = service.prepareEarlyAgent()) {
             String early = prepared.jvmArgument();
@@ -235,28 +257,50 @@ class NativeCaptureIT {
                     .redirectOutput(ProcessBuilder.Redirect.DISCARD).redirectError(ProcessBuilder.Redirect.DISCARD).start();
             try {
                 InspectorSession session = prepared.await(Long.toString(target.pid()), "capture fixture");
-                try { session.request(Operation.JVMTI_BIND, artifact.bindingOptions()); return new Fixture(target, session); }
-                catch (Throwable error) { session.close(); throw error; }
-            } catch (Throwable error) { target.destroyForcibly(); target.waitFor(5, TimeUnit.SECONDS); throw error; }
+                try {
+                    session.request(Operation.JVMTI_BIND, artifact.bindingOptions());
+                    return new Fixture(target, session);
+                } catch (Throwable error) {
+                    session.close();
+                    throw error;
+                }
+            } catch (Throwable error) {
+                target.destroyForcibly();
+                target.waitFor(5, TimeUnit.SECONDS);
+                throw error;
+            }
         }
     }
 
     private static void define(InspectorSession session, String name) throws IOException {
         assertEquals("done", session.requestText(Operation.EXECUTE, "public class " + name + " { public static void execute(java.io.PrintStream out) { out.print(\"done\"); } }"));
     }
+
     private static long sequence(String events, String name) {
-        String encoded = Base64.getEncoder().encodeToString(name.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        String encoded = Base64.getEncoder().encodeToString(name.getBytes(StandardCharsets.UTF_8));
         return events.lines().filter(line -> line.endsWith("\t" + encoded)).map(line -> Long.parseLong(line.split("\t", 2)[0])).findFirst().orElseThrow();
     }
+
     private static long metric(String events, String key) {
         return events.lines().filter(line -> line.startsWith(key + "=")).mapToLong(line -> Long.parseLong(line.substring(key.length() + 1))).findFirst().orElseThrow();
     }
+
     private static final class Fixture implements AutoCloseable {
-        final Process target; final InspectorSession session;
-        Fixture(Process target, InspectorSession session) { this.target = target; this.session = session; }
+        final Process target;
+        final InspectorSession session;
+
+        Fixture(Process target, InspectorSession session) {
+            this.target = target;
+            this.session = session;
+        }
+
         public void close() throws Exception {
-            session.close(); target.destroy();
-            if (!target.waitFor(5, TimeUnit.SECONDS)) { target.destroyForcibly(); assertTrue(target.waitFor(5, TimeUnit.SECONDS)); }
+            session.close();
+            target.destroy();
+            if (!target.waitFor(5, TimeUnit.SECONDS)) {
+                target.destroyForcibly();
+                assertTrue(target.waitFor(5, TimeUnit.SECONDS));
+            }
         }
     }
 }

@@ -12,9 +12,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MapAndPdbSymbolParserTest {
-    @TempDir Path directory;
+    @TempDir
+    Path directory;
 
-    @Test void readsMsvcSymbolsAndSourceLinesFromMap() throws Exception {
+    @Test
+    void readsMsvcSymbolsAndSourceLinesFromMap() throws Exception {
         Path map = directory.resolve("sample.map");
         Files.writeString(map, " 0001:00000010 ?run@Demo@@YAXH@Z 0000000140001010 f demo.obj\n"
                 + "Line numbers for demo.obj(C:\\src\\demo.cpp) segment .text\n"
@@ -28,7 +30,8 @@ class MapAndPdbSymbolParserTest {
         assertTrue(parsed.sourceFiles().contains("C:\\src\\demo.cpp"));
     }
 
-    @Test void extractsDecoratedNamesAndSourcesFromPdbStrings() throws Exception {
+    @Test
+    void extractsDecoratedNamesAndSourcesFromPdbStrings() throws Exception {
         Path pdb = directory.resolve("sample.pdb");
         byte[] header = "Microsoft C/C++ MSF 7.00\r\n\u001aDS\0\0\0?run@Demo@@YAXH@Z\0C:\\src\\demo.cpp\0"
                 .getBytes(StandardCharsets.ISO_8859_1);

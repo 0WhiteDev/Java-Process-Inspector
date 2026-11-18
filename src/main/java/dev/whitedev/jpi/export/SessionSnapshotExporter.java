@@ -14,7 +14,8 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
 public final class SessionSnapshotExporter {
-    private SessionSnapshotExporter() { }
+    private SessionSnapshotExporter() {
+    }
 
     public static Path export(InspectorSession session, Path output) throws IOException {
         if (session == null) throw new IOException("Inspector session is not attached");

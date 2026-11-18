@@ -10,7 +10,8 @@ import java.awt.*;
 import java.io.InputStream;
 
 public final class CodeEditors {
-    private CodeEditors() {}
+    private CodeEditors() {
+    }
 
     public static RSyntaxTextArea javaEditor(boolean editable) {
         RSyntaxTextArea editor = new RSyntaxTextArea();
@@ -47,7 +48,10 @@ public final class CodeEditors {
             editor.setBackground(Ui.SURFACE);
             editor.setForeground(Ui.TEXT);
         } finally {
-            try { input.close(); } catch (Exception ignored) {}
+            try {
+                input.close();
+            } catch (Exception ignored) {
+            }
         }
     }
 }

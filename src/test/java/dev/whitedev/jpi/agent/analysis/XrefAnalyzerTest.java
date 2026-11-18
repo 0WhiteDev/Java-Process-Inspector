@@ -9,7 +9,8 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class XrefAnalyzerTest {
-    @Test void findsClassAndFieldInstructionUsagesWithDefinitionIdentifiers() throws Exception {
+    @Test
+    void findsClassAndFieldInstructionUsagesWithDefinitionIdentifiers() throws Exception {
         String resource = "/" + SymbolFixture.class.getName().replace('.', '/') + ".class";
         byte[] bytecode;
         try (InputStream input = SymbolFixture.class.getResourceAsStream(resource)) {
@@ -26,7 +27,8 @@ class XrefAnalyzerTest {
         assertTrue(types.stream().anyMatch(row -> row.member.equals("build")));
     }
 
-    @Test void findsCallsTypesConstantsAndReverseCallers() throws Exception {
+    @Test
+    void findsCallsTypesConstantsAndReverseCallers() throws Exception {
         byte[] bytecode = fixtureBytes();
         List<XrefAnalyzer.Reference> references = XrefAnalyzer.references(
                 bytecode, "analyze", "(Ljava/lang/String;)Ljava/lang/String;");
@@ -59,10 +61,16 @@ class XrefAnalyzerTest {
     static final class SymbolFixture {
         int value;
 
-        int read() { return value; }
+        int read() {
+            return value;
+        }
 
-        void write(int next) { value = next; }
+        void write(int next) {
+            value = next;
+        }
 
-        String build() { return new StringBuilder().append(value).toString(); }
+        String build() {
+            return new StringBuilder().append(value).toString();
+        }
     }
 }

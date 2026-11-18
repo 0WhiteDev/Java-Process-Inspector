@@ -2,7 +2,7 @@ package dev.whitedev.jpi.ui.context;
 
 public record AnalysisTarget(Kind kind, String identifier, String owner, String member,
                              String descriptor, String value) {
-    public enum Kind { CLASS, METHOD, FIELD, CONSTANT }
+    public enum Kind {CLASS, METHOD, FIELD, CONSTANT}
 
     public static AnalysisTarget method(String identifier, String owner, String member, String descriptor) {
         return new AnalysisTarget(Kind.METHOD, identifier, owner, member, descriptor, "");

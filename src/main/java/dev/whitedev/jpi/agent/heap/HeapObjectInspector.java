@@ -1,10 +1,14 @@
 package dev.whitedev.jpi.agent.heap;
 
-import java.lang.instrument.Instrumentation;
 import dev.whitedev.jpi.agent.RuntimeAccess;
+
+import java.io.IOException;
+import java.lang.instrument.Instrumentation;
 import java.lang.ref.WeakReference;
+import java.lang.reflect.AccessibleObject;
 import java.lang.reflect.Array;
 import java.lang.reflect.Field;
+import java.lang.reflect.Member;
 import java.lang.reflect.Modifier;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
@@ -100,11 +104,11 @@ public final class HeapObjectInspector {
         try {
             id = Long.parseLong(idText.trim());
         } catch (NumberFormatException error) {
-            throw new java.io.IOException("Invalid heap object ID", error);
+            throw new IOException("Invalid heap object ID", error);
         }
         ObjectHandle handle = handles.get(Long.valueOf(id));
         Object value = handle == null ? null : handle.reference.get();
-        if (value == null) throw new java.io.IOException("The sampled object is no longer reachable or its handle expired");
+        if (value == null) throw new IOException("The sampled object is no longer reachable or its handle expired");
         int maxValueLength = 2048;
         StringBuilder output = new StringBuilder();
         output.append('H').append('\t').append(id).append('\t').append(encoded(value.getClass().getName())).append('\t')
@@ -157,7 +161,8 @@ public final class HeapObjectInspector {
             if (!config.matchesRoot(type.getName()) || !rootTypeAllowed(type)) continue;
             for (Field field : type.getDeclaredFields()) {
                 if (fields >= config.maxRootFields || System.nanoTime() >= deadline) break;
-                if (!Modifier.isStatic(field.getModifiers()) || field.getType().isPrimitive() || field.isSynthetic()) continue;
+                if (!Modifier.isStatic(field.getModifiers()) || field.getType().isPrimitive() || field.isSynthetic())
+                    continue;
                 fields++;
                 try {
                     field.setAccessible(true);
@@ -231,7 +236,8 @@ public final class HeapObjectInspector {
     private static void appendCounts(StringBuilder output, Map<String, ClassCount> counts) {
         List<ClassCount> ordered = new ArrayList<ClassCount>(counts.values());
         Collections.sort(ordered, new Comparator<ClassCount>() {
-            @Override public int compare(ClassCount left, ClassCount right) {
+            @Override
+            public int compare(ClassCount left, ClassCount right) {
                 int count = Long.compare(right.instances, left.instances);
                 return count == 0 ? left.className.compareTo(right.className) : count;
             }
@@ -287,7 +293,7 @@ public final class HeapObjectInspector {
 
     private static boolean terminalReference(Object value) {
         return value instanceof Class<?> || value instanceof ClassLoader || value instanceof Thread
-                || value instanceof java.lang.reflect.Member || value instanceof java.lang.reflect.AccessibleObject;
+                || value instanceof Member || value instanceof AccessibleObject;
     }
 
     private static boolean rootTypeAllowed(Class<?> type) {

@@ -6,7 +6,8 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class CppDemanglerTest {
-    @Test void demanglesItaniumAndMsvcNamesAndClassifiesRuntimeTypes() {
+    @Test
+    void demanglesItaniumAndMsvcNamesAndClassifiesRuntimeTypes() {
         assertEquals("demo::Widget::run(int)", CppDemangler.demangle("_ZN4demo6Widget3runEi"));
         assertEquals("Demo::run", CppDemangler.demangle("?run@Demo@@YAXH@Z"));
         assertEquals("vtable for demo::Widget", CppDemangler.demangle("_ZTVN4demo6WidgetE"));

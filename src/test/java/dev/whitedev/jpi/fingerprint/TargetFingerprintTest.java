@@ -9,15 +9,21 @@ import dev.whitedev.jpi.deobfuscation.io.MappingFormats;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 class TargetFingerprintTest {
-    @TempDir Path directory;
+    @TempDir
+    Path directory;
 
-    @Test void capturesSelectedHashesMembersAndStableLoaderKeys() throws Exception {
+    @Test
+    void capturesSelectedHashesMembersAndStableLoaderKeys() throws Exception {
         String wire = capture();
         var fingerprint = TargetFingerprint.parse(wire);
         assertEquals(1, fingerprint.loadedCount());
@@ -31,17 +37,21 @@ class TargetFingerprintTest {
         assertEquals(fingerprint.id(), changedTime.id());
     }
 
-    @Test void preservesCatalogWhenBytecodeIsUnavailableAndRejectsLargeSelections() throws Exception {
+    @Test
+    void preservesCatalogWhenBytecodeIsUnavailableAndRejectsLargeSelections() throws Exception {
         var unavailable = TargetFingerprint.parse(TargetFingerprintCapture.capture(new Class<?>[]{getClass()}, getClass().getName(),
-                type -> { throw new java.io.IOException("unavailable"); }));
+                type -> {
+                    throw new IOException("unavailable");
+                }));
         assertEquals(1, unavailable.definitions().size());
         assertFalse(unavailable.definitions().getFirst().inspected());
-        String selection = java.util.stream.IntStream.range(0, 129).mapToObj(index -> "Class" + index).collect(java.util.stream.Collectors.joining("\n"));
-        assertThrows(java.io.IOException.class, () -> TargetFingerprintCapture.capture(new Class<?>[0], selection, type -> null));
+        String selection = IntStream.range(0, 129).mapToObj(index -> "Class" + index).collect(Collectors.joining("\n"));
+        assertThrows(IOException.class, () -> TargetFingerprintCapture.capture(new Class<?>[0], selection, type -> null));
         assertThrows(IllegalArgumentException.class, () -> TargetFingerprint.parse("bad"));
     }
 
-    @Test void roundTripsWorkspaceBaselineAndSavedBreakpointsWithoutChangingMappings() throws Exception {
+    @Test
+    void roundTripsWorkspaceBaselineAndSavedBreakpointsWithoutChangingMappings() throws Exception {
         var breakpoint = breakpoint("capture", "()Ljava/lang/String;", BreakpointSpec.Type.METHOD, null);
         String wire = TargetFingerprint.withBreakpoints(capture(), List.of(breakpoint));
         MappingEntry mapping = new MappingEntry(MappingKind.CLASS, "", getClass().getName(), "", -1, 1);
@@ -60,7 +70,8 @@ class TargetFingerprintTest {
         assertEquals("", MappingFormats.readFingerprint(file));
     }
 
-    @Test void reportsChangedMethodsAndUnresolvedLinesWithoutTreatingUnknownDataAsVerified() {
+    @Test
+    void reportsChangedMethodsAndUnresolvedLinesWithoutTreatingUnknownDataAsVerified() {
         var before = definition("a".repeat(64), List.of(new TargetFingerprint.Member("run", "()V", true, List.of(10))));
         var after = definition("b".repeat(64), List.of(new TargetFingerprint.Member("other", "()V", true, List.of(20))));
         MappingEntry mapping = new MappingEntry(MappingKind.METHOD, getClass().getName(), "run", "()V", -1, 1);
@@ -77,7 +88,8 @@ class TargetFingerprintTest {
         assertTrue(unverified.issues().stream().filter(issue -> issue.category().equals("Mapping")).allMatch(issue -> issue.status().equals("Unverified")));
     }
 
-    @Test void treatsDuplicateLoaderDefinitionsAndMissingClassesConservatively() {
+    @Test
+    void treatsDuplicateLoaderDefinitionsAndMissingClassesConservatively() {
         var type = definition("a".repeat(64), List.of());
         var duplicate = new TargetFingerprint(1, "Main", "21", 2, false, List.of(type, type), List.of());
         var result = FingerprintComparison.compare(fingerprint(type), duplicate, List.of(),
@@ -90,7 +102,8 @@ class TargetFingerprintTest {
         assertTrue(missing.issues().stream().anyMatch(issue -> issue.category().equals("Breakpoint") && issue.status().equals("Not loaded")));
     }
 
-    @Test void marksMissingDebugSymbolsAndTruncatedCatalogsAsUnverified() {
+    @Test
+    void marksMissingDebugSymbolsAndTruncatedCatalogsAsUnverified() {
         var type = definition("a".repeat(64), List.of(new TargetFingerprint.Member("run", "()V", true, List.of())));
         var truncated = new TargetFingerprint(1, "Main", "21", 1, true, List.of(type), List.of());
         var result = FingerprintComparison.compare(fingerprint(type), truncated, List.of(),
@@ -99,14 +112,16 @@ class TargetFingerprintTest {
         assertEquals(0, result.issues().stream().filter(issue -> issue.status().equals("Unresolved")).count());
     }
 
-    @Test void rejectsCorruptBaselineMetadataInsteadOfSilentlyDiscardingIt() throws Exception {
+    @Test
+    void rejectsCorruptBaselineMetadataInsteadOfSilentlyDiscardingIt() throws Exception {
         Path file = directory.resolve("corrupt.json");
-        java.nio.file.Files.writeString(file, "{\"targetFingerprint\":\"@\"}");
-        assertThrows(java.io.IOException.class, () -> MappingFormats.readFingerprint(file));
+        Files.writeString(file, "{\"targetFingerprint\":\"@\"}");
+        assertThrows(IOException.class, () -> MappingFormats.readFingerprint(file));
         assertThrows(IllegalArgumentException.class, () -> new TargetFingerprint(1, "Main", "21", -1, false, List.of(), List.of()));
     }
 
-    @Test void doesNotClaimBuildVerificationWithoutSelectedBytecode() {
+    @Test
+    void doesNotClaimBuildVerificationWithoutSelectedBytecode() {
         var type = definition("", List.of());
         var result = FingerprintComparison.compare(fingerprint(type), fingerprint(type), List.of(), List.of());
         assertEquals(100, result.classMatchPercent());

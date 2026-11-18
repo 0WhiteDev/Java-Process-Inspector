@@ -28,6 +28,7 @@ import javax.swing.JTable;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.SpinnerNumberModel;
+import javax.swing.Timer;
 import javax.swing.border.EmptyBorder;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
@@ -35,6 +36,8 @@ import javax.swing.table.DefaultTableModel;
 import java.awt.BorderLayout;
 import java.awt.FlowLayout;
 import java.awt.GridLayout;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
@@ -74,7 +77,7 @@ public final class FileMonitorPanel extends JPanel implements SessionAware {
     private final JTextField ruleCaller = new JTextField("*");
     private final JTextField redirectRoot = new JTextField();
     private final JComboBox<FileDecision> globalPolicy = new JComboBox<>(new FileDecision[]{FileDecision.ALLOW, FileDecision.BLOCK});
-    private final javax.swing.Timer timer = new javax.swing.Timer(850, event -> poll());
+    private final Timer timer = new Timer(850, event -> poll());
     private InspectorSession session;
     private boolean active;
     private boolean polling;
@@ -108,8 +111,9 @@ public final class FileMonitorPanel extends JPanel implements SessionAware {
         eventTable.getSelectionModel().addListSelectionListener(event -> {
             if (!event.getValueIsAdjusting()) showDetails();
         });
-        ruleTable.addMouseListener(new java.awt.event.MouseAdapter() {
-            @Override public void mouseClicked(java.awt.event.MouseEvent event) {
+        ruleTable.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent event) {
                 if (event.getClickCount() == 2) loadSelectedRule();
             }
         });
@@ -128,7 +132,8 @@ public final class FileMonitorPanel extends JPanel implements SessionAware {
         this.navigation = navigation;
     }
 
-    @Override public void setSession(InspectorSession value) {
+    @Override
+    public void setSession(InspectorSession value) {
         timer.stop();
         session = value;
         active = false;
@@ -433,15 +438,17 @@ public final class FileMonitorPanel extends JPanel implements SessionAware {
         Async.run(() -> FileProtocolCodec.parseRules(current.requestText(Operation.FILE_RULE_LIST, "")), rules -> {
             if (session != current) return;
             ruleModel.setRowCount(0);
-            for (FileRule rule : rules) ruleModel.addRow(new Object[]{rule.id(), rule.operation(), rule.pathPattern(),
-                    rule.callerPattern(), rule.decision(), rule.redirectRoot()});
+            for (FileRule rule : rules)
+                ruleModel.addRow(new Object[]{rule.id(), rule.operation(), rule.pathPattern(),
+                        rule.callerPattern(), rule.decision(), rule.redirectRoot()});
         }, error -> status.setText("Rules unavailable: " + message(error)));
         Async.run(() -> current.requestText(Operation.FILE_POLICY_GET, ""), policy -> {
             try {
                 globalPolicy.setSelectedItem(FileDecision.valueOf(policy.trim()));
             } catch (RuntimeException ignored) {
             }
-        }, error -> { });
+        }, error -> {
+        });
     }
 
     private void setPolicy() {
@@ -472,9 +479,20 @@ public final class FileMonitorPanel extends JPanel implements SessionAware {
 
     private void watch(JTextField field) {
         field.getDocument().addDocumentListener(new DocumentListener() {
-            @Override public void insertUpdate(DocumentEvent event) { filter(); }
-            @Override public void removeUpdate(DocumentEvent event) { filter(); }
-            @Override public void changedUpdate(DocumentEvent event) { filter(); }
+            @Override
+            public void insertUpdate(DocumentEvent event) {
+                filter();
+            }
+
+            @Override
+            public void removeUpdate(DocumentEvent event) {
+                filter();
+            }
+
+            @Override
+            public void changedUpdate(DocumentEvent event) {
+                filter();
+            }
         });
     }
 
@@ -510,13 +528,14 @@ public final class FileMonitorPanel extends JPanel implements SessionAware {
 
     private static DefaultTableModel readOnly(String... columns) {
         return new DefaultTableModel(columns, 0) {
-            @Override public boolean isCellEditable(int row, int column) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
                 return false;
             }
         };
     }
 
-    public enum NavigationTarget { CALLER, XREFS, CFG, INVESTIGATION, TIMELINE }
+    public enum NavigationTarget {CALLER, XREFS, CFG, INVESTIGATION, TIMELINE}
 
     @FunctionalInterface
     public interface Navigation {

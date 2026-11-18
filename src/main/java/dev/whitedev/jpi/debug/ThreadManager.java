@@ -30,7 +30,8 @@ public final class ThreadManager {
     }
 
     public record ThreadView(long id, String name, int status, boolean suspended, int suspendCount) {
-        @Override public String toString() {
+        @Override
+        public String toString() {
             return (suspended ? "[suspended] " : "[running] ") + name + "  #" + id + "  " + state(status);
         }
 

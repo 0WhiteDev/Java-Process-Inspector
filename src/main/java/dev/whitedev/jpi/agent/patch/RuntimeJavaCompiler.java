@@ -14,8 +14,8 @@ import javax.tools.StandardJavaFileManager;
 import javax.tools.StandardLocation;
 import javax.tools.ToolProvider;
 import java.io.ByteArrayInputStream;
-import java.io.File;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -37,15 +37,22 @@ import java.util.Set;
 public final class RuntimeJavaCompiler {
     public interface ClassPath {
         byte[] find(String binaryName);
+
         Collection<String> list(String packageName, boolean recurse);
     }
 
     private static final ClassPath EMPTY_CLASS_PATH = new ClassPath() {
-        public byte[] find(String binaryName) { return null; }
-        public Collection<String> list(String packageName, boolean recurse) { return Collections.emptyList(); }
+        public byte[] find(String binaryName) {
+            return null;
+        }
+
+        public Collection<String> list(String packageName, boolean recurse) {
+            return Collections.emptyList();
+        }
     };
 
-    private RuntimeJavaCompiler() { }
+    private RuntimeJavaCompiler() {
+    }
 
     public static byte[] compile(String binaryName, String source) throws IOException {
         return compile(binaryName, source, EMPTY_CLASS_PATH);
@@ -86,7 +93,8 @@ public final class RuntimeJavaCompiler {
             if (!success) throw new IOException(formatDiagnostics(diagnostics));
             Map<String, byte[]> outputs = manager.outputs();
             byte[] primary = outputs.get(binaryName);
-            if (primary == null) throw new IOException("Compilation did not produce " + binaryName + ". Outputs: " + outputs.keySet());
+            if (primary == null)
+                throw new IOException("Compilation did not produce " + binaryName + ". Outputs: " + outputs.keySet());
             if (outputs.size() != 1) {
                 List<String> additional = new ArrayList<String>(outputs.keySet());
                 additional.remove(binaryName);
@@ -106,6 +114,7 @@ public final class RuntimeJavaCompiler {
         }
         if (!file.delete()) file.deleteOnExit();
     }
+
     private static String join(List<String> values) {
         StringBuilder output = new StringBuilder();
         for (String value : values) {
@@ -132,7 +141,8 @@ public final class RuntimeJavaCompiler {
             this.source = source;
         }
 
-        @Override public CharSequence getCharContent(boolean ignoreEncodingErrors) {
+        @Override
+        public CharSequence getCharContent(boolean ignoreEncodingErrors) {
             return source;
         }
     }
@@ -147,7 +157,8 @@ public final class RuntimeJavaCompiler {
             this.bytecode = bytecode;
         }
 
-        @Override public InputStream openInputStream() {
+        @Override
+        public InputStream openInputStream() {
             return new ByteArrayInputStream(bytecode);
         }
     }
@@ -159,7 +170,8 @@ public final class RuntimeJavaCompiler {
             super(URI.create("memory:/" + binaryName.replace('.', '/') + kind.extension), kind);
         }
 
-        @Override public OutputStream openOutputStream() {
+        @Override
+        public OutputStream openOutputStream() {
             return output;
         }
 
@@ -179,20 +191,23 @@ public final class RuntimeJavaCompiler {
             this.sourceIdentifiers = identifiers(source);
         }
 
-        @Override public JavaFileObject getJavaFileForOutput(JavaFileManager.Location location, String className,
-                                                             JavaFileObject.Kind kind, FileObject sibling) {
+        @Override
+        public JavaFileObject getJavaFileForOutput(JavaFileManager.Location location, String className,
+                                                   JavaFileObject.Kind kind, FileObject sibling) {
             String binaryName = className.replace('/', '.');
             ClassOutputFile file = new ClassOutputFile(binaryName, kind);
             classes.put(binaryName, file);
             return file;
         }
 
-        @Override public JavaFileObject getJavaFileForInput(JavaFileManager.Location location, String className,
-                                                            JavaFileObject.Kind kind) throws IOException {
+        @Override
+        public JavaFileObject getJavaFileForInput(JavaFileManager.Location location, String className,
+                                                  JavaFileObject.Kind kind) throws IOException {
             try {
                 JavaFileObject standard = super.getJavaFileForInput(location, className, kind);
                 if (standard != null) return standard;
-            } catch (IOException ignored) { }
+            } catch (IOException ignored) {
+            }
             if (kind == JavaFileObject.Kind.CLASS && location == StandardLocation.CLASS_PATH) {
                 byte[] bytecode = classPath.find(className);
                 if (bytecode != null) return new ClassInputFile(className, bytecode);
@@ -200,8 +215,9 @@ public final class RuntimeJavaCompiler {
             return null;
         }
 
-        @Override public Iterable<JavaFileObject> list(JavaFileManager.Location location, String packageName,
-                                                       Set<JavaFileObject.Kind> kinds, boolean recurse)
+        @Override
+        public Iterable<JavaFileObject> list(JavaFileManager.Location location, String packageName,
+                                             Set<JavaFileObject.Kind> kinds, boolean recurse)
                 throws IOException {
             Iterable<JavaFileObject> standard = super.list(location, packageName, kinds, recurse);
             if (location != StandardLocation.CLASS_PATH || !kinds.contains(JavaFileObject.Kind.CLASS)) return standard;
@@ -230,7 +246,7 @@ public final class RuntimeJavaCompiler {
 
         private static Set<String> identifiers(String source) {
             Set<String> values = new HashSet<String>();
-            for (int index = 0; index < source.length();) {
+            for (int index = 0; index < source.length(); ) {
                 char value = source.charAt(index);
                 if (!Character.isJavaIdentifierStart(value)) {
                     index++;
@@ -244,7 +260,8 @@ public final class RuntimeJavaCompiler {
             return values;
         }
 
-        @Override public String inferBinaryName(JavaFileManager.Location location, JavaFileObject file) {
+        @Override
+        public String inferBinaryName(JavaFileManager.Location location, JavaFileObject file) {
             if (file instanceof ClassInputFile) return ((ClassInputFile) file).binaryName;
             return super.inferBinaryName(location, file);
         }

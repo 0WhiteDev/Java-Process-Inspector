@@ -4,6 +4,7 @@ import dev.whitedev.jpi.symbols.model.NativeSymbol;
 import dev.whitedev.jpi.symbols.model.SymbolKind;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -58,7 +59,7 @@ final class DwarfLineParser {
             directories.add("");
             while (cursor < headerEnd) {
                 String directory = data.asciiZ(cursor, (int) Math.min(16_384L, headerEnd - cursor));
-                cursor += directory.getBytes(java.nio.charset.StandardCharsets.UTF_8).length + 1L;
+                cursor += directory.getBytes(StandardCharsets.UTF_8).length + 1L;
                 if (directory.isEmpty()) break;
                 directories.add(directory);
             }
@@ -66,7 +67,7 @@ final class DwarfLineParser {
             files.add(new FileEntry("", 0));
             while (cursor < headerEnd) {
                 String name = data.asciiZ(cursor, (int) Math.min(16_384L, headerEnd - cursor));
-                cursor += name.getBytes(java.nio.charset.StandardCharsets.UTF_8).length + 1L;
+                cursor += name.getBytes(StandardCharsets.UTF_8).length + 1L;
                 if (name.isEmpty()) break;
                 long[] position = {cursor};
                 int directory = (int) unsignedLeb(data, position, headerEnd);
@@ -93,7 +94,7 @@ final class DwarfLineParser {
                         state.address = address(data, position[0], bytes);
                     } else if (extended == 3) {
                         String name = data.asciiZ(position[0], (int) Math.min(16_384L, extendedEnd - position[0]));
-                        position[0] += name.getBytes(java.nio.charset.StandardCharsets.UTF_8).length + 1L;
+                        position[0] += name.getBytes(StandardCharsets.UTF_8).length + 1L;
                         int directory = (int) unsignedLeb(data, position, extendedEnd);
                         unsignedLeb(data, position, extendedEnd);
                         unsignedLeb(data, position, extendedEnd);
@@ -112,7 +113,8 @@ final class DwarfLineParser {
                         case 4 -> state.file = (int) unsignedLeb(data, position, unitEnd);
                         case 5 -> unsignedLeb(data, position, unitEnd);
                         case 6 -> state.statement = !state.statement;
-                        case 8 -> state.address += (long) ((255 - opcodeBase) / Math.max(1, lineRange)) * minimumInstruction;
+                        case 8 ->
+                                state.address += (long) ((255 - opcodeBase) / Math.max(1, lineRange)) * minimumInstruction;
                         case 9 -> {
                             state.address += data.u16(position[0]);
                             position[0] += 2;
@@ -189,9 +191,11 @@ final class DwarfLineParser {
         return result;
     }
 
-    record Result(List<NativeSymbol> symbols, Set<String> sourceFiles, List<String> warnings) {}
+    record Result(List<NativeSymbol> symbols, Set<String> sourceFiles, List<String> warnings) {
+    }
 
-    private record FileEntry(String name, int directory) {}
+    private record FileEntry(String name, int directory) {
+    }
 
     private static final class State {
         long address;

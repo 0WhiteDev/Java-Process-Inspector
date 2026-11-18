@@ -9,7 +9,8 @@ import java.io.Serializable;
 import java.nio.file.Path;
 
 public final class HprofWorker {
-    private HprofWorker() {}
+    private HprofWorker() {
+    }
 
     public static void main(String[] arguments) throws Exception {
         var input = new ObjectInputStream(new BufferedInputStream(System.in));
@@ -48,6 +49,9 @@ public final class HprofWorker {
     }
 
     public record Request(String action, String text, int limit, long id, boolean retained,
-                          boolean excludeWeak) implements Serializable {}
-    public record Failure(String message) implements Serializable {}
+                          boolean excludeWeak) implements Serializable {
+    }
+
+    public record Failure(String message) implements Serializable {
+    }
 }

@@ -2,6 +2,7 @@ package dev.whitedev.jpi.ui.mcp;
 
 import dev.whitedev.jpi.mcp.JpiMcpRuntime;
 import dev.whitedev.jpi.ui.Ui;
+
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTable;
@@ -13,7 +14,10 @@ public final class McpPanel extends JPanel {
     private final JpiMcpRuntime runtime;
     private final JLabel status = new JLabel();
     private final DefaultTableModel calls = new DefaultTableModel(new String[]{"Time", "Client", "Tool", "PID", "Duration (ms)", "Status", "Results", "Error"}, 0) {
-        @Override public boolean isCellEditable(int row, int column) { return false; }
+        @Override
+        public boolean isCellEditable(int row, int column) {
+            return false;
+        }
     };
     private final Timer refresh = new Timer(1000, event -> refresh());
     private Object lastEntries;
@@ -46,10 +50,20 @@ public final class McpPanel extends JPanel {
         if (entries.equals(lastEntries)) return;
         lastEntries = entries;
         calls.setRowCount(0);
-        for (var entry : entries) calls.addRow(new Object[]{entry.timestamp(), entry.client(), entry.tool(), entry.targetPid(),
-                entry.durationMillis(), entry.status(), entry.resultCount(), entry.errorCode()});
+        for (var entry : entries)
+            calls.addRow(new Object[]{entry.timestamp(), entry.client(), entry.tool(), entry.targetPid(),
+                    entry.durationMillis(), entry.status(), entry.resultCount(), entry.errorCode()});
     }
 
-    @Override public void addNotify() { super.addNotify(); refresh.start(); }
-    @Override public void removeNotify() { refresh.stop(); super.removeNotify(); }
+    @Override
+    public void addNotify() {
+        super.addNotify();
+        refresh.start();
+    }
+
+    @Override
+    public void removeNotify() {
+        refresh.stop();
+        super.removeNotify();
+    }
 }

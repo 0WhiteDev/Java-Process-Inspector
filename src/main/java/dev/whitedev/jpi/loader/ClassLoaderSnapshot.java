@@ -25,8 +25,10 @@ public record ClassLoaderSnapshot(long timestamp, List<Loader> loaders, List<Def
                         Integer.parseInt(values[8]), Long.parseLong(values[9]), decode(values[10])));
                 case "C" -> definitions.add(new Definition(decode(values[1]), decode(values[2]),
                         decode(values[3]), decode(values[4]), values[5]));
-                case "U" -> sources.computeIfAbsent(decode(values[1]), ignored -> new ArrayList<>()).add(decode(values[2]));
-                default -> { }
+                case "U" ->
+                        sources.computeIfAbsent(decode(values[1]), ignored -> new ArrayList<>()).add(decode(values[2]));
+                default -> {
+                }
             }
         }
         sources.replaceAll((key, value) -> List.copyOf(value));
@@ -67,9 +69,12 @@ public record ClassLoaderSnapshot(long timestamp, List<Loader> loaders, List<Def
 
     public record Loader(String id, String parentId, String type, String label, String status,
                          long firstSeen, long observedAt, int classes, long shallowSize, String notice) {
-        @Override public String toString() {
+        @Override
+        public String toString() {
             return label + " | " + classes + " classes" + ("collected".equals(status) ? " | collected" : "");
         }
     }
-    public record Definition(String id, String name, String loaderId, String source, String kind) {}
+
+    public record Definition(String id, String name, String loaderId, String source, String kind) {
+    }
 }

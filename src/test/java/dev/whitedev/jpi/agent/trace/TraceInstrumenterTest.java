@@ -4,6 +4,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.InputStream;
+import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
@@ -15,11 +16,13 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TraceInstrumenterTest {
-    @AfterEach void resetRuntime() {
+    @AfterEach
+    void resetRuntime() {
         TraceRuntime.clear();
     }
 
-    @Test void capturesReturnsArgumentsAndUncaughtExceptions() throws Exception {
+    @Test
+    void capturesReturnsArgumentsAndUncaughtExceptions() throws Exception {
         TraceConfig config = TraceConfig.parse("maxEvents=10\nrateLimit=100\nstopAfterMillis=60000\ncondition=");
         TraceProbe success = new TraceProbe("trace-success", "fixture", TraceFixture.class.getName(),
                 "combine", "(Ljava/lang/String;I)Ljava/lang/String;", config);
@@ -31,7 +34,7 @@ class TraceInstrumenterTest {
         FixtureLoader loader = new FixtureLoader(getClass().getClassLoader());
         byte[] instrumented = TraceInstrumenter.instrument(fixtureBytes(), loader, Arrays.asList(success, failure));
         Class<?> fixtureType = loader.define(TraceFixture.class.getName(), instrumented);
-        java.lang.reflect.Constructor<?> constructor = fixtureType.getDeclaredConstructor();
+        Constructor<?> constructor = fixtureType.getDeclaredConstructor();
         constructor.setAccessible(true);
         Object fixture = constructor.newInstance();
 
@@ -59,7 +62,8 @@ class TraceInstrumenterTest {
         assertTrue(failureGraph.contains("R\tFAILED\tCALLS\t"));
     }
 
-    @Test void heatmapMetricsRemainExactWhenEventCaptureIsSampled() throws Exception {
+    @Test
+    void heatmapMetricsRemainExactWhenEventCaptureIsSampled() throws Exception {
         TraceConfig config = TraceConfig.parse(
                 "sampleEvery=100\nmaxEvents=10\nrateLimit=100\nstopAfterMillis=60000\ncondition=");
         TraceProbe probe = new TraceProbe("trace-heat", "fixture", TraceFixture.class.getName(),
@@ -68,14 +72,15 @@ class TraceInstrumenterTest {
         FixtureLoader loader = new FixtureLoader(getClass().getClassLoader());
         byte[] instrumented = TraceInstrumenter.instrument(fixtureBytes(), loader, Arrays.asList(probe));
         Class<?> fixtureType = loader.define(TraceFixture.class.getName(), instrumented);
-        java.lang.reflect.Constructor<?> constructor = fixtureType.getDeclaredConstructor();
+        Constructor<?> constructor = fixtureType.getDeclaredConstructor();
         constructor.setAccessible(true);
         Object fixture = constructor.newInstance();
         Method combine = fixtureType.getDeclaredMethod("combine", String.class, int.class);
         combine.setAccessible(true);
 
-        for (int index = 0; index < 25; index++) assertEquals("value:" + index,
-                combine.invoke(fixture, "value", index));
+        for (int index = 0; index < 25; index++)
+            assertEquals("value:" + index,
+                    combine.invoke(fixture, "value", index));
 
         String snapshot = TraceRuntime.graphSnapshot();
         String nodePrefix = "N\t" + encoded(TraceFixture.class.getName()) + "\t"

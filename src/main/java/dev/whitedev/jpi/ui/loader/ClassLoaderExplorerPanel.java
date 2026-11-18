@@ -34,8 +34,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 public final class ClassLoaderExplorerPanel extends JPanel implements SessionAware {
     private static final int PAGE_SIZE = 500;
@@ -54,14 +56,17 @@ public final class ClassLoaderExplorerPanel extends JPanel implements SessionAwa
     private final JTable classes = table(classesModel);
     private final JTable duplicates = table(duplicatesModel);
     private final JTable collisions = table(collisionsModel);
-    private final Timer filterTimer = new Timer(300, event -> { page = 0; render(); });
+    private final Timer filterTimer = new Timer(300, event -> {
+        page = 0;
+        render();
+    });
     private final BiConsumer<String, String> openClass;
     private final Consumer<String> openHeap;
     private InspectorSession session;
     private ClassLoaderSnapshot snapshot;
     private ClassLoaderSnapshot.Loader selected;
     private Map<String, List<ClassLoaderSnapshot.Definition>> duplicateGroups = Map.of();
-    private Map<String, java.util.Set<String>> packageGroups = Map.of();
+    private Map<String, Set<String>> packageGroups = Map.of();
     private List<ClassLoaderSnapshot.Definition> matchingClasses = List.of();
     private boolean loading;
     private int page;
@@ -109,20 +114,38 @@ public final class ClassLoaderExplorerPanel extends JPanel implements SessionAwa
         heap.addActionListener(event -> {
             if (selected != null && !selected.type().isEmpty()) openHeap.accept(selected.type());
         });
-        previous.addActionListener(event -> { page--; renderClassPage(); });
-        next.addActionListener(event -> { page++; renderClassPage(); });
+        previous.addActionListener(event -> {
+            page--;
+            renderClassPage();
+        });
+        next.addActionListener(event -> {
+            page++;
+            renderClassPage();
+        });
         filterTimer.setRepeats(false);
         filter.getDocument().addDocumentListener(new DocumentListener() {
-            @Override public void insertUpdate(DocumentEvent event) { filterTimer.restart(); }
-            @Override public void removeUpdate(DocumentEvent event) { filterTimer.restart(); }
-            @Override public void changedUpdate(DocumentEvent event) { filterTimer.restart(); }
+            @Override
+            public void insertUpdate(DocumentEvent event) {
+                filterTimer.restart();
+            }
+
+            @Override
+            public void removeUpdate(DocumentEvent event) {
+                filterTimer.restart();
+            }
+
+            @Override
+            public void changedUpdate(DocumentEvent event) {
+                filterTimer.restart();
+            }
         });
         follow(classes, 0, 1);
         follow(duplicates, 2, 0);
         setSession(null);
     }
 
-    @Override public void setSession(InspectorSession value) {
+    @Override
+    public void setSession(InspectorSession value) {
         session = value;
         loading = false;
         snapshot = null;
@@ -224,7 +247,7 @@ public final class ClassLoaderExplorerPanel extends JPanel implements SessionAwa
         collisionsModel.setRowCount(0);
         packageGroups.entrySet().stream().filter(entry -> entry.getKey().toLowerCase(Locale.ROOT).contains(query))
                 .sorted(Map.Entry.comparingByKey()).limit(1000).forEach(entry -> collisionsModel.addRow(new Object[]{entry.getKey(),
-                        entry.getValue().size(), entry.getValue().stream().sorted().map(snapshot::loaderLabel).collect(java.util.stream.Collectors.joining("\n"))}));
+                        entry.getValue().size(), entry.getValue().stream().sorted().map(snapshot::loaderLabel).collect(Collectors.joining("\n"))}));
         updateControls();
     }
 
@@ -242,7 +265,8 @@ public final class ClassLoaderExplorerPanel extends JPanel implements SessionAwa
 
     private void follow(JTable table, int idColumn, int nameColumn) {
         table.addMouseListener(new MouseAdapter() {
-            @Override public void mouseClicked(MouseEvent event) {
+            @Override
+            public void mouseClicked(MouseEvent event) {
                 int row = table.getSelectedRow();
                 if (event.getClickCount() == 2 && row >= 0 && session != null && openClass != null) {
                     openClass.accept(table.getValueAt(row, idColumn).toString(), table.getValueAt(row, nameColumn).toString());
@@ -256,18 +280,27 @@ public final class ClassLoaderExplorerPanel extends JPanel implements SessionAwa
         heap.setEnabled(selected != null && !selected.type().isEmpty() && openHeap != null && !loading);
     }
 
-    private static String time(long value) { return value == 0 ? "session baseline" : Instant.ofEpochMilli(value).toString(); }
+    private static String time(long value) {
+        return value == 0 ? "session baseline" : Instant.ofEpochMilli(value).toString();
+    }
+
     private static JTable table(DefaultTableModel model) {
         JTable table = new JTable(model);
         table.setAutoCreateRowSorter(true);
         table.setFillsViewportHeight(true);
         return table;
     }
+
     private static DefaultTableModel model(String... columns) {
         return new DefaultTableModel(columns, 0) {
-            @Override public boolean isCellEditable(int row, int column) { return false; }
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return false;
+            }
         };
     }
+
     private record Analysis(ClassLoaderSnapshot snapshot, Map<String, List<ClassLoaderSnapshot.Definition>> duplicates,
-                            Map<String, java.util.Set<String>> packages) {}
+                            Map<String, Set<String>> packages) {
+    }
 }

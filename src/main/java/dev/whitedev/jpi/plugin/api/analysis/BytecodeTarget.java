@@ -10,7 +10,8 @@ public record BytecodeTarget(String classId, String className, byte[] bytecode,
         methodDescriptor = value(methodDescriptor);
     }
 
-    @Override public byte[] bytecode() {
+    @Override
+    public byte[] bytecode() {
         return bytecode.clone();
     }
 

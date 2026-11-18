@@ -36,7 +36,8 @@ abstract class TraceCondition {
             final int index = Integer.parseInt(matcher.group(1));
             final boolean equal = "==".equals(matcher.group(2));
             return new TraceCondition() {
-                @Override boolean matches(Context context) {
+                @Override
+                boolean matches(Context context) {
                     return (context.argument(index) == null) == equal;
                 }
             };
@@ -47,7 +48,8 @@ abstract class TraceCondition {
             final int index = Integer.parseInt(matcher.group(1));
             final String expected = unescape(matcher.group(2));
             return new TraceCondition() {
-                @Override boolean matches(Context context) {
+                @Override
+                boolean matches(Context context) {
                     Object value = context.argument(index);
                     return value instanceof String && ((String) value).contains(expected);
                 }
@@ -59,7 +61,8 @@ abstract class TraceCondition {
             final boolean equal = "==".equals(matcher.group(1));
             final String expected = matcher.group(2).trim();
             return new TraceCondition() {
-                @Override boolean matches(Context context) {
+                @Override
+                boolean matches(Context context) {
                     return valueEquals(context.returnValue, expected) == equal;
                 }
             };
@@ -69,7 +72,8 @@ abstract class TraceCondition {
         if (matcher.matches()) {
             final boolean equal = "==".equals(matcher.group(1));
             return new TraceCondition() {
-                @Override boolean matches(Context context) {
+                @Override
+                boolean matches(Context context) {
                     return (context.exception == null) == equal;
                 }
             };
@@ -79,7 +83,8 @@ abstract class TraceCondition {
         if (matcher.matches()) {
             final String expected = unescape(matcher.group(1));
             return new TraceCondition() {
-                @Override boolean matches(Context context) {
+                @Override
+                boolean matches(Context context) {
                     return context.threadName.contains(expected);
                 }
             };
@@ -90,7 +95,8 @@ abstract class TraceCondition {
             final String operator = matcher.group(1);
             final double expected = toNanos(Double.parseDouble(matcher.group(2)), matcher.group(3));
             return new TraceCondition() {
-                @Override boolean matches(Context context) {
+                @Override
+                boolean matches(Context context) {
                     return compare(context.durationNanos, expected, operator);
                 }
             };

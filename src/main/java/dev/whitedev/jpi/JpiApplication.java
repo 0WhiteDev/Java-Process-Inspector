@@ -1,18 +1,20 @@
 package dev.whitedev.jpi;
 
+import dev.whitedev.jpi.attach.AttachService;
+import dev.whitedev.jpi.attach.TunnelAgentCommand;
+import dev.whitedev.jpi.mcp.JpiMcpRuntime;
+import dev.whitedev.jpi.plugin.runtime.PluginManager;
+import dev.whitedev.jpi.ui.MainFrame;
+import dev.whitedev.jpi.ui.Ui;
+
+import javax.swing.SwingUtilities;
 import java.awt.GraphicsEnvironment;
 import java.io.OutputStream;
 
-import dev.whitedev.jpi.mcp.JpiMcpRuntime;
-import dev.whitedev.jpi.ui.MainFrame;
-import dev.whitedev.jpi.ui.Ui;
-import dev.whitedev.jpi.plugin.runtime.PluginManager;
-import dev.whitedev.jpi.attach.AttachService;
-import dev.whitedev.jpi.attach.TunnelAgentCommand;
-import javax.swing.SwingUtilities;
-
 public final class JpiApplication {
-    private JpiApplication() {}
+    private JpiApplication() {
+    }
+
     public static void main(String[] args) {
         if (args.length == 1 && args[0].equals("--mcp")) {
             startMcp();
@@ -41,8 +43,11 @@ public final class JpiApplication {
         }
         Ui.install();
         PluginManager plugins = new PluginManager();
-        try { plugins.reload(); }
-        catch (Exception error) { System.err.println("JPI plugins could not be loaded: " + error.getMessage()); }
+        try {
+            plugins.reload();
+        } catch (Exception error) {
+            System.err.println("JPI plugins could not be loaded: " + error.getMessage());
+        }
         SwingUtilities.invokeLater(() -> {
             MainFrame frame = new MainFrame(plugins, runtime);
             frame.setVisible(true);

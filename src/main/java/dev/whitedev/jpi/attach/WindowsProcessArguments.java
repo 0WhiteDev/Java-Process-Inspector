@@ -6,12 +6,13 @@ import com.sun.jna.platform.win32.Ole32;
 import com.sun.jna.platform.win32.Shell32Util;
 import com.sun.jna.platform.win32.WinError;
 import com.sun.jna.platform.win32.WinNT.HRESULT;
+
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.TimeoutException;
 
 final class WindowsProcessArguments {
-    private enum Property { COMMANDLINE }
+    private enum Property {COMMANDLINE}
 
     static List<String> read(long pid) {
         HRESULT initialized = Ole32.INSTANCE.CoInitializeEx(null, Ole32.COINIT_MULTITHREADED);
@@ -25,7 +26,10 @@ final class WindowsProcessArguments {
             if (!(value instanceof String command) || command.isBlank()) return null;
             String[] argv = Shell32Util.CommandLineToArgv(command);
             return argv.length > 1 ? List.copyOf(Arrays.asList(argv).subList(1, argv.length)) : List.of();
-        } catch (RuntimeException | LinkageError | TimeoutException unavailable) { return null; }
-        finally { if (balanceInitialization) Ole32.INSTANCE.CoUninitialize(); }
+        } catch (RuntimeException | LinkageError | TimeoutException unavailable) {
+            return null;
+        } finally {
+            if (balanceInitialization) Ole32.INSTANCE.CoUninitialize();
+        }
     }
 }

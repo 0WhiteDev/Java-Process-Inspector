@@ -17,7 +17,8 @@ public record WatchCondition(String operator, Object operand) {
 
     public static WatchCondition parse(String text) {
         Matcher matcher = SYNTAX.matcher(text == null ? "" : text.trim());
-        if (!matcher.matches()) throw new IllegalArgumentException("Use a comparison such as < 5, == false, != null, or == \"ready\"");
+        if (!matcher.matches())
+            throw new IllegalArgumentException("Use a comparison such as < 5, == false, != null, or == \"ready\"");
         String literal = matcher.group(2).trim();
         Object operand;
         if ("null".equals(literal)) operand = null;
@@ -28,8 +29,11 @@ public record WatchCondition(String operator, Object operand) {
                 throw new IllegalArgumentException("String comparisons currently accept plain text without escapes");
             }
         } else {
-            try { operand = new BigDecimal(literal); }
-            catch (NumberFormatException error) { throw new IllegalArgumentException("Comparison requires a numeric, boolean, null, or quoted string literal"); }
+            try {
+                operand = new BigDecimal(literal);
+            } catch (NumberFormatException error) {
+                throw new IllegalArgumentException("Comparison requires a numeric, boolean, null, or quoted string literal");
+            }
         }
         String operator = matcher.group(1);
         if (!(operand instanceof BigDecimal) && !"==".equals(operator) && !"!=".equals(operator)) {
@@ -38,7 +42,9 @@ public record WatchCondition(String operator, Object operand) {
         return new WatchCondition(operator, operand);
     }
 
-    public boolean matches(Value value) { return matchesScalar(scalar(value)); }
+    public boolean matches(Value value) {
+        return matchesScalar(scalar(value));
+    }
 
     public boolean matchesScalar(Object value) {
         boolean equal;
@@ -53,7 +59,8 @@ public record WatchCondition(String operator, Object operand) {
                     default -> false;
                 };
             }
-            if (!(value instanceof BigDecimal actual)) throw new IllegalArgumentException("Watched value is not numeric");
+            if (!(value instanceof BigDecimal actual))
+                throw new IllegalArgumentException("Watched value is not numeric");
             int comparison = actual.compareTo(number);
             return switch (operator) {
                 case "==" -> comparison == 0;
@@ -86,14 +93,20 @@ public record WatchCondition(String operator, Object operand) {
         if (value instanceof BooleanValue bool) return bool.value();
         if (value instanceof CharValue character) return BigDecimal.valueOf(character.value());
         if (value instanceof PrimitiveValue primitive) {
-            try { return new BigDecimal(primitive.toString()); }
-            catch (NumberFormatException error) { return new SpecialNumber(primitive.doubleValue()); }
+            try {
+                return new BigDecimal(primitive.toString());
+            } catch (NumberFormatException error) {
+                return new SpecialNumber(primitive.doubleValue());
+            }
         }
         if (value instanceof StringReference string) return string.value();
         if (value instanceof ObjectReference object) return new Identity(object.uniqueID());
         throw new IllegalArgumentException("Unsupported value type");
     }
 
-    private record Identity(long id) {}
-    private record SpecialNumber(double value) {}
+    private record Identity(long id) {
+    }
+
+    private record SpecialNumber(double value) {
+    }
 }

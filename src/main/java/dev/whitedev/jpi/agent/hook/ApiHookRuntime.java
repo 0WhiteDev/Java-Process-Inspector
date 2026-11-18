@@ -14,7 +14,8 @@ public final class ApiHookRuntime {
     private static final Map<String, ProfileState> STATES = new ConcurrentHashMap<String, ProfileState>();
     private static final ArrayDeque<Event> EVENTS = new ArrayDeque<Event>();
 
-    private ApiHookRuntime() {}
+    private ApiHookRuntime() {
+    }
 
     public static void hit(String profile, String callerClass, String callerMethod, String callerDescriptor,
                            String apiClass, String apiMethod, String apiDescriptor, String invocationKind) {

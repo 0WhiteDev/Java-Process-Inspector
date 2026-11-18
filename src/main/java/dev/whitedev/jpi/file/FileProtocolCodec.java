@@ -6,7 +6,8 @@ import java.util.Base64;
 import java.util.List;
 
 public final class FileProtocolCodec {
-    private FileProtocolCodec() {}
+    private FileProtocolCodec() {
+    }
 
     public static Batch parseEvents(String value) {
         List<FileEvent> events = new ArrayList<>();
@@ -61,5 +62,6 @@ public final class FileProtocolCodec {
         return value.isEmpty() ? new byte[0] : Base64.getDecoder().decode(value);
     }
 
-    public record Batch(String summary, long dropped, List<FileEvent> events) {}
+    public record Batch(String summary, long dropped, List<FileEvent> events) {
+    }
 }

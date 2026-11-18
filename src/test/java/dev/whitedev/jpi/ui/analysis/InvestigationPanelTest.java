@@ -12,10 +12,14 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 class InvestigationPanelTest {
-    @Test void exposesTheAssistantAndManualAnalysisWithoutEnablingDetachedActions() throws Exception {
+    @Test
+    void exposesTheAssistantAndManualAnalysisWithoutEnablingDetachedActions() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
             InvestigationPanel panel = new InvestigationPanel(new DeobfuscationWorkspace(),
-                    ignored -> { }, ignored -> { }, ignored -> { });
+                    ignored -> {
+                    }, ignored -> {
+            }, ignored -> {
+            });
             panel.setSession(null);
             List<Component> components = components(panel);
             assertTrue(components.stream().anyMatch(component -> component instanceof JTabbedPane tabs

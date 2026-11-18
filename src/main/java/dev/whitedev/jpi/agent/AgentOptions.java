@@ -5,7 +5,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 public final class AgentOptions {
-    public enum Mode { CONNECT, LISTEN }
+    public enum Mode {CONNECT, LISTEN}
 
     private final Mode mode;
     private final InetAddress host;
@@ -71,10 +71,27 @@ public final class AgentOptions {
         return value == null || value.isEmpty() ? fallback : Integer.parseInt(value);
     }
 
-    public Mode mode() { return mode; }
-    public InetAddress host() { return host; }
-    public int port() { return port; }
-    public String token() { return token; }
-    public int acceptTimeoutMillis() { return acceptTimeoutMillis; }
-    public boolean reconnect() { return reconnect; }
+    public Mode mode() {
+        return mode;
+    }
+
+    public InetAddress host() {
+        return host;
+    }
+
+    public int port() {
+        return port;
+    }
+
+    public String token() {
+        return token;
+    }
+
+    public int acceptTimeoutMillis() {
+        return acceptTimeoutMillis;
+    }
+
+    public boolean reconnect() {
+        return reconnect;
+    }
 }

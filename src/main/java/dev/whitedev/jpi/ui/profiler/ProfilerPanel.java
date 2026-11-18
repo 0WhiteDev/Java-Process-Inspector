@@ -35,6 +35,7 @@ import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.GridLayout;
 import java.util.EnumMap;
+import java.util.List;
 import java.util.Map;
 import java.util.StringJoiner;
 
@@ -117,7 +118,8 @@ public final class ProfilerPanel extends JPanel implements SessionAware {
         setSession(null);
     }
 
-    @Override public void setSession(InspectorSession value) {
+    @Override
+    public void setSession(InspectorSession value) {
         timer.stop();
         session = value;
         currentStatus = null;
@@ -268,7 +270,8 @@ public final class ProfilerPanel extends JPanel implements SessionAware {
 
     private void clearReport() {
         overview.setRowCount(0);
-        for (CategoryView view : categoryViews.values()) view.setData(new ProfilerReport.CategoryData(0L, 0L, java.util.List.of(), java.util.List.of()));
+        for (CategoryView view : categoryViews.values())
+            view.setData(new ProfilerReport.CategoryData(0L, 0L, List.of(), List.of()));
         recordingTime.setText("No recording");
         processedEvents.setText("0 events");
         recordingState.setText("Idle");
@@ -362,7 +365,8 @@ public final class ProfilerPanel extends JPanel implements SessionAware {
 
     private static DefaultTableModel readOnly(String... columns) {
         return new DefaultTableModel(columns, 0) {
-            @Override public boolean isCellEditable(int row, int column) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
                 return false;
             }
         };

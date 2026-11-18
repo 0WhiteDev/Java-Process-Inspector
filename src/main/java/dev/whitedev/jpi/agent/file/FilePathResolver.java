@@ -6,7 +6,8 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 
 public final class FilePathResolver {
-    private FilePathResolver() {}
+    private FilePathResolver() {
+    }
 
     public static String normalized(Object value) {
         try {

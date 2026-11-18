@@ -4,7 +4,6 @@ import dev.whitedev.jpi.attach.CommandLineTokenizer;
 import dev.whitedev.jpi.attach.InspectorSession;
 import dev.whitedev.jpi.attach.JvmDescriptor;
 import dev.whitedev.jpi.attach.JvmDiscovery;
-import dev.whitedev.jpi.decompile.DecompilerService;
 import dev.whitedev.jpi.debug.BreakpointManager;
 import dev.whitedev.jpi.debug.BreakpointSpec;
 import dev.whitedev.jpi.debug.DebugEvent;
@@ -13,6 +12,8 @@ import dev.whitedev.jpi.debug.DebugState;
 import dev.whitedev.jpi.debug.StackFrameManager;
 import dev.whitedev.jpi.debug.StepManager;
 import dev.whitedev.jpi.debug.ThreadManager;
+import dev.whitedev.jpi.decompile.DecompilerService;
+import dev.whitedev.jpi.protocol.Operation;
 import dev.whitedev.jpi.ui.Async;
 import dev.whitedev.jpi.ui.CodeEditors;
 import dev.whitedev.jpi.ui.SessionAware;
@@ -22,7 +23,6 @@ import dev.whitedev.jpi.ui.context.ContextActions;
 import dev.whitedev.jpi.ui.timeline.RuntimeTimelineStore;
 import dev.whitedev.jpi.ui.timeline.TimelineEvent;
 import dev.whitedev.jpi.ui.timeline.TimelineSource;
-import dev.whitedev.jpi.protocol.Operation;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 
 import javax.swing.BorderFactory;
@@ -38,11 +38,11 @@ import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
+import javax.swing.JTabbedPane;
 import javax.swing.JTable;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.JTree;
-import javax.swing.JTabbedPane;
 import javax.swing.ListSelectionModel;
 import javax.swing.SwingUtilities;
 import javax.swing.border.EmptyBorder;
@@ -54,28 +54,53 @@ import javax.swing.tree.DefaultTreeModel;
 import javax.swing.tree.ExpandVetoException;
 import javax.swing.tree.TreePath;
 import java.awt.BorderLayout;
+import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
+import java.awt.Font;
 import java.awt.GridLayout;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.File;
-import java.util.List;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
 public final class DebuggerPanel extends JPanel implements SessionAware {
     private boolean togglingBreakpoint;
 
-    public Object connectionIdentity() { return debugger; }
-    public boolean canToggleMethodBreakpoint() { return debugger != null && debugger.state() != DebugState.DISCONNECTED && !togglingBreakpoint; }
-    public boolean canStep() { return stepInto.isEnabled() && threads.getSelectedValue() != null; }
-    public boolean canContinue() { return resume.isEnabled(); }
-    public void stepInto() { if (canStep()) step(StepManager.Depth.INTO); }
-    public void stepOver() { if (canStep()) step(StepManager.Depth.OVER); }
-    public void stepOut() { if (canStep()) step(StepManager.Depth.OUT); }
-    public void continueExecution() { if (canContinue()) resume.doClick(); }
+    public Object connectionIdentity() {
+        return debugger;
+    }
+
+    public boolean canToggleMethodBreakpoint() {
+        return debugger != null && debugger.state() != DebugState.DISCONNECTED && !togglingBreakpoint;
+    }
+
+    public boolean canStep() {
+        return stepInto.isEnabled() && threads.getSelectedValue() != null;
+    }
+
+    public boolean canContinue() {
+        return resume.isEnabled();
+    }
+
+    public void stepInto() {
+        if (canStep()) step(StepManager.Depth.INTO);
+    }
+
+    public void stepOver() {
+        if (canStep()) step(StepManager.Depth.OVER);
+    }
+
+    public void stepOut() {
+        if (canStep()) step(StepManager.Depth.OUT);
+    }
+
+    public void continueExecution() {
+        if (canContinue()) resume.doClick();
+    }
 
     public void toggleMethodBreakpoint(AnalysisTarget target) {
         if (!canToggleMethodBreakpoint()) return;
@@ -85,8 +110,9 @@ public final class DebuggerPanel extends JPanel implements SessionAware {
             var existing = current.breakpoints().snapshot().stream().filter(view -> view.spec().type() == BreakpointSpec.Type.METHOD
                     && view.spec().className().equals(target.owner()) && view.spec().methodName().equals(target.member())
                     && view.spec().descriptor().equals(target.descriptor())).toList();
-            if (existing.isEmpty()) current.breakpoints().add(new BreakpointSpec(target.owner(), target.member(), target.descriptor(),
-                    null, null, BreakpointSpec.Type.METHOD, BreakpointSpec.SuspendPolicy.THREAD, true));
+            if (existing.isEmpty())
+                current.breakpoints().add(new BreakpointSpec(target.owner(), target.member(), target.descriptor(),
+                        null, null, BreakpointSpec.Type.METHOD, BreakpointSpec.SuspendPolicy.THREAD, true));
             else for (var view : existing) current.breakpoints().remove(view.id());
             return existing.isEmpty() ? "Method breakpoint added" : "Method breakpoint removed";
         }, result -> {
@@ -117,10 +143,12 @@ public final class DebuggerPanel extends JPanel implements SessionAware {
         StackFrameManager.FrameView frame = frames.getSelectedValue();
         return frame == null ? null : AnalysisTarget.method("", frame.className(), frame.methodName(), frame.descriptor());
     }
+
     public List<BreakpointSpec> fingerprintBreakpoints() {
         DebugSession current = debugger;
         return current == null ? List.of() : current.breakpoints().snapshot().stream().map(BreakpointManager.BreakpointView::spec).toList();
     }
+
     private final RuntimeTimelineStore timeline;
     private final AtomicLong eventIds = new AtomicLong();
     private final JButton launch = Ui.primaryButton("Launch with debugger...");
@@ -182,7 +210,7 @@ public final class DebuggerPanel extends JPanel implements SessionAware {
         JPanel labels = new JPanel();
         labels.setOpaque(false);
         labels.setLayout(new BoxLayout(labels, BoxLayout.Y_AXIS));
-        state.setFont(state.getFont().deriveFont(java.awt.Font.BOLD, 13f));
+        state.setFont(state.getFont().deriveFont(Font.BOLD, 13f));
         instrumentation.setForeground(Ui.MUTED);
         labels.add(state);
         labels.add(instrumentation);
@@ -277,28 +305,34 @@ public final class DebuggerPanel extends JPanel implements SessionAware {
             }
         });
         variables.addTreeWillExpandListener(new TreeWillExpandListener() {
-            @Override public void treeWillExpand(TreeExpansionEvent event) throws ExpandVetoException {
+            @Override
+            public void treeWillExpand(TreeExpansionEvent event) throws ExpandVetoException {
                 loadChildren((DefaultMutableTreeNode) event.getPath().getLastPathComponent());
             }
 
-            @Override public void treeWillCollapse(TreeExpansionEvent event) {
+            @Override
+            public void treeWillCollapse(TreeExpansionEvent event) {
             }
         });
         variables.addMouseListener(new MouseAdapter() {
-            @Override public void mouseClicked(MouseEvent event) {
+            @Override
+            public void mouseClicked(MouseEvent event) {
                 if (event.getClickCount() == 2) editSelectedValue();
             }
 
-            @Override public void mousePressed(MouseEvent event) {
+            @Override
+            public void mousePressed(MouseEvent event) {
                 showVariableMenu(event);
             }
 
-            @Override public void mouseReleased(MouseEvent event) {
+            @Override
+            public void mouseReleased(MouseEvent event) {
                 showVariableMenu(event);
             }
         });
         breakpointTable.addMouseListener(new MouseAdapter() {
-            @Override public void mouseClicked(MouseEvent event) {
+            @Override
+            public void mouseClicked(MouseEvent event) {
                 if (event.getClickCount() == 2) toggleBreakpoint();
             }
         });
@@ -370,7 +404,8 @@ public final class DebuggerPanel extends JPanel implements SessionAware {
         updateControls();
     }
 
-    @Override public void setSession(InspectorSession session) {
+    @Override
+    public void setSession(InspectorSession session) {
         instrumentationSession = session;
         sourceCache.clear();
         instrumentation.setText(session == null
@@ -524,13 +559,19 @@ public final class DebuggerPanel extends JPanel implements SessionAware {
         togglingBreakpoint = false;
         debugger = session;
         session.addListener(new DebugSession.Listener() {
-            @Override public void onState(DebugState value) {
-                SwingUtilities.invokeLater(() -> { if (debugger == session) stateChanged(value); });
+            @Override
+            public void onState(DebugState value) {
+                SwingUtilities.invokeLater(() -> {
+                    if (debugger == session) stateChanged(value);
+                });
             }
 
-            @Override public void onEvent(DebugEvent event) {
+            @Override
+            public void onEvent(DebugEvent event) {
                 publish(event);
-                SwingUtilities.invokeLater(() -> { if (debugger == session) eventReceived(event); });
+                SwingUtilities.invokeLater(() -> {
+                    if (debugger == session) eventReceived(event);
+                });
             }
         });
         stateChanged(session.state());
@@ -611,7 +652,7 @@ public final class DebuggerPanel extends JPanel implements SessionAware {
         StackFrameManager.FrameView frame = frames.getSelectedValue();
         if (current == null || frame == null) return;
         Async.run(() -> new FrameData(current.frames().variables(frame.threadId(), frame.index()),
-                        current.frames().locationDetails(frame.threadId(), frame.index())), data -> {
+                current.frames().locationDetails(frame.threadId(), frame.index())), data -> {
             if (debugger != current || frames.getSelectedValue() != frame) return;
             variableRoot.removeAllChildren();
             DefaultMutableTreeNode receiver = new DefaultMutableTreeNode("this");
@@ -736,7 +777,8 @@ public final class DebuggerPanel extends JPanel implements SessionAware {
             matches++;
             if (selected.isEmpty() || Boolean.parseBoolean(values[5])) selected = values[0];
         }
-        if (selected.isEmpty()) throw new IllegalArgumentException("Class is not available in the Instrumentation session: " + className);
+        if (selected.isEmpty())
+            throw new IllegalArgumentException("Class is not available in the Instrumentation session: " + className);
         if (matches > 1) {
             throw new IllegalArgumentException("Several classloaders define " + className
                     + ". Use the exact JVM location and open the matching definition in Loaded classes.");
@@ -930,7 +972,7 @@ public final class DebuggerPanel extends JPanel implements SessionAware {
                 event.type().toString(), event.details(), subject, event.type().toString(), event.details()));
     }
 
-    private static JPanel titled(String title, java.awt.Component content) {
+    private static JPanel titled(String title, Component content) {
         JPanel panel = new JPanel(new BorderLayout(0, 6));
         panel.setOpaque(false);
         panel.setBorder(BorderFactory.createLineBorder(Ui.BORDER));
@@ -949,7 +991,8 @@ public final class DebuggerPanel extends JPanel implements SessionAware {
 
     private static DefaultTableModel readOnly(String... columns) {
         return new DefaultTableModel(columns, 0) {
-            @Override public boolean isCellEditable(int row, int column) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
                 return false;
             }
         };
@@ -972,9 +1015,11 @@ public final class DebuggerPanel extends JPanel implements SessionAware {
         void open(String className, String methodName, String descriptor);
     }
 
-    private enum Loading { INSTANCE }
+    private enum Loading {INSTANCE}
+
     private record FrameData(List<StackFrameManager.VariableView> variables, String location) {
     }
+
     private record PendingInstruction(String owner, String method, String descriptor, int ordinal) {
     }
 }

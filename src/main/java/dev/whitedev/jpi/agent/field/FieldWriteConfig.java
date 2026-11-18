@@ -27,7 +27,8 @@ final class FieldWriteConfig {
         if (raw != null) {
             for (String line : raw.split("[;\\n]")) {
                 int separator = line.indexOf('=');
-                if (separator > 0) values.put(line.substring(0, separator).trim(), line.substring(separator + 1).trim());
+                if (separator > 0)
+                    values.put(line.substring(0, separator).trim(), line.substring(separator + 1).trim());
             }
         }
         return new FieldWriteConfig(

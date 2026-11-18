@@ -1,7 +1,11 @@
 package dev.whitedev.jpi.agent.exception;
 
 import dev.whitedev.jpi.exceptions.ExceptionSnapshot;
+import dev.whitedev.jpi.protocol.WireProtocol;
 import org.junit.jupiter.api.Test;
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -10,7 +14,9 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class ExceptionAnalyzerTest {
     private static volatile Throwable retained;
-    @Test void aggregatesWindowTotalsThreadsAndLocations() {
+
+    @Test
+    void aggregatesWindowTotalsThreadsAndLocations() {
         ExceptionAnalyzer analyzer = new ExceptionAnalyzer();
         long now = System.currentTimeMillis();
         analyzer.record(0, "example.Failure", now - 40000, 1, "example.Service", "run", "()V", 12, "stack");
@@ -25,7 +31,8 @@ class ExceptionAnalyzerTest {
         assertEquals("()V", entry.locations().getFirst().descriptor());
     }
 
-    @Test void clearDiscardsOldBufferedEventsButAcceptsNewEvents() {
+    @Test
+    void clearDiscardsOldBufferedEventsButAcceptsNewEvents() {
         ExceptionAnalyzer analyzer = new ExceptionAnalyzer();
         long old = System.currentTimeMillis() - 1000;
         long previousGeneration = analyzer.generation();
@@ -38,7 +45,8 @@ class ExceptionAnalyzerTest {
         assertTrue(ExceptionSnapshot.parse(analyzer.snapshot(30)).entries().isEmpty());
     }
 
-    @Test void acceptsCurrentStreamEventsWithoutComparingJfrAndWallClocks() {
+    @Test
+    void acceptsCurrentStreamEventsWithoutComparingJfrAndWallClocks() {
         ExceptionAnalyzer analyzer = new ExceptionAnalyzer();
         long previous = analyzer.generation();
         analyzer.clear();
@@ -51,24 +59,28 @@ class ExceptionAnalyzerTest {
         assertEquals(1, snapshot.entries().getFirst().firstSeen());
     }
 
-    @Test void boundsUniqueTypesAndThreadsAndRejectsInvalidWindow() {
+    @Test
+    void boundsUniqueTypesAndThreadsAndRejectsInvalidWindow() {
         ExceptionAnalyzer analyzer = new ExceptionAnalyzer();
-        for (int i = 0; i < 300; i++) analyzer.record(0, "failure" + i, System.currentTimeMillis(), i,
-                "A", "run", "()V", 1, "");
+        for (int i = 0; i < 300; i++)
+            analyzer.record(0, "failure" + i, System.currentTimeMillis(), i,
+                    "A", "run", "()V", 1, "");
         var snapshot = ExceptionSnapshot.parse(analyzer.snapshot(30));
         assertEquals(256, snapshot.entries().size());
         assertEquals(44, snapshot.dropped());
-        for (int i = 0; i < 200; i++) analyzer.record(0, "failure0", System.currentTimeMillis(), i,
-                "A", "run", "()V", 1, "");
+        for (int i = 0; i < 200; i++)
+            analyzer.record(0, "failure0", System.currentTimeMillis(), i,
+                    "A", "run", "()V", 1, "");
         var entry = ExceptionSnapshot.parse(analyzer.snapshot(30)).entries().getFirst();
         assertEquals(128, entry.threads());
         assertTrue(entry.threadOverflow());
         assertThrows(IllegalArgumentException.class, () -> analyzer.snapshot(301));
     }
 
-    @Test void durationStopsRecordingAutomaticallyAndAllowsRestart() throws Exception {
+    @Test
+    void durationStopsRecordingAutomaticallyAndAllowsRestart() throws Exception {
         try (ExceptionAnalyzer analyzer = new ExceptionAnalyzer()) {
-            assertThrows(java.io.IOException.class, () -> analyzer.start("durationSeconds=0"));
+            assertThrows(IOException.class, () -> analyzer.start("durationSeconds=0"));
             analyzer.start("durationSeconds=1");
             long deadline = System.nanoTime() + 10000000000L;
             while (ExceptionSnapshot.parse(analyzer.snapshot(30)).state().equals("recording")
@@ -78,23 +90,26 @@ class ExceptionAnalyzerTest {
         }
     }
 
-    @Test void boundsGlobalLocationsAndEncodedSnapshotSize() {
+    @Test
+    void boundsGlobalLocationsAndEncodedSnapshotSize() {
         ExceptionAnalyzer analyzer = new ExceptionAnalyzer();
         String stack = "x".repeat(16000);
-        for (int type = 0; type < 32; type++) for (int line = 0; line < 32; line++) {
-            analyzer.record(0, "Failure" + type, System.currentTimeMillis(), 1, "Service", "run", "()V", line, stack);
-        }
+        for (int type = 0; type < 32; type++)
+            for (int line = 0; line < 32; line++) {
+                analyzer.record(0, "Failure" + type, System.currentTimeMillis(), 1, "Service", "run", "()V", line, stack);
+            }
         String raw = analyzer.snapshot(30);
         var snapshot = ExceptionSnapshot.parse(raw);
         assertEquals(512, snapshot.entries().stream().mapToInt(entry -> entry.locations().size()).sum());
         assertEquals(512, snapshot.dropped());
-        assertTrue(raw.getBytes(java.nio.charset.StandardCharsets.UTF_8).length < dev.whitedev.jpi.protocol.WireProtocol.MAX_PAYLOAD);
+        assertTrue(raw.getBytes(StandardCharsets.UTF_8).length < WireProtocol.MAX_PAYLOAD);
     }
 
-    @Test void streamsRealJfrExceptionsAndSupportsClearDuringRecording() throws Exception {
+    @Test
+    void streamsRealJfrExceptionsAndSupportsClearDuringRecording() throws Exception {
         try (ExceptionAnalyzer analyzer = new ExceptionAnalyzer()) {
             assertEquals("recording", ExceptionSnapshot.parse(analyzer.start("durationSeconds=90")).state());
-            assertThrows(java.io.IOException.class, () -> analyzer.start(""));
+            assertThrows(IOException.class, () -> analyzer.start(""));
             var entry = awaitFailure(analyzer);
             assertTrue(entry.total() >= 1);
             assertTrue(entry.locations().stream().anyMatch(location -> location.method().equals("emit")));
@@ -164,9 +179,16 @@ class ExceptionAnalyzerTest {
     }
 
     private static void emit() {
-        try { throw new TestFailure(); } catch (TestFailure failure) { retained = failure; }
+        try {
+            throw new TestFailure();
+        } catch (TestFailure failure) {
+            retained = failure;
+        }
     }
 
-    private static final class TestFailure extends RuntimeException { }
-    private static final class TestError extends Error { }
+    private static final class TestFailure extends RuntimeException {
+    }
+
+    private static final class TestError extends Error {
+    }
 }

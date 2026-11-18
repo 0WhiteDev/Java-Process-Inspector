@@ -55,7 +55,8 @@ public final class NativeSymbolService {
         String architecture = "unknown";
         for (ParsedSymbols result : parsed) {
             if (!formats.contains(result.format())) formats.add(result.format());
-            if ("unknown".equals(architecture) && !"unknown".equals(result.architecture())) architecture = result.architecture();
+            if ("unknown".equals(architecture) && !"unknown".equals(result.architecture()))
+                architecture = result.architecture();
             artifacts.addAll(result.artifacts());
             sources.addAll(result.sourceFiles());
             warnings.addAll(result.warnings());
@@ -69,7 +70,8 @@ public final class NativeSymbolService {
         if ("map".equals(extension)) return new MapSymbolParser().parse(path);
         if ("pdb".equals(extension)) return new PdbSymbolParser().parse(path);
         byte[] signature = signature(path);
-        if (signature.length >= 2 && signature[0] == 'M' && signature[1] == 'Z') return new PeSymbolParser().parse(path);
+        if (signature.length >= 2 && signature[0] == 'M' && signature[1] == 'Z')
+            return new PeSymbolParser().parse(path);
         if (signature.length >= 4 && signature[0] == 0x7f && signature[1] == 'E'
                 && signature[2] == 'L' && signature[3] == 'F') return new ElfSymbolParser().parse(path);
         throw new IOException("Unsupported symbol input. Choose PE, ELF, PDB, or MAP: " + path);
@@ -78,9 +80,11 @@ public final class NativeSymbolService {
     private static List<NativeSymbol> merge(List<ParsedSymbols> parsed) throws IOException {
         Map<String, NativeSymbol> values = new LinkedHashMap<>();
         Map<String, NativeSymbol> addressedByName = new HashMap<>();
-        for (ParsedSymbols result : parsed) for (NativeSymbol symbol : result.symbols()) {
-            if (symbol.address() >= 0L && symbol.kind() != SymbolKind.LINE) addressedByName.putIfAbsent(symbol.rawName(), symbol);
-        }
+        for (ParsedSymbols result : parsed)
+            for (NativeSymbol symbol : result.symbols()) {
+                if (symbol.address() >= 0L && symbol.kind() != SymbolKind.LINE)
+                    addressedByName.putIfAbsent(symbol.rawName(), symbol);
+            }
         for (ParsedSymbols result : parsed) {
             for (NativeSymbol symbol : result.symbols()) {
                 if (values.size() >= MAX_MERGED_SYMBOLS) throw new IOException("Merged symbols exceed the "

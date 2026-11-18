@@ -3,6 +3,7 @@ package dev.whitedev.jpi.fingerprint;
 import dev.whitedev.jpi.debug.BreakpointSpec;
 import dev.whitedev.jpi.deobfuscation.MappingEntry;
 import dev.whitedev.jpi.deobfuscation.MappingKind;
+import org.objectweb.asm.Type;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -12,8 +13,12 @@ import java.util.Objects;
 
 public record FingerprintComparison(int matchingDefinitions, int baselineDefinitions, int matchingHashes,
                                     int checkedHashes, List<Issue> issues) {
-    public FingerprintComparison { issues = List.copyOf(issues); }
-    public record Issue(String category, String location, String status, String reason) {}
+    public FingerprintComparison {
+        issues = List.copyOf(issues);
+    }
+
+    public record Issue(String category, String location, String status, String reason) {
+    }
 
     public double classMatchPercent() {
         return baselineDefinitions == 0 ? 0 : 100.0 * matchingDefinitions / baselineDefinitions;
@@ -24,13 +29,18 @@ public record FingerprintComparison(int matchingDefinitions, int baselineDefinit
         Map<String, List<TargetFingerprint.Definition>> oldKeys = byKey(baseline);
         Map<String, List<TargetFingerprint.Definition>> newKeys = byKey(current);
         Map<String, List<TargetFingerprint.Definition>> names = new HashMap<>();
-        for (var type : current.definitions()) names.computeIfAbsent(type.name(), ignored -> new ArrayList<>()).add(type);
+        for (var type : current.definitions())
+            names.computeIfAbsent(type.name(), ignored -> new ArrayList<>()).add(type);
         int matched = 0, matchingHashes = 0, checkedHashes = 0;
         List<Issue> issues = new ArrayList<>();
-        if (baseline.truncated() || current.truncated()) issues.add(new Issue("Target", "Class catalog", "Unverified", "Catalog was truncated"));
-        if (!baseline.mainClass().equals(current.mainClass())) issues.add(new Issue("Target", "Main class", "Changed", baseline.mainClass() + " -> " + current.mainClass()));
-        if (!baseline.javaVersion().equals(current.javaVersion())) issues.add(new Issue("Target", "Java version", "Changed", baseline.javaVersion() + " -> " + current.javaVersion()));
-        if (baseline.loadedCount() != current.loadedCount()) issues.add(new Issue("Target", "Loaded-class count", "Changed", baseline.loadedCount() + " -> " + current.loadedCount()));
+        if (baseline.truncated() || current.truncated())
+            issues.add(new Issue("Target", "Class catalog", "Unverified", "Catalog was truncated"));
+        if (!baseline.mainClass().equals(current.mainClass()))
+            issues.add(new Issue("Target", "Main class", "Changed", baseline.mainClass() + " -> " + current.mainClass()));
+        if (!baseline.javaVersion().equals(current.javaVersion()))
+            issues.add(new Issue("Target", "Java version", "Changed", baseline.javaVersion() + " -> " + current.javaVersion()));
+        if (baseline.loadedCount() != current.loadedCount())
+            issues.add(new Issue("Target", "Loaded-class count", "Changed", baseline.loadedCount() + " -> " + current.loadedCount()));
         for (var entry : oldKeys.entrySet()) {
             List<TargetFingerprint.Definition> now = newKeys.getOrDefault(entry.getKey(), List.of());
             matched += Math.min(entry.getValue().size(), now.size());
@@ -50,12 +60,15 @@ public record FingerprintComparison(int matchingDefinitions, int baselineDefinit
         if (matched != baseline.definitions().size() || matched != current.definitions().size()) {
             issues.add(new Issue("Target", "Loaded class catalog", "Changed", "Definitions were loaded, unloaded, or moved to a different loader hierarchy"));
         }
-        if (checkedHashes == 0) issues.add(new Issue("Target", "Bytecode coverage", "Unverified", "Baseline contains no verified bytecode hashes"));
+        if (checkedHashes == 0)
+            issues.add(new Issue("Target", "Bytecode coverage", "Unverified", "Baseline contains no verified bytecode hashes"));
         for (MappingEntry mapping : mappings) {
-            if (!mapping.enabled() || mapping.mappedName().isEmpty() && mapping.comment().isEmpty() && mapping.tags().isEmpty()) continue;
+            if (!mapping.enabled() || mapping.mappedName().isEmpty() && mapping.comment().isEmpty() && mapping.tags().isEmpty())
+                continue;
             if (mapping.kind() == MappingKind.PACKAGE) {
                 boolean present = names.keySet().stream().anyMatch(name -> name.startsWith(mapping.originalName() + "."));
-                if (!present) issues.add(new Issue("Mapping", mapping.location(), current.truncated() ? "Unverified" : "Review", "No loaded class remains in the mapped package"));
+                if (!present)
+                    issues.add(new Issue("Mapping", mapping.location(), current.truncated() ? "Unverified" : "Review", "No loaded class remains in the mapped package"));
                 continue;
             }
             String owner = mapping.kind() == MappingKind.CLASS ? mapping.originalName() : mapping.owner();
@@ -65,9 +78,12 @@ public record FingerprintComparison(int matchingDefinitions, int baselineDefinit
             if (candidates.isEmpty() && current.truncated()) reason = "Unverified: class catalog was truncated";
             if (reason == null && mapping.kind() == MappingKind.PARAMETER) {
                 try {
-                    int count = org.objectweb.asm.Type.getArgumentTypes(mapping.descriptor()).length;
-                    if (mapping.parameterIndex() < 0 || mapping.parameterIndex() >= count) reason = "Parameter index no longer resolves";
-                } catch (IllegalArgumentException error) { reason = "Invalid mapped method descriptor"; }
+                    int count = Type.getArgumentTypes(mapping.descriptor()).length;
+                    if (mapping.parameterIndex() < 0 || mapping.parameterIndex() >= count)
+                        reason = "Parameter index no longer resolves";
+                } catch (IllegalArgumentException error) {
+                    reason = "Invalid mapped method descriptor";
+                }
             }
             boolean changed = candidates.size() == 1 && oldKeys.getOrDefault(candidates.getFirst().key(), List.of()).stream()
                     .anyMatch(old -> old.inspected() && candidates.getFirst().inspected() && !old.hash().equals(candidates.getFirst().hash()));
@@ -88,7 +104,8 @@ public record FingerprintComparison(int matchingDefinitions, int baselineDefinit
                 if (lines.isEmpty()) reason = "Unverified: debug line information is unavailable";
                 else if (!lines.contains(breakpoint.sourceLine())) reason = "Source line no longer resolves";
             }
-            if (reason == null && breakpoint.type() == BreakpointSpec.Type.BYTECODE) reason = "Unverified: reconnect the debugger to validate the bytecode index";
+            if (reason == null && breakpoint.type() == BreakpointSpec.Type.BYTECODE)
+                reason = "Unverified: reconnect the debugger to validate the bytecode index";
             if (reason != null) issues.add(new Issue("Breakpoint", breakpoint.location(), candidates.isEmpty()
                     ? current.truncated() ? "Unverified" : "Not loaded" : reason.startsWith("Unverified:") ? "Unverified" : "Unresolved", reason));
         }
@@ -101,13 +118,15 @@ public record FingerprintComparison(int matchingDefinitions, int baselineDefinit
         var type = candidates.getFirst();
         if (!type.inspected()) return "Unverified: bytecode was not inspected";
         if (!member.isEmpty() && type.members().stream().noneMatch(value -> value.method() == method
-                && value.name().equals(member) && (descriptor.isEmpty() || value.descriptor().equals(descriptor)))) return "Member signature no longer resolves";
+                && value.name().equals(member) && (descriptor.isEmpty() || value.descriptor().equals(descriptor))))
+            return "Member signature no longer resolves";
         return null;
     }
 
     private static Map<String, List<TargetFingerprint.Definition>> byKey(TargetFingerprint fingerprint) {
         Map<String, List<TargetFingerprint.Definition>> result = new HashMap<>();
-        for (var type : fingerprint.definitions()) result.computeIfAbsent(type.key(), ignored -> new ArrayList<>()).add(type);
+        for (var type : fingerprint.definitions())
+            result.computeIfAbsent(type.key(), ignored -> new ArrayList<>()).add(type);
         return result;
     }
 }

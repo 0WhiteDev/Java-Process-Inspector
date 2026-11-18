@@ -21,7 +21,8 @@ public enum ProfilerCategory {
         return unit;
     }
 
-    @Override public String toString() {
+    @Override
+    public String toString() {
         return label;
     }
 }

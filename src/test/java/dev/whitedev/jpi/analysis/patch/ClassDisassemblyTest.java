@@ -2,6 +2,7 @@ package dev.whitedev.jpi.analysis.patch;
 
 import org.junit.jupiter.api.Test;
 import org.objectweb.asm.ClassWriter;
+import org.objectweb.asm.Label;
 import org.objectweb.asm.Opcodes;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -22,7 +23,7 @@ class ClassDisassemblyTest {
         writer.visit(Opcodes.V21, Opcodes.ACC_PUBLIC, "Fixture", null, "java/lang/Object", null);
         var method = writer.visitMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC, "value", "()I", null, null);
         method.visitCode();
-        var label = new org.objectweb.asm.Label();
+        var label = new Label();
         method.visitLabel(label);
         method.visitLineNumber(line, label);
         method.visitInsn(opcode);

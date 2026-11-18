@@ -6,6 +6,7 @@ import java.util.Base64;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 public final class ValueTraceAnalyzer {
@@ -110,7 +111,7 @@ public final class ValueTraceAnalyzer {
         if (normalized.length() >= 2 && normalized.charAt(0) == '"' && normalized.endsWith("\"")) {
             normalized = normalized.substring(1, normalized.length() - 1);
         }
-        return normalized.toLowerCase(java.util.Locale.ROOT);
+        return normalized.toLowerCase(Locale.ROOT);
     }
 
     private static String compact(String value) {

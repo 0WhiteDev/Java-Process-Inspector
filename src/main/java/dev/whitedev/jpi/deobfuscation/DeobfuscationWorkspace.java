@@ -1,5 +1,7 @@
 package dev.whitedev.jpi.deobfuscation;
 
+import dev.whitedev.jpi.fingerprint.TargetFingerprint;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -14,13 +16,16 @@ import java.util.concurrent.CopyOnWriteArrayList;
 public final class DeobfuscationWorkspace {
     private String targetFingerprint = "";
 
-    public synchronized String targetFingerprint() { return targetFingerprint; }
+    public synchronized String targetFingerprint() {
+        return targetFingerprint;
+    }
 
     public synchronized void setTargetFingerprint(String value) {
-        if (!value.isEmpty()) dev.whitedev.jpi.fingerprint.TargetFingerprint.parse(value);
+        if (!value.isEmpty()) TargetFingerprint.parse(value);
         targetFingerprint = value;
         changed();
     }
+
     private final Map<String, MappingEntry> entries = new LinkedHashMap<>();
     private final List<Runnable> listeners = new CopyOnWriteArrayList<>();
 
@@ -139,19 +144,25 @@ public final class DeobfuscationWorkspace {
                 if (separator > 0) packages.add(entry.originalName().substring(0, separator));
                 if (mapClasses && entry.mappedName().isEmpty()) {
                     String alias;
-                    do { alias = "class_" + classIndex++; } while (aliases.contains(alias));
+                    do {
+                        alias = "class_" + classIndex++;
+                    } while (aliases.contains(alias));
                     entry.setMappedName(alias);
                     aliases.add(alias);
                 }
             } else if (entry.kind() == MappingKind.METHOD && mapMethods
                     && entry.mappedName().isEmpty() && !entry.originalName().startsWith("<")) {
                 String alias;
-                do { alias = "method_" + methodIndex++; } while (aliases.contains(alias));
+                do {
+                    alias = "method_" + methodIndex++;
+                } while (aliases.contains(alias));
                 entry.setMappedName(alias);
                 aliases.add(alias);
             } else if (entry.kind() == MappingKind.FIELD && mapFields && entry.mappedName().isEmpty()) {
                 String alias;
-                do { alias = "field_" + fieldIndex++; } while (aliases.contains(alias));
+                do {
+                    alias = "field_" + fieldIndex++;
+                } while (aliases.contains(alias));
                 entry.setMappedName(alias);
                 aliases.add(alias);
             } else if (entry.kind() == MappingKind.PARAMETER && mapParameters && entry.mappedName().isEmpty()) {
@@ -169,7 +180,9 @@ public final class DeobfuscationWorkspace {
                 }
                 if (entry.mappedName().isEmpty()) {
                     String alias;
-                    do { alias = "package_" + packageIndex++; } while (aliases.contains(alias));
+                    do {
+                        alias = "package_" + packageIndex++;
+                    } while (aliases.contains(alias));
                     entry.setMappedName(alias);
                     aliases.add(alias);
                 }
@@ -296,7 +309,7 @@ public final class DeobfuscationWorkspace {
     }
 
     private static Map.Entry<String, String> match(String source, int offset,
-                                                    List<Map.Entry<String, String>> replacements) {
+                                                   List<Map.Entry<String, String>> replacements) {
         for (Map.Entry<String, String> replacement : replacements) {
             String alias = replacement.getKey();
             if (!source.regionMatches(offset, alias, 0, alias.length())) continue;
@@ -324,8 +337,16 @@ public final class DeobfuscationWorkspace {
             this.ambiguousAliases = ambiguousAliases;
         }
 
-        public String source() { return source; }
-        public int replacements() { return replacements; }
-        public List<String> ambiguousAliases() { return Collections.unmodifiableList(ambiguousAliases); }
+        public String source() {
+            return source;
+        }
+
+        public int replacements() {
+            return replacements;
+        }
+
+        public List<String> ambiguousAliases() {
+            return Collections.unmodifiableList(ambiguousAliases);
+        }
     }
 }

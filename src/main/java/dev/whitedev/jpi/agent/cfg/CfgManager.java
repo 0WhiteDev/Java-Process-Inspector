@@ -1,9 +1,10 @@
 package dev.whitedev.jpi.agent.cfg;
 
+import dev.whitedev.jpi.agent.RuntimeAccess;
+
 import java.io.IOException;
 import java.lang.instrument.ClassDefinition;
 import java.lang.instrument.Instrumentation;
-import dev.whitedev.jpi.agent.RuntimeAccess;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -16,7 +17,8 @@ public final class CfgManager {
 
     private final RuntimeAccess instrumentation;
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(new ThreadFactory() {
-        @Override public Thread newThread(Runnable task) {
+        @Override
+        public Thread newThread(Runnable task) {
             Thread thread = new Thread(task, "jpi-cfg-expiration");
             thread.setDaemon(true);
             thread.setContextClassLoader(CfgRuntime.class.getClassLoader());
@@ -55,7 +57,8 @@ public final class CfgManager {
                 System.currentTimeMillis() + durationMillis);
         active = probe;
         probe.expiration = scheduler.schedule(new Runnable() {
-            @Override public void run() {
+            @Override
+            public void run() {
                 try {
                     stop(id);
                 } catch (Throwable ignored) {

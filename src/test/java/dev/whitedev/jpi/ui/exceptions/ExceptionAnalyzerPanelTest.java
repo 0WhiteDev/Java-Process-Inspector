@@ -14,10 +14,12 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 class ExceptionAnalyzerPanelTest {
-    @Test void refreshPreservesSelectionAndStackScrollPosition() throws Exception {
+    @Test
+    void refreshPreservesSelectionAndStackScrollPosition() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
             try {
-                var panel = new ExceptionAnalyzerPanel((action, selection) -> { });
+                var panel = new ExceptionAnalyzerPanel((action, selection) -> {
+                });
                 render(panel, snapshot(1));
                 JTable types = field(panel, "types", JTable.class);
                 types.setRowSelectionInterval(0, 0);
@@ -27,14 +29,18 @@ class ExceptionAnalyzerPanelTest {
                 assertEquals(0, types.getSelectedRow());
                 assertEquals(5, stack.getCaretPosition());
                 assertEquals(2L, types.getValueAt(0, 1));
-            } catch (Exception error) { throw new AssertionError(error); }
+            } catch (Exception error) {
+                throw new AssertionError(error);
+            }
         });
     }
 
-    @Test void filterUsesLiteralTextInsteadOfRegularExpressions() throws Exception {
+    @Test
+    void filterUsesLiteralTextInsteadOfRegularExpressions() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
             try {
-                var panel = new ExceptionAnalyzerPanel((action, selection) -> { });
+                var panel = new ExceptionAnalyzerPanel((action, selection) -> {
+                });
                 render(panel, snapshot(1));
                 JTextField filter = field(panel, "filter", JTextField.class);
                 JTable types = field(panel, "types", JTable.class);
@@ -42,7 +48,9 @@ class ExceptionAnalyzerPanelTest {
                 assertEquals(1, types.getRowCount());
                 filter.setText("[");
                 assertEquals(0, types.getRowCount());
-            } catch (Exception error) { throw new AssertionError(error); }
+            } catch (Exception error) {
+                throw new AssertionError(error);
+            }
         });
     }
 

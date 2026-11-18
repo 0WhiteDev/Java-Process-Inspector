@@ -1,8 +1,5 @@
 package dev.whitedev.jpi.ui.analysis;
 
-import dev.whitedev.jpi.ui.context.AnalysisTarget;
-import dev.whitedev.jpi.ui.context.ContextActions;
-
 import dev.whitedev.jpi.attach.InspectorSession;
 import dev.whitedev.jpi.deobfuscation.DeobfuscationWorkspace;
 import dev.whitedev.jpi.investigation.InvestigationAnalyzer;
@@ -14,17 +11,18 @@ import dev.whitedev.jpi.protocol.Operation;
 import dev.whitedev.jpi.ui.Async;
 import dev.whitedev.jpi.ui.SessionAware;
 import dev.whitedev.jpi.ui.Ui;
+import dev.whitedev.jpi.ui.context.AnalysisTarget;
+import dev.whitedev.jpi.ui.context.ContextActions;
 import dev.whitedev.jpi.ui.debug.DebuggerPanel;
 
 import javax.swing.BorderFactory;
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JFileChooser;
-import javax.swing.JProgressBar;
-import javax.swing.SwingUtilities;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.JProgressBar;
 import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
 import javax.swing.JTabbedPane;
@@ -32,6 +30,7 @@ import javax.swing.JTable;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.ListSelectionModel;
+import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 import javax.swing.border.EmptyBorder;
 import javax.swing.table.DefaultTableModel;
@@ -42,6 +41,7 @@ import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.GridLayout;
+import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
@@ -49,9 +49,9 @@ import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Consumer;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.CancellationException;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 
 public final class InvestigationPanel extends JPanel implements SessionAware {
     private final DeobfuscationWorkspace workspace;
@@ -72,7 +72,10 @@ public final class InvestigationPanel extends JPanel implements SessionAware {
     private final JProgressBar assistantProgress = new JProgressBar(0, 7);
     private final DefaultTableModel probeModel = new DefaultTableModel(
             new Object[]{"Suggested method", "Definition"}, 0) {
-        @Override public boolean isCellEditable(int row, int column) { return false; }
+        @Override
+        public boolean isCellEditable(int row, int column) {
+            return false;
+        }
     };
     private final JTable suggestedProbes = new JTable(probeModel);
     private final JTabbedPane workspaceTabs = new JTabbedPane();
@@ -111,7 +114,9 @@ public final class InvestigationPanel extends JPanel implements SessionAware {
     private final DefaultTableModel entryModel = new DefaultTableModel(
             new Object[]{"Confidence", "Method", "Runtime hits", "Matched constant"}, 0) {
         @Override
-        public boolean isCellEditable(int row, int column) {return false;}
+        public boolean isCellEditable(int row, int column) {
+            return false;
+        }
     };
 
     private final JTable entries = new JTable(entryModel);
@@ -784,8 +789,9 @@ public final class InvestigationPanel extends JPanel implements SessionAware {
         probeTargets = List.of();
         probeModel.setRowCount(0);
         assistantProgress.setValue(0);
-        for (int i = 0; i < assistantSteps.length; i++) if (assistantSteps[i] != null)
-            assistantSteps[i].setText((i + 1) + ". Pending");
+        for (int i = 0; i < assistantSteps.length; i++)
+            if (assistantSteps[i] != null)
+                assistantSteps[i].setText((i + 1) + ". Pending");
         assistantDetails.setText("Enter a marker and click Investigate to run the bounded deterministic assistant.\n"
                 + "No probes are installed automatically. Static call graph paths do not prove execution order.");
     }
@@ -795,7 +801,8 @@ public final class InvestigationPanel extends JPanel implements SessionAware {
         assistantDetails.setCaretPosition(0);
         probeTargets = data.probes();
         probeModel.setRowCount(0);
-        for (InvestigationTarget target : probeTargets) probeModel.addRow(new Object[]{display(target), target.classIdentifier()});
+        for (InvestigationTarget target : probeTargets)
+            probeModel.addRow(new Object[]{display(target), target.classIdentifier()});
         if (!probeTargets.isEmpty()) suggestedProbes.setRowSelectionInterval(0, 0);
     }
 
@@ -810,12 +817,15 @@ public final class InvestigationPanel extends JPanel implements SessionAware {
         AssistantReport current = assistantReport;
         if (current == null) return;
         JFileChooser chooser = new JFileChooser();
-        chooser.setSelectedFile(new java.io.File("jpi-investigation.md"));
+        chooser.setSelectedFile(new File("jpi-investigation.md"));
         if (chooser.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) return;
         var path = chooser.getSelectedFile().toPath();
         if (Files.exists(path) && JOptionPane.showConfirmDialog(this, "Replace the existing report?",
                 "Export investigation", JOptionPane.OK_CANCEL_OPTION) != JOptionPane.OK_OPTION) return;
-        Async.run(() -> { Files.writeString(path, current.markdown(), StandardCharsets.UTF_8); return path; },
+        Async.run(() -> {
+                    Files.writeString(path, current.markdown(), StandardCharsets.UTF_8);
+                    return path;
+                },
                 saved -> status.setText("Report exported to " + saved), error -> Ui.error(this, error));
     }
 
@@ -864,8 +874,11 @@ public final class InvestigationPanel extends JPanel implements SessionAware {
             for (String line : snapshotRaw.split("\n")) {
                 String[] values = line.split("\t", -1);
                 if (values.length == 3 && "H".equals(values[0])) {
-                    try {hits.put(Integer.parseInt(values[1]), Long.parseLong(values[2]));} catch (
-                            NumberFormatException ignored) {}
+                    try {
+                        hits.put(Integer.parseInt(values[1]), Long.parseLong(values[2]));
+                    } catch (
+                            NumberFormatException ignored) {
+                    }
                 }
             }
             for (String line : graphRaw.split("\n")) {

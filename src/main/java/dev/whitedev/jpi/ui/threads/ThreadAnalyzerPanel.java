@@ -25,6 +25,7 @@ import javax.swing.SwingConstants;
 import javax.swing.Timer;
 import javax.swing.border.EmptyBorder;
 import javax.swing.table.DefaultTableModel;
+import javax.swing.table.TableCellRenderer;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
@@ -93,7 +94,8 @@ public final class ThreadAnalyzerPanel extends JPanel implements SessionAware {
         setSession(null);
     }
 
-    @Override public void setSession(InspectorSession value) {
+    @Override
+    public void setSession(InspectorSession value) {
         timer.stop();
         session = value;
         snapshot = null;
@@ -171,7 +173,8 @@ public final class ThreadAnalyzerPanel extends JPanel implements SessionAware {
 
     private JTable threadTable() {
         return new JTable(threadsModel) {
-            @Override public Component prepareRenderer(javax.swing.table.TableCellRenderer renderer, int row, int column) {
+            @Override
+            public Component prepareRenderer(TableCellRenderer renderer, int row, int column) {
                 Component component = super.prepareRenderer(renderer, row, column);
                 int modelRow = convertRowIndexToModel(row);
                 String state = String.valueOf(getModel().getValueAt(modelRow, 2));
@@ -423,7 +426,8 @@ public final class ThreadAnalyzerPanel extends JPanel implements SessionAware {
 
     private static DefaultTableModel readOnly(String... columns) {
         return new DefaultTableModel(columns, 0) {
-            @Override public boolean isCellEditable(int row, int column) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
                 return false;
             }
         };

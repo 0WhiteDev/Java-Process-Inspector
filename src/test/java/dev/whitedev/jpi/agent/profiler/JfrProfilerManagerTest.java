@@ -8,7 +8,8 @@ import java.nio.file.Path;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class JfrProfilerManagerTest {
-    @Test void recordsAndAggregatesRuntimeEvents() throws Exception {
+    @Test
+    void recordsAndAggregatesRuntimeEvents() throws Exception {
         JfrProfilerManager manager = new JfrProfilerManager();
         assertTrue(manager.status().startsWith("IDLE\ttrue"));
         manager.start("durationSeconds=1;categories=CPU,ALLOCATIONS,LOCKS,EXCEPTIONS,GC,THREADS,IO");

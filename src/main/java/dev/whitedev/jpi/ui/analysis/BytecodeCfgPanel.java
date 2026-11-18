@@ -1,14 +1,13 @@
 package dev.whitedev.jpi.ui.analysis;
 
-import dev.whitedev.jpi.ui.context.AnalysisTarget;
-import dev.whitedev.jpi.ui.context.ContextActions;
-
 import dev.whitedev.jpi.attach.InspectorSession;
 import dev.whitedev.jpi.deobfuscation.DeobfuscationWorkspace;
 import dev.whitedev.jpi.protocol.Operation;
 import dev.whitedev.jpi.ui.Async;
 import dev.whitedev.jpi.ui.SessionAware;
 import dev.whitedev.jpi.ui.Ui;
+import dev.whitedev.jpi.ui.context.AnalysisTarget;
+import dev.whitedev.jpi.ui.context.ContextActions;
 import dev.whitedev.jpi.ui.debug.DebuggerPanel;
 
 import javax.swing.BorderFactory;
@@ -30,6 +29,7 @@ import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.GridLayout;
+import java.util.function.Supplier;
 
 public final class BytecodeCfgPanel extends JPanel implements SessionAware {
     private static final Color DEAD = new Color(220, 88, 96);
@@ -141,7 +141,9 @@ public final class BytecodeCfgPanel extends JPanel implements SessionAware {
         selectTarget(identifier, owner, method, methodDescriptor, false);
     }
 
-    public boolean canStartBlockTrace() { return session != null && !traceActive && !analyzing; }
+    public boolean canStartBlockTrace() {
+        return session != null && !traceActive && !analyzing;
+    }
 
     public void traceTarget(String identifier, String owner, String method, String descriptor) {
         if (canStartBlockTrace()) selectTarget(identifier, owner, method, descriptor, true);
@@ -179,7 +181,7 @@ public final class BytecodeCfgPanel extends JPanel implements SessionAware {
     }
 
     public void setContextActions(ContextActions actions) {
-        java.util.function.Supplier<AnalysisTarget> target = () ->
+        Supplier<AnalysisTarget> target = () ->
                 classIdentifier.isEmpty() ? null : AnalysisTarget.method(
                         classIdentifier, actualClassName, actualMethodName, actualDescriptor);
         actions.install(graph, target);
@@ -187,7 +189,8 @@ public final class BytecodeCfgPanel extends JPanel implements SessionAware {
         actions.install(methodName, target);
     }
 
-    @Override public void setSession(InspectorSession value) {
+    @Override
+    public void setSession(InspectorSession value) {
         session = value;
         generation++;
         analyzing = false;

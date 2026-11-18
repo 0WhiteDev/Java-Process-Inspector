@@ -1,22 +1,28 @@
 package dev.whitedev.jpi.integration;
 
-import dev.whitedev.jpi.attach.ImprovedAttachService;
 import dev.whitedev.jpi.attach.AttachService;
+import dev.whitedev.jpi.attach.ImprovedAttachService;
 import dev.whitedev.jpi.attach.InspectorSession;
 import dev.whitedev.jpi.attach.JvmDescriptor;
 import dev.whitedev.jpi.attach.jvmti.NativeAgentArtifact;
 import dev.whitedev.jpi.protocol.Operation;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Assumptions;
+import org.junit.jupiter.api.Test;
 import org.objectweb.asm.ClassReader;
 
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Base64;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeUnit;
 import java.util.jar.Attributes;
 import java.util.jar.JarEntry;
@@ -28,7 +34,8 @@ import static org.junit.jupiter.api.Assertions.*;
 class NativeJvmtiIT {
     private final ImprovedAttachService service = new ImprovedAttachService(new File(System.getProperty("jpi.agent.jar", "target/jpi.jar")));
 
-    @Test void earlyLaunchBindsNativeBackendWithoutDynamicLoading() throws Exception {
+    @Test
+    void earlyLaunchBindsNativeBackendWithoutDynamicLoading() throws Exception {
         NativeAgentArtifact artifact = artifact();
         File targetJar = fixtureJar();
         var result = service.launch(targetJar, List.of("-XX:-EnableDynamicAgentLoading"), List.of(), artifact);
@@ -36,10 +43,13 @@ class NativeJvmtiIT {
             assertTrue(session.requestText(Operation.JVMTI_STATUS, "").contains("mode=startup"));
             assertBackend(session);
             assertTrue(result.process().isAlive());
-        } finally { stop(result.process()); }
+        } finally {
+            stop(result.process());
+        }
     }
 
-    @Test void loadsThroughAttachApiEnumeratesClassesAndCapturesBytes() throws Exception {
+    @Test
+    void loadsThroughAttachApiEnumeratesClassesAndCapturesBytes() throws Exception {
         NativeAgentArtifact artifact = artifact();
         Process process = start(List.of());
         try (InspectorSession session = service.attach(new JvmDescriptor(Long.toString(process.pid()), "JVMTI fixture"))) {
@@ -49,17 +59,22 @@ class NativeJvmtiIT {
             assertTrue(bound.contains("backend=JVMTI"), bound);
             assertTrue(bound.contains("mode=attach"), bound);
             assertBackend(session);
-            Path copy = java.nio.file.Files.createTempFile("jpi-identical-native-", System.mapLibraryName("jpi_jvmti"));
+            Path copy = Files.createTempFile("jpi-identical-native-", System.mapLibraryName("jpi_jvmti"));
             try {
-                java.nio.file.Files.copy(artifact.library(), copy, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                Files.copy(artifact.library(), copy, StandardCopyOption.REPLACE_EXISTING);
                 assertTrue(service.enableNativeBackend(session, NativeAgentArtifact.verify(copy, artifact.sha256())).contains("backend=JVMTI"));
-            } finally { java.nio.file.Files.deleteIfExists(copy); }
+            } finally {
+                Files.deleteIfExists(copy);
+            }
             assertThrows(IOException.class, () -> session.requestText(Operation.JVMTI_BIND, artifact.library() + "\n" + "0".repeat(64)));
             assertEquals("pong", session.requestText(Operation.PING, ""));
-        } finally { stop(process); }
+        } finally {
+            stop(process);
+        }
     }
 
-    @Test void supportsAgentpathWithDynamicAgentLoadingDisabled() throws Exception {
+    @Test
+    void supportsAgentpathWithDynamicAgentLoadingDisabled() throws Exception {
         NativeAgentArtifact artifact = artifact();
         try (AttachService.PreparedAgentSession prepared = service.prepareEarlyAgent()) {
             Process process = start(List.of("-XX:-EnableDynamicAgentLoading", artifact.startupArgument(), unquote(prepared.jvmArgument())));
@@ -67,11 +82,14 @@ class NativeJvmtiIT {
                 String bound = session.requestText(Operation.JVMTI_BIND, artifact.bindingOptions());
                 assertTrue(bound.contains("mode=startup"), bound);
                 assertBackend(session);
-            } finally { stop(process); }
+            } finally {
+                stop(process);
+            }
         }
     }
 
-    @Test void respectsDynamicLoadingPolicyAndKeepsInstrumentationAvailable() throws Exception {
+    @Test
+    void respectsDynamicLoadingPolicyAndKeepsInstrumentationAvailable() throws Exception {
         NativeAgentArtifact artifact = artifact();
         try (AttachService.PreparedAgentSession prepared = service.prepareEarlyAgent()) {
             Process process = start(List.of("-XX:-EnableDynamicAgentLoading", unquote(prepared.jvmArgument())));
@@ -81,7 +99,9 @@ class NativeJvmtiIT {
                 assertTrue(session.requestText(Operation.JVMTI_STATUS, "").contains("not-bound"));
                 assertFalse(session.requestText(Operation.CLASSES, "").isEmpty());
                 assertEquals("pong", session.requestText(Operation.PING, ""));
-            } finally { stop(process); }
+            } finally {
+                stop(process);
+            }
         }
     }
 
@@ -93,7 +113,7 @@ class NativeJvmtiIT {
     }
 
     private File fixtureJar() throws Exception {
-        File jar = java.nio.file.Files.createTempFile("jpi-jvmti-early-", ".jar").toFile();
+        File jar = Files.createTempFile("jpi-jvmti-early-", ".jar").toFile();
         jar.deleteOnExit();
         Manifest manifest = new Manifest();
         manifest.getMainAttributes().put(Attributes.Name.MANIFEST_VERSION, "1.0");
@@ -121,7 +141,7 @@ class NativeJvmtiIT {
         assertTrue(status.contains("can_tag_objects=1"), status);
         String classes = session.requestText(Operation.JVMTI_CLASSES, "");
         assertTrue(classes.contains("\t" + AttachTarget.class.getName() + "\t"), classes.substring(0, Math.min(200, classes.length())));
-        String classId = java.util.Arrays.stream(classes.split("\n"))
+        String classId = Arrays.stream(classes.split("\n"))
                 .filter(line -> line.contains("\t" + AttachTarget.class.getName() + "\t"))
                 .findFirst().orElseThrow().split("\t", 2)[0];
         for (int index = 0; index < 2; index++) {
@@ -145,7 +165,7 @@ class NativeJvmtiIT {
     }
 
     private static long metric(String text, String name) {
-        return java.util.Arrays.stream(text.split("\n"))
+        return Arrays.stream(text.split("\n"))
                 .filter(line -> line.startsWith(name + "="))
                 .mapToLong(line -> Long.parseLong(line.substring(name.length() + 1)))
                 .findFirst().orElseThrow();
@@ -158,9 +178,10 @@ class NativeJvmtiIT {
         String maps = session.requestText(Operation.MEMORY_REGIONS, "");
         assertFalse(maps.isEmpty());
         assertArrayEquals(new byte[16], session.request(Operation.MEMORY_READ, address + "\n16"));
-        String before = java.util.Base64.getEncoder().encodeToString(new byte[16]);
-        byte[] changed = new byte[16]; java.util.Arrays.fill(changed, (byte) 0x5a);
-        String after = java.util.Base64.getEncoder().encodeToString(changed);
+        String before = Base64.getEncoder().encodeToString(new byte[16]);
+        byte[] changed = new byte[16];
+        Arrays.fill(changed, (byte) 0x5a);
+        String after = Base64.getEncoder().encodeToString(changed);
         assertTrue(session.requestText(Operation.MEMORY_PATCH, address + "\n" + before + "\n" + after).contains("Patched 16"));
         assertArrayEquals(changed, session.request(Operation.MEMORY_READ, address + "\n16"));
         assertThrows(IOException.class, () -> session.request(Operation.MEMORY_PATCH, address + "\n" + before + "\n" + after));
@@ -173,7 +194,7 @@ class NativeJvmtiIT {
         String executable = maps.lines().filter(line -> line.endsWith("r-x")).findFirst().orElseThrow();
         String codeAddress = executable.split("\t")[0];
         byte[] code = session.request(Operation.MEMORY_READ, codeAddress + "\n1");
-        String same = java.util.Base64.getEncoder().encodeToString(code);
+        String same = Base64.getEncoder().encodeToString(code);
         assertThrows(IOException.class, () -> session.request(Operation.MEMORY_PATCH, codeAddress + "\n" + same + "\n" + same));
         assertEquals("pong", session.requestText(Operation.PING, ""));
     }
@@ -187,11 +208,15 @@ class NativeJvmtiIT {
         command.add(AttachTarget.class.getName());
         Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
         try {
-            String greeting = java.util.concurrent.CompletableFuture.supplyAsync(() -> {
-                try { return process.inputReader().readLine(); }
-                catch (IOException error) { throw new java.util.concurrent.CompletionException(error); }
+            String greeting = CompletableFuture.supplyAsync(() -> {
+                try {
+                    return process.inputReader().readLine();
+                } catch (IOException error) {
+                    throw new CompletionException(error);
+                }
             }).get(15, TimeUnit.SECONDS);
-            if (!Long.toString(process.pid()).equals(greeting)) throw new IOException("JVMTI fixture did not become ready: " + greeting);
+            if (!Long.toString(process.pid()).equals(greeting))
+                throw new IOException("JVMTI fixture did not become ready: " + greeting);
             return process;
         } catch (Exception error) {
             process.destroyForcibly();

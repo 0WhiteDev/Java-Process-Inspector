@@ -18,7 +18,10 @@ class ClassesPanelLayoutTest {
     void keepsClassAndMethodActionsInsideTheirToolbarsAfterResizing() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
             ClassesPanel panel = new ClassesPanel(new DeobfuscationWorkspace(), null, null, null,
-                    () -> {}, () -> {}, () -> {});
+                    () -> {
+                    }, () -> {
+            }, () -> {
+            });
             for (int width : new int[]{1600, 1100, 900, 1600}) {
                 panel.setSize(width, 1000);
                 for (int pass = 0; pass < 5; pass++) layout(panel);
@@ -30,7 +33,8 @@ class ClassesPanelLayoutTest {
                         tabs.setSelectedIndex(index);
                         for (int pass = 0; pass < 5; pass++) layout(panel);
                         for (JButton button : buttons(tabs.getSelectedComponent())) {
-                            if (button.isVisible() && button.getText() != null && !button.getText().isEmpty()) assertContained(button);
+                            if (button.isVisible() && button.getText() != null && !button.getText().isEmpty())
+                                assertContained(button);
                         }
                     }
                 }
@@ -53,7 +57,8 @@ class ClassesPanelLayoutTest {
     private static List<JButton> buttons(Component root) {
         List<JButton> result = new ArrayList<>();
         if (root instanceof JButton button) result.add(button);
-        if (root instanceof Container parent) for (Component child : parent.getComponents()) result.addAll(buttons(child));
+        if (root instanceof Container parent)
+            for (Component child : parent.getComponents()) result.addAll(buttons(child));
         return result;
     }
 

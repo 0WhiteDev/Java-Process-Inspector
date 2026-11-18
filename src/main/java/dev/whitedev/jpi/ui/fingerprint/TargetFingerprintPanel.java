@@ -20,6 +20,7 @@ import java.awt.FlowLayout;
 import java.awt.Toolkit;
 import java.awt.datatransfer.StringSelection;
 import java.io.File;
+import java.time.Instant;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -45,7 +46,9 @@ public final class TargetFingerprintPanel extends JPanel implements SessionAware
     private boolean busy;
     private long generation;
     private String observedBaseline = "";
-    private record Capture(String wire, TargetFingerprint fingerprint) {}
+
+    private record Capture(String wire, TargetFingerprint fingerprint) {
+    }
 
     public TargetFingerprintPanel(DeobfuscationWorkspace workspace, Supplier<List<BreakpointSpec>> breakpointSource,
                                   Consumer<String> warning) {
@@ -68,7 +71,8 @@ public final class TargetFingerprintPanel extends JPanel implements SessionAware
         export.addActionListener(event -> export());
         forget.addActionListener(event -> {
             if (JOptionPane.showConfirmDialog(this, "Forget the saved target baseline? Mappings remain unchanged.",
-                    "Target fingerprint", JOptionPane.OK_CANCEL_OPTION) == JOptionPane.OK_OPTION) workspace.setTargetFingerprint("");
+                    "Target fingerprint", JOptionPane.OK_CANCEL_OPTION) == JOptionPane.OK_OPTION)
+                workspace.setTargetFingerprint("");
         });
         copy.addActionListener(event -> Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(summary.getText()), null));
         selection.setEditable(true);
@@ -98,7 +102,8 @@ public final class TargetFingerprintPanel extends JPanel implements SessionAware
         render();
     }
 
-    @Override public void setSession(InspectorSession value) {
+    @Override
+    public void setSession(InspectorSession value) {
         session = value;
         generation++;
         busy = false;
@@ -161,7 +166,8 @@ public final class TargetFingerprintPanel extends JPanel implements SessionAware
     private void bind() {
         if (current == null || busy) return;
         if (!workspace.targetFingerprint().isEmpty() && JOptionPane.showConfirmDialog(this,
-                "Replace the workspace baseline with this capture?", "Target fingerprint", JOptionPane.OK_CANCEL_OPTION) != JOptionPane.OK_OPTION) return;
+                "Replace the workspace baseline with this capture?", "Target fingerprint", JOptionPane.OK_CANCEL_OPTION) != JOptionPane.OK_OPTION)
+            return;
         workspace.setTargetFingerprint(currentWire);
         observedBaseline = currentWire;
         render();
@@ -176,7 +182,9 @@ public final class TargetFingerprintPanel extends JPanel implements SessionAware
             workspace.setTargetFingerprint(wire);
             render();
             if (session != null) capture();
-        } catch (Exception error) { Ui.error(this, error); }
+        } catch (Exception error) {
+            Ui.error(this, error);
+        }
     }
 
     private void export() {
@@ -188,7 +196,9 @@ public final class TargetFingerprintPanel extends JPanel implements SessionAware
                 "Export fingerprint", JOptionPane.OK_CANCEL_OPTION) != JOptionPane.OK_OPTION) return;
         try {
             MappingFormats.write(chooser.getSelectedFile().toPath(), MappingFormats.Format.JSON, List.of(), currentWire);
-        } catch (Exception error) { Ui.error(this, error); }
+        } catch (Exception error) {
+            Ui.error(this, error);
+        }
     }
 
     private void render() {
@@ -207,10 +217,11 @@ public final class TargetFingerprintPanel extends JPanel implements SessionAware
         StringBuilder text = new StringBuilder("Main class: ").append(displayed.mainClass()).append("\nJava: ")
                 .append(displayed.javaVersion()).append("\nLoaded classes: ").append(displayed.loadedCount())
                 .append("\nCatalog definitions: ").append(displayed.definitions().size())
-                .append("\nCaptured: ").append(java.time.Instant.ofEpochMilli(displayed.capturedAt()))
+                .append("\nCaptured: ").append(Instant.ofEpochMilli(displayed.capturedAt()))
                 .append("\nFingerprint: ").append(displayed.id()).append('\n');
         for (var definition : displayed.definitions()) {
-            if (!definition.status().equals("not selected")) hashes.addRow(new Object[]{definition.name(), definition.loader(), definition.hash(), definition.status()});
+            if (!definition.status().equals("not selected"))
+                hashes.addRow(new Object[]{definition.name(), definition.loader(), definition.hash(), definition.status()});
         }
         if (current != null && baseline != null) {
             Set<BreakpointSpec> breakpoints = new LinkedHashSet<>(baseline.breakpoints());
@@ -227,7 +238,8 @@ public final class TargetFingerprintPanel extends JPanel implements SessionAware
             for (var issue : comparison.issues().stream().limit(5000).toList()) {
                 issues.addRow(new Object[]{issue.category(), issue.location(), issue.status(), issue.reason()});
             }
-            if (comparison.issues().size() > 5000) text.append("Review table is limited to the first 5,000 issues; summary counts include all checks.\n");
+            if (comparison.issues().size() > 5000)
+                text.append("Review table is limited to the first 5,000 issues; summary counts include all checks.\n");
             String message = comparison.issues().isEmpty() ? "No differences in checked definitions." : "Workspace target differs or needs verification. " + review + " mappings to review; " + unresolved + " unresolved breakpoint locations; " + unverified + " unverified checks.";
             status.setText(message);
             warning.accept(comparison.issues().isEmpty() ? "" : message + " Open Target fingerprint for details.");
@@ -252,7 +264,10 @@ public final class TargetFingerprintPanel extends JPanel implements SessionAware
 
     private static DefaultTableModel model(String... columns) {
         return new DefaultTableModel(columns, 0) {
-            @Override public boolean isCellEditable(int row, int column) { return false; }
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return false;
+            }
         };
     }
 

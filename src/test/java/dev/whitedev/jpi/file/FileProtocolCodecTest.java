@@ -9,7 +9,8 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class FileProtocolCodecTest {
-    @Test void parsesBoundedFileEventBatch() {
+    @Test
+    void parsesBoundedFileEventBatch() {
         String event = "E\t7\t123\tWRITE\t" + encoded("input.txt") + "\t" + encoded("C:\\input.txt")
                 + "\t" + encoded("app.Main") + "\t" + encoded("save") + "\t" + encoded("()V")
                 + "\t" + encoded("Worker") + "\tREDIRECT\t3\t" + encoded("sandbox/input.txt")

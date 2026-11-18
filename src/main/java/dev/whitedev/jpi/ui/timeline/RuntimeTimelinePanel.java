@@ -25,7 +25,8 @@ public final class RuntimeTimelinePanel extends JPanel implements SessionAware {
     private final RuntimeTimelineStore store;
     private final DefaultTableModel model = new DefaultTableModel(
             new Object[]{"Time", "Source", "Thread", "Correlation", "Event"}, 0) {
-        @Override public boolean isCellEditable(int row, int column) {
+        @Override
+        public boolean isCellEditable(int row, int column) {
             return false;
         }
     };
@@ -71,9 +72,20 @@ public final class RuntimeTimelinePanel extends JPanel implements SessionAware {
         filter.putClientProperty("JTextField.showClearButton", true);
         filter.setPreferredSize(new Dimension(390, 34));
         filter.getDocument().addDocumentListener(new DocumentListener() {
-            @Override public void insertUpdate(DocumentEvent event) { refresh(); }
-            @Override public void removeUpdate(DocumentEvent event) { refresh(); }
-            @Override public void changedUpdate(DocumentEvent event) { refresh(); }
+            @Override
+            public void insertUpdate(DocumentEvent event) {
+                refresh();
+            }
+
+            @Override
+            public void removeUpdate(DocumentEvent event) {
+                refresh();
+            }
+
+            @Override
+            public void changedUpdate(DocumentEvent event) {
+                refresh();
+            }
         });
         source.addItem("All sources");
         for (TimelineSource value : TimelineSource.values()) source.addItem(value);
@@ -114,7 +126,8 @@ public final class RuntimeTimelinePanel extends JPanel implements SessionAware {
         store.addListener(this::queueRefresh);
     }
 
-    @Override public void setSession(InspectorSession session) {
+    @Override
+    public void setSession(InspectorSession session) {
         this.session = session;
         marker.setEnabled(session != null);
         refresh();
@@ -151,12 +164,13 @@ public final class RuntimeTimelinePanel extends JPanel implements SessionAware {
         source.setSelectedIndex(0);
         correlatedOnly.setSelected(false);
         refresh();
-        for (int row = 0; row < visible.size(); row++) if (visible.get(row).event().key().equals(key)) {
-            table.setRowSelectionInterval(row, row);
-            table.scrollRectToVisible(table.getCellRect(row, 0, true));
-            showSelected();
-            return;
-        }
+        for (int row = 0; row < visible.size(); row++)
+            if (visible.get(row).event().key().equals(key)) {
+                table.setRowSelectionInterval(row, row);
+                table.scrollRectToVisible(table.getCellRect(row, 0, true));
+                showSelected();
+                return;
+            }
         status.setText("This event is no longer in the bounded timeline");
     }
 
@@ -212,7 +226,8 @@ public final class RuntimeTimelinePanel extends JPanel implements SessionAware {
     }
 
     private static final class SourceRenderer extends DefaultTableCellRenderer {
-        @Override protected void setValue(Object value) {
+        @Override
+        protected void setValue(Object value) {
             super.setValue(value);
             setForeground(value == TimelineSource.TRACE ? Ui.SUCCESS
                     : value == TimelineSource.NETWORK ? new Color(102, 178, 255)

@@ -9,7 +9,8 @@ public record DecompilationRequest(String className, byte[] bytecode,
         methodDescriptor = methodDescriptor == null ? "" : methodDescriptor;
     }
 
-    @Override public byte[] bytecode() {
+    @Override
+    public byte[] bytecode() {
         return bytecode.clone();
     }
 

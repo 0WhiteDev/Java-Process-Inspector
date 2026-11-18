@@ -1,13 +1,12 @@
 package dev.whitedev.jpi.ui.workspace;
 
+import dev.whitedev.jpi.attach.InspectorSession;
+import dev.whitedev.jpi.deobfuscation.DeobfuscationWorkspace;
+import dev.whitedev.jpi.protocol.Operation;
 import dev.whitedev.jpi.ui.Async;
 import dev.whitedev.jpi.ui.CodeEditors;
 import dev.whitedev.jpi.ui.SessionAware;
 import dev.whitedev.jpi.ui.Ui;
-
-import dev.whitedev.jpi.attach.InspectorSession;
-import dev.whitedev.jpi.deobfuscation.DeobfuscationWorkspace;
-import dev.whitedev.jpi.protocol.Operation;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 
 import javax.swing.*;
@@ -15,6 +14,7 @@ import javax.swing.border.EmptyBorder;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
+import java.util.Collections;
 
 public final class ExecutorPanel extends JPanel implements SessionAware {
     private final DeobfuscationWorkspace workspace;
@@ -41,7 +41,7 @@ public final class ExecutorPanel extends JPanel implements SessionAware {
         actions.add(reset);
         actions.add(run);
         add(Ui.sectionHeader("Code executor",
-                "Compile an isolated Java class and invoke execute(PrintStream) inside the target", actions),
+                        "Compile an isolated Java class and invoke execute(PrintStream) inside the target", actions),
                 BorderLayout.NORTH);
 
         JPanel editorCard = Ui.card(new BorderLayout(0, 10));
@@ -77,7 +77,10 @@ public final class ExecutorPanel extends JPanel implements SessionAware {
 
         code.getInputMap().put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, KeyEvent.CTRL_DOWN_MASK), "jpi-run");
         code.getActionMap().put("jpi-run", new AbstractAction() {
-            @Override public void actionPerformed(ActionEvent event) { execute(); }
+            @Override
+            public void actionPerformed(ActionEvent event) {
+                execute();
+            }
         });
         setTemplate();
     }
@@ -92,7 +95,8 @@ public final class ExecutorPanel extends JPanel implements SessionAware {
         code.setCaretPosition(0);
     }
 
-    @Override public void setSession(InspectorSession session) {
+    @Override
+    public void setSession(InspectorSession session) {
         this.session = session;
         run.setEnabled(session != null);
         state.setText(session == null ? "Attach required" : "Ready");
@@ -104,7 +108,7 @@ public final class ExecutorPanel extends JPanel implements SessionAware {
         if (current == null || !run.isEnabled()) return;
         DeobfuscationWorkspace.TranslationResult translation = resolveMappings.isSelected()
                 ? workspace.translateSource(code.getText())
-                : new DeobfuscationWorkspace.TranslationResult(code.getText(), 0, java.util.Collections.emptyList());
+                : new DeobfuscationWorkspace.TranslationResult(code.getText(), 0, Collections.emptyList());
         if (!translation.ambiguousAliases().isEmpty()) {
             Ui.error(this, new IllegalStateException("Mapped aliases are ambiguous: "
                     + String.join(", ", translation.ambiguousAliases())));

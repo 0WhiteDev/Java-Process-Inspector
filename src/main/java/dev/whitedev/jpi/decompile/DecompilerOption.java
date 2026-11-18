@@ -30,14 +30,34 @@ public final class DecompilerOption {
         return new DecompilerOption(pluginId + ":" + provider.id(), provider.name(), null, provider);
     }
 
-    public String id() { return id; }
-    DecompilerEngine engine() { return engine; }
-    DecompilerProvider provider() { return provider; }
-    public boolean plugin() { return provider != null; }
+    public String id() {
+        return id;
+    }
 
-    @Override public String toString() { return name; }
-    @Override public boolean equals(Object value) {
+    DecompilerEngine engine() {
+        return engine;
+    }
+
+    DecompilerProvider provider() {
+        return provider;
+    }
+
+    public boolean plugin() {
+        return provider != null;
+    }
+
+    @Override
+    public String toString() {
+        return name;
+    }
+
+    @Override
+    public boolean equals(Object value) {
         return value instanceof DecompilerOption other && id.equals(other.id);
     }
-    @Override public int hashCode() { return Objects.hash(id); }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id);
+    }
 }

@@ -13,6 +13,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 public final class ExceptionAnalyzer implements AutoCloseable {
@@ -52,7 +53,9 @@ public final class ExceptionAnalyzer implements AutoCloseable {
         }
         final Object recording = type.getConstructor().newInstance();
         final long epoch;
-        synchronized (dataLock) { epoch = generation; }
+        synchronized (dataLock) {
+            epoch = generation;
+        }
         try {
             invoke(recording, "setMaxSize", new Class<?>[]{long.class}, 32L * 1024 * 1024);
             invoke(recording, "setMaxAge", new Class<?>[]{Duration.class}, Duration.ofSeconds(60));
@@ -78,7 +81,7 @@ public final class ExceptionAnalyzer implements AutoCloseable {
             deadline = new Thread(() -> {
                 try {
                     long remaining = deadlineNanos - System.nanoTime();
-                    if (remaining > 0) java.util.concurrent.TimeUnit.NANOSECONDS.sleep(remaining);
+                    if (remaining > 0) TimeUnit.NANOSECONDS.sleep(remaining);
                     stopIfCurrent(recording);
                 } catch (InterruptedException ignored) {
                     Thread.currentThread().interrupt();
@@ -90,7 +93,10 @@ public final class ExceptionAnalyzer implements AutoCloseable {
             stream = null;
             state = "error";
             message = "Unable to start JFR stream: " + rootMessage(error);
-            try { invoke(recording, "close", new Class<?>[0]); } catch (Exception ignored) { }
+            try {
+                invoke(recording, "close", new Class<?>[0]);
+            } catch (Exception ignored) {
+            }
             throw error;
         }
     }
@@ -98,7 +104,9 @@ public final class ExceptionAnalyzer implements AutoCloseable {
     public synchronized String stop() {
         Object current = stream;
         stream = null;
-        synchronized (dataLock) { generation++; }
+        synchronized (dataLock) {
+            generation++;
+        }
         if (deadline != null && deadline != Thread.currentThread()) deadline.interrupt();
         deadline = null;
         if (current != null) {
@@ -151,7 +159,8 @@ public final class ExceptionAnalyzer implements AutoCloseable {
     }
 
     public String snapshot(int windowSeconds) {
-        if (windowSeconds < 1 || windowSeconds > 300) throw new IllegalArgumentException("Window must be between 1 and 300 seconds");
+        if (windowSeconds < 1 || windowSeconds > 300)
+            throw new IllegalArgumentException("Window must be between 1 and 300 seconds");
         long now = System.currentTimeMillis();
         synchronized (dataLock) {
             long cutoff = now - windowSeconds * 1000L;
@@ -165,14 +174,20 @@ public final class ExceptionAnalyzer implements AutoCloseable {
                 StringBuilder entry = new StringBuilder("E\t").append(encode(summary.type)).append('\t').append(counts.getOrDefault(summary, 0L))
                         .append('\t').append(summary.total).append('\t').append(summary.first).append('\t').append(summary.last)
                         .append('\t').append(summary.threads.size()).append('\t').append(summary.threadOverflow).append('\n');
-                if (out.length() + entry.length() > MAX_SNAPSHOT_BYTES) { omitted++; continue; }
+                if (out.length() + entry.length() > MAX_SNAPSHOT_BYTES) {
+                    omitted++;
+                    continue;
+                }
                 out.append(entry);
                 for (Location location : summary.locations.values()) {
                     StringBuilder detail = new StringBuilder("L\t").append(encode(summary.type)).append('\t').append(location.count).append('\t')
                             .append(encode(location.owner)).append('\t').append(encode(location.method)).append('\t')
                             .append(encode(location.descriptor)).append('\t').append(location.line).append('\t')
                             .append(encode(location.stack)).append('\n');
-                    if (out.length() + detail.length() > MAX_SNAPSHOT_BYTES) { omitted++; continue; }
+                    if (out.length() + detail.length() > MAX_SNAPSHOT_BYTES) {
+                        omitted++;
+                        continue;
+                    }
                     out.append(detail);
                 }
             }
@@ -215,7 +230,9 @@ public final class ExceptionAnalyzer implements AutoCloseable {
             }
             record(epoch, type, timestamp, threadId, owner, method, descriptor, line, stack.toString());
         } catch (Exception ignored) {
-            synchronized (dataLock) { if (epoch == generation) dropped++; }
+            synchronized (dataLock) {
+                if (epoch == generation) dropped++;
+            }
         }
     }
 
@@ -225,7 +242,10 @@ public final class ExceptionAnalyzer implements AutoCloseable {
             if (epoch != generation) return;
             Summary summary = summaries.get(type);
             if (summary == null) {
-                if (summaries.size() >= MAX_TYPES) { dropped++; return; }
+                if (summaries.size() >= MAX_TYPES) {
+                    dropped++;
+                    return;
+                }
                 summary = new Summary(type, timestamp);
                 summaries.put(type, summary);
             }
@@ -247,14 +267,24 @@ public final class ExceptionAnalyzer implements AutoCloseable {
             if (location != null) location.count++;
             else dropped++;
             while (!samples.isEmpty() && samples.peekFirst().timestamp < timestamp - 300000L) samples.removeFirst();
-            if (samples.size() >= MAX_EVENTS) { samples.removeFirst(); dropped++; }
+            if (samples.size() >= MAX_EVENTS) {
+                samples.removeFirst();
+                dropped++;
+            }
             samples.addLast(new Sample(summary, timestamp));
         }
     }
 
-    long generation() { synchronized (dataLock) { return generation; } }
+    long generation() {
+        synchronized (dataLock) {
+            return generation;
+        }
+    }
 
-    @Override public void close() { stop(); }
+    @Override
+    public void close() {
+        stop();
+    }
 
     private static int duration(String settings) throws IOException {
         for (String part : settings.split("[;\n]")) {
@@ -262,7 +292,8 @@ public final class ExceptionAnalyzer implements AutoCloseable {
             try {
                 int value = Integer.parseInt(part.substring(16));
                 if (value >= 1 && value <= 3600) return value;
-            } catch (NumberFormatException ignored) { }
+            } catch (NumberFormatException ignored) {
+            }
             throw new IOException("durationSeconds must be between 1 and 3600");
         }
         return 60;
@@ -289,21 +320,34 @@ public final class ExceptionAnalyzer implements AutoCloseable {
         final Map<String, Location> locations = new LinkedHashMap<>();
         long first, last, total;
         boolean threadOverflow;
-        Summary(String type, long timestamp) { this.type = type; first = last = timestamp; }
+
+        Summary(String type, long timestamp) {
+            this.type = type;
+            first = last = timestamp;
+        }
     }
 
     private static final class Location {
         final String owner, method, descriptor, stack;
         final int line;
         long count;
+
         Location(String owner, String method, String descriptor, int line, String stack) {
-            this.owner = owner; this.method = method; this.descriptor = descriptor; this.line = line; this.stack = stack;
+            this.owner = owner;
+            this.method = method;
+            this.descriptor = descriptor;
+            this.line = line;
+            this.stack = stack;
         }
     }
 
     private static final class Sample {
         final Summary summary;
         final long timestamp;
-        Sample(Summary summary, long timestamp) { this.summary = summary; this.timestamp = timestamp; }
+
+        Sample(Summary summary, long timestamp) {
+            this.summary = summary;
+            this.timestamp = timestamp;
+        }
     }
 }

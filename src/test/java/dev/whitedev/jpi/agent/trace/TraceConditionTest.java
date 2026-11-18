@@ -9,7 +9,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TraceConditionTest {
-    @Test void evaluatesSupportedRuntimeFilters() {
+    @Test
+    void evaluatesSupportedRuntimeFilters() {
         TraceCondition.Context context = new TraceCondition.Context(
                 new Object(), new Object[]{"access-token", Integer.valueOf(5)}, Boolean.FALSE,
                 null, 12_000_000L, "Worker-2");

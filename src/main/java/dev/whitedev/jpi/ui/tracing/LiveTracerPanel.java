@@ -1,16 +1,14 @@
 package dev.whitedev.jpi.ui.tracing;
 
-import dev.whitedev.jpi.ui.context.AnalysisTarget;
-import dev.whitedev.jpi.ui.context.ContextActions;
-
-import dev.whitedev.jpi.ui.Async;
-import dev.whitedev.jpi.ui.SessionAware;
-import dev.whitedev.jpi.ui.Ui;
-import dev.whitedev.jpi.ui.debug.DebuggerPanel;
-
 import dev.whitedev.jpi.attach.InspectorSession;
 import dev.whitedev.jpi.deobfuscation.DeobfuscationWorkspace;
 import dev.whitedev.jpi.protocol.Operation;
+import dev.whitedev.jpi.ui.Async;
+import dev.whitedev.jpi.ui.SessionAware;
+import dev.whitedev.jpi.ui.Ui;
+import dev.whitedev.jpi.ui.context.AnalysisTarget;
+import dev.whitedev.jpi.ui.context.ContextActions;
+import dev.whitedev.jpi.ui.debug.DebuggerPanel;
 import dev.whitedev.jpi.ui.timeline.RuntimeTimelineStore;
 import dev.whitedev.jpi.ui.timeline.TimelineEvent;
 import dev.whitedev.jpi.ui.timeline.TimelineSource;
@@ -39,13 +37,16 @@ import java.util.Map;
 public final class LiveTracerPanel extends JPanel implements SessionAware {
     private boolean installing;
 
-    public boolean canStartProbe() { return session != null && !installing; }
+    public boolean canStartProbe() {
+        return session != null && !installing;
+    }
 
     public void traceTarget(String identifier, String owner, String method, String descriptor) {
         if (!canStartProbe()) return;
         selectTarget(identifier, owner, method, descriptor);
         startProbe();
     }
+
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm:ss.SSS")
             .withZone(ZoneId.systemDefault());
     private static final int MAX_LOCAL_EVENTS = 10_000;
@@ -124,7 +125,7 @@ public final class LiveTracerPanel extends JPanel implements SessionAware {
         headerActions.add(stop);
         headerActions.add(stopAll);
         add(Ui.sectionHeader("Live behavior tracer",
-                "Observe real method calls, values, exceptions, timing, threads, and caller paths", headerActions),
+                        "Observe real method calls, values, exceptions, timing, threads, and caller paths", headerActions),
                 BorderLayout.NORTH);
 
         JPanel configuration = configurationPanel();
@@ -136,15 +137,18 @@ public final class LiveTracerPanel extends JPanel implements SessionAware {
             if (!event.getValueIsAdjusting()) showSelectedEvent();
         });
         events.addMouseListener(new MouseAdapter() {
-            @Override public void mouseClicked(MouseEvent event) {
+            @Override
+            public void mouseClicked(MouseEvent event) {
                 if (event.getClickCount() == 2) useSelectedAsProbe();
             }
 
-            @Override public void mousePressed(MouseEvent event) {
+            @Override
+            public void mousePressed(MouseEvent event) {
                 showDebugMenu(event, events);
             }
 
-            @Override public void mouseReleased(MouseEvent event) {
+            @Override
+            public void mouseReleased(MouseEvent event) {
                 showDebugMenu(event, events);
             }
         });
@@ -154,7 +158,8 @@ public final class LiveTracerPanel extends JPanel implements SessionAware {
             if (selected instanceof TraceEvent) showEvent((TraceEvent) selected);
         });
         callTree.addMouseListener(new MouseAdapter() {
-            @Override public void mouseClicked(MouseEvent event) {
+            @Override
+            public void mouseClicked(MouseEvent event) {
                 if (event.getClickCount() == 2) {
                     Object selected = selectedTreeValue();
                     if (selected instanceof TraceEvent) useAsProbe((TraceEvent) selected);
@@ -162,11 +167,13 @@ public final class LiveTracerPanel extends JPanel implements SessionAware {
             }
 
 
-            @Override public void mousePressed(MouseEvent event) {
+            @Override
+            public void mousePressed(MouseEvent event) {
                 showDebugMenu(event, callTree);
             }
 
-            @Override public void mouseReleased(MouseEvent event) {
+            @Override
+            public void mouseReleased(MouseEvent event) {
                 showDebugMenu(event, callTree);
             }
         });
@@ -232,7 +239,8 @@ public final class LiveTracerPanel extends JPanel implements SessionAware {
         debugNextCall.setEnabled(debugger != null && methods.getSelectedItem() != null);
     }
 
-    @Override public void setSession(InspectorSession session) {
+    @Override
+    public void setSession(InspectorSession session) {
         installing = false;
         this.session = session;
         loadingMethods = false;
@@ -726,7 +734,8 @@ public final class LiveTracerPanel extends JPanel implements SessionAware {
 
     private static DefaultTableModel readOnlyModel(String... columns) {
         return new DefaultTableModel(columns, 0) {
-            @Override public boolean isCellEditable(int row, int column) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
                 return false;
             }
         };
@@ -758,7 +767,8 @@ public final class LiveTracerPanel extends JPanel implements SessionAware {
                     values[1], values[2], Boolean.parseBoolean(values[3]));
         }
 
-        @Override public String toString() {
+        @Override
+        public String toString() {
             String visible = displayName.equals(name) ? name : displayName + " [" + name + "]";
             return modifiers + " " + visible + descriptor;
         }
@@ -851,7 +861,8 @@ public final class LiveTracerPanel extends JPanel implements SessionAware {
             }
         }
 
-        @Override public String toString() {
+        @Override
+        public String toString() {
             return "#" + sequence + "  " + className + "." + methodName + "  "
                     + outcome + "  " + duration(duration);
         }

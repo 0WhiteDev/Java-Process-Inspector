@@ -1,22 +1,22 @@
 package dev.whitedev.jpi.ui.workspace;
 
-import dev.whitedev.jpi.ui.context.AnalysisTarget;
-import dev.whitedev.jpi.ui.context.ContextActions;
-
-import dev.whitedev.jpi.ui.Async;
-import dev.whitedev.jpi.ui.SessionAware;
-import dev.whitedev.jpi.ui.Ui;
-
 import dev.whitedev.jpi.attach.InspectorSession;
 import dev.whitedev.jpi.deobfuscation.DeobfuscationWorkspace;
 import dev.whitedev.jpi.deobfuscation.MappingEntry;
-import dev.whitedev.jpi.deobfuscation.io.MappingFormats;
 import dev.whitedev.jpi.deobfuscation.MappingInventory;
 import dev.whitedev.jpi.deobfuscation.MappingKind;
+import dev.whitedev.jpi.deobfuscation.io.MappingFormats;
 import dev.whitedev.jpi.deobfuscation.search.MappingSearchQuery;
 import dev.whitedev.jpi.protocol.Operation;
+import dev.whitedev.jpi.ui.Async;
+import dev.whitedev.jpi.ui.SessionAware;
+import dev.whitedev.jpi.ui.Ui;
+import dev.whitedev.jpi.ui.context.AnalysisTarget;
+import dev.whitedev.jpi.ui.context.ContextActions;
 
+import javax.lang.model.SourceVersion;
 import javax.swing.*;
+import javax.swing.Timer;
 import javax.swing.border.EmptyBorder;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
@@ -25,8 +25,10 @@ import javax.swing.table.AbstractTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
 import java.awt.*;
 import java.io.File;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -36,6 +38,7 @@ public final class DeobfuscationWorkspacePanel extends JPanel implements Session
         fingerprintWarning.setToolTipText(message);
         fingerprintWarning.setVisible(!message.isEmpty());
     }
+
     private final JLabel fingerprintWarning = new JLabel();
     private final DeobfuscationWorkspace workspace;
     private final JTextField scope = new JTextField();
@@ -53,7 +56,7 @@ public final class DeobfuscationWorkspacePanel extends JPanel implements Session
     private final JLabel status = new JLabel("Enter a package prefix");
     private final MappingTableModel model = new MappingTableModel();
     private final JTable table = new JTable(model);
-    private final javax.swing.Timer saveTimer = new javax.swing.Timer(600, event -> saveDefault());
+    private final Timer saveTimer = new Timer(600, event -> saveDefault());
     private final Path defaultFile = Path.of(System.getProperty("user.home"), ".jpi", "deobfuscation-workspace.json");
     private InspectorSession session;
 
@@ -77,7 +80,7 @@ public final class DeobfuscationWorkspacePanel extends JPanel implements Session
         actions.add(importMapping);
         actions.add(exportMapping);
         add(Ui.sectionHeader("Deobfuscation workspace",
-                "Build a persistent naming layer without modifying the running target", actions),
+                        "Build a persistent naming layer without modifying the running target", actions),
                 BorderLayout.NORTH);
 
         JPanel body = new JPanel(new BorderLayout(0, 12));
@@ -89,7 +92,8 @@ public final class DeobfuscationWorkspacePanel extends JPanel implements Session
         setSession(null);
     }
 
-    @Override public void setSession(InspectorSession value) {
+    @Override
+    public void setSession(InspectorSession value) {
         session = value;
         load.setEnabled(value != null);
         autoMap.setEnabled(value != null);
@@ -153,9 +157,20 @@ public final class DeobfuscationWorkspacePanel extends JPanel implements Session
                 "Text or class=abc field=a,b,c method=l,p,av1");
         filter.putClientProperty("JTextField.showClearButton", true);
         filter.getDocument().addDocumentListener(new DocumentListener() {
-            @Override public void insertUpdate(DocumentEvent event) { refreshRows(); }
-            @Override public void removeUpdate(DocumentEvent event) { refreshRows(); }
-            @Override public void changedUpdate(DocumentEvent event) { refreshRows(); }
+            @Override
+            public void insertUpdate(DocumentEvent event) {
+                refreshRows();
+            }
+
+            @Override
+            public void removeUpdate(DocumentEvent event) {
+                refreshRows();
+            }
+
+            @Override
+            public void changedUpdate(DocumentEvent event) {
+                refreshRows();
+            }
         });
         kindFilter.addItem("All kinds");
         for (MappingKind kind : MappingKind.values()) kindFilter.addItem(kind);
@@ -289,7 +304,8 @@ public final class DeobfuscationWorkspacePanel extends JPanel implements Session
                     null, options, options[0]);
             if (choice == 0) workspace.merge(imported);
             else if (choice == 1) workspace.replace(imported);
-            if (choice == 1 || choice == 0 && workspace.targetFingerprint().isEmpty()) workspace.setTargetFingerprint(fingerprint);
+            if (choice == 1 || choice == 0 && workspace.targetFingerprint().isEmpty())
+                workspace.setTargetFingerprint(fingerprint);
         } catch (Exception error) {
             Ui.error(this, error);
         }
@@ -334,10 +350,10 @@ public final class DeobfuscationWorkspacePanel extends JPanel implements Session
             Path temporary = defaultFile.resolveSibling(defaultFile.getFileName() + ".tmp");
             MappingFormats.write(temporary, MappingFormats.Format.JSON, workspace.entries(), workspace.targetFingerprint());
             try {
-                Files.move(temporary, defaultFile, java.nio.file.StandardCopyOption.ATOMIC_MOVE,
-                        java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-            } catch (java.nio.file.AtomicMoveNotSupportedException ignored) {
-                Files.move(temporary, defaultFile, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                Files.move(temporary, defaultFile, StandardCopyOption.ATOMIC_MOVE,
+                        StandardCopyOption.REPLACE_EXISTING);
+            } catch (AtomicMoveNotSupportedException ignored) {
+                Files.move(temporary, defaultFile, StandardCopyOption.REPLACE_EXISTING);
             }
         } catch (Exception error) {
             status.setText("Automatic save failed: " + error.getMessage());
@@ -362,13 +378,14 @@ public final class DeobfuscationWorkspacePanel extends JPanel implements Session
         filter.setText("");
         kindFilter.setSelectedIndex(0);
         refreshRows();
-        for (int row = 0; row < model.getRowCount(); row++) if (model.entry(row).key().equals(key)) {
-            int view = table.convertRowIndexToView(row);
-            table.setRowSelectionInterval(view, view);
-            table.scrollRectToVisible(table.getCellRect(view, 0, true));
-            table.requestFocusInWindow();
-            return;
-        }
+        for (int row = 0; row < model.getRowCount(); row++)
+            if (model.entry(row).key().equals(key)) {
+                int view = table.convertRowIndexToView(row);
+                table.setRowSelectionInterval(view, view);
+                table.scrollRectToVisible(table.getCellRect(view, 0, true));
+                table.requestFocusInWindow();
+                return;
+            }
         status.setText("This mapping or note is no longer in the workspace");
     }
 
@@ -420,13 +437,33 @@ public final class DeobfuscationWorkspacePanel extends JPanel implements Session
             return rows.get(row);
         }
 
-        @Override public int getRowCount() { return rows.size(); }
-        @Override public int getColumnCount() { return columns.length; }
-        @Override public String getColumnName(int column) { return columns[column]; }
-        @Override public Class<?> getColumnClass(int column) { return column == 8 ? Boolean.class : String.class; }
-        @Override public boolean isCellEditable(int row, int column) { return column >= 4; }
+        @Override
+        public int getRowCount() {
+            return rows.size();
+        }
 
-        @Override public Object getValueAt(int row, int column) {
+        @Override
+        public int getColumnCount() {
+            return columns.length;
+        }
+
+        @Override
+        public String getColumnName(int column) {
+            return columns[column];
+        }
+
+        @Override
+        public Class<?> getColumnClass(int column) {
+            return column == 8 ? Boolean.class : String.class;
+        }
+
+        @Override
+        public boolean isCellEditable(int row, int column) {
+            return column >= 4;
+        }
+
+        @Override
+        public Object getValueAt(int row, int column) {
             MappingEntry entry = rows.get(row);
             if (column == 0) return entry.kind().name();
             if (column == 1) {
@@ -446,7 +483,8 @@ public final class DeobfuscationWorkspacePanel extends JPanel implements Session
             return entry.enabled();
         }
 
-        @Override public void setValueAt(Object value, int row, int column) {
+        @Override
+        public void setValueAt(Object value, int row, int column) {
             MappingEntry entry = rows.get(row);
             if (column == 4) {
                 String mapped = String.valueOf(value).trim();
@@ -469,8 +507,7 @@ public final class DeobfuscationWorkspacePanel extends JPanel implements Session
                     return;
                 }
                 entry.setColor(color);
-            }
-            else if (column == 7) entry.setComment(String.valueOf(value));
+            } else if (column == 7) entry.setComment(String.valueOf(value));
             else if (column == 8) entry.setEnabled(Boolean.TRUE.equals(value));
             workspace.update(entry);
         }
@@ -481,15 +518,16 @@ public final class DeobfuscationWorkspacePanel extends JPanel implements Session
         String[] parts = kind == MappingKind.CLASS || kind == MappingKind.PACKAGE
                 ? value.split("\\.", -1) : new String[]{value};
         for (String part : parts) {
-            if (!javax.lang.model.SourceVersion.isIdentifier(part)
-                    || javax.lang.model.SourceVersion.isKeyword(part)) return false;
+            if (!SourceVersion.isIdentifier(part)
+                    || SourceVersion.isKeyword(part)) return false;
         }
         return true;
     }
 
     private final class MappingRenderer extends DefaultTableCellRenderer {
-        @Override public Component getTableCellRendererComponent(JTable source, Object value,
-                boolean selected, boolean focused, int row, int column) {
+        @Override
+        public Component getTableCellRendererComponent(JTable source, Object value,
+                                                       boolean selected, boolean focused, int row, int column) {
             Component component = super.getTableCellRendererComponent(source, value, selected, focused, row, column);
             if (!selected) {
                 component.setBackground(Ui.SURFACE);

@@ -1,5 +1,6 @@
 package dev.whitedev.jpi.agent.file;
 
+import dev.whitedev.jpi.agent.RuntimeAccess;
 import dev.whitedev.jpi.agent.hook.HookClassRegistry;
 
 import java.io.ByteArrayOutputStream;
@@ -7,9 +8,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.lang.instrument.ClassDefinition;
 import java.lang.instrument.Instrumentation;
-import dev.whitedev.jpi.agent.RuntimeAccess;
-import java.nio.charset.StandardCharsets;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collections;
@@ -47,7 +47,8 @@ public final class FileInterceptorManager {
         List<Class<?>> classes = new ArrayList<Class<?>>();
         for (Class<?> type : instrumentation.getAllLoadedClasses()) classes.add(type);
         Collections.sort(classes, new Comparator<Class<?>>() {
-            @Override public int compare(Class<?> left, Class<?> right) {
+            @Override
+            public int compare(Class<?> left, Class<?> right) {
                 return left.getName().compareTo(right.getName());
             }
         });
@@ -67,7 +68,8 @@ public final class FileInterceptorManager {
             try {
                 FileCallSiteTransformer.Result result = FileCallSiteTransformer.transform(source);
                 if (result.sites == 0) continue;
-                if (sites + result.sites > config.maxSites || bytes + source.length + result.bytecode.length > MAX_BYTES) break;
+                if (sites + result.sites > config.maxSites || bytes + source.length + result.bytecode.length > MAX_BYTES)
+                    break;
                 instrumentation.redefineClasses(new ClassDefinition(type, result.bytecode));
                 transformed.put(type, source.clone());
                 registry.recordApplied(type, result.bytecode);
@@ -125,7 +127,8 @@ public final class FileInterceptorManager {
 
     public String putRule(String payload) {
         FileRule rule = parseRule(payload);
-        if (rule.decision == FileDecision.SPOOF) throw new IllegalArgumentException("SPOOF is not enabled in the stable MVP");
+        if (rule.decision == FileDecision.SPOOF)
+            throw new IllegalArgumentException("SPOOF is not enabled in the stable MVP");
         FileInterceptorRuntime.rules().put(rule);
         return rule.id;
     }
@@ -258,7 +261,8 @@ public final class FileInterceptorManager {
             String value = setting(source, key);
             if (value.isEmpty()) return fallback;
             int parsed = Integer.parseInt(value);
-            if (parsed < minimum || parsed > maximum) throw new IllegalArgumentException(key + " is outside its allowed range");
+            if (parsed < minimum || parsed > maximum)
+                throw new IllegalArgumentException(key + " is outside its allowed range");
             return parsed;
         }
 

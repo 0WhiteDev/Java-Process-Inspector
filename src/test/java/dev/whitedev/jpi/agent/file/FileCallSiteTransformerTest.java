@@ -3,8 +3,8 @@ package dev.whitedev.jpi.agent.file;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
-import java.io.InputStream;
 import java.io.FileOutputStream;
+import java.io.InputStream;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.channels.FileChannel;
@@ -21,11 +21,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 class FileCallSiteTransformerTest {
-    @AfterEach void clear() {
+    @AfterEach
+    void clear() {
         FileInterceptorRuntime.clear();
     }
 
-    @Test void observesReadsAndWritesWithoutChangingBehavior() throws Exception {
+    @Test
+    void observesReadsAndWritesWithoutChangingBehavior() throws Exception {
         FileInterceptorRuntime.configure(100, true, 4096);
         Class<?> fixture = transformed();
         Path file = Files.createTempFile("jpi-file-observe-", ".bin");
@@ -41,7 +43,8 @@ class FileCallSiteTransformerTest {
         assertTrue(events.contains("\t4\t"));
     }
 
-    @Test void redirectsConsistentlyAndBlocksWithFileSystemException() throws Exception {
+    @Test
+    void redirectsConsistentlyAndBlocksWithFileSystemException() throws Exception {
         Path root = Files.createTempDirectory("jpi-file-sandbox-");
         Path original = root.resolveSibling("jpi-original-").resolve("state.bin");
         FileInterceptorRuntime.rules().put(new FileRule("redirect", Collections.singleton(FileOperation.WRITE),
@@ -68,7 +71,8 @@ class FileCallSiteTransformerTest {
         }
     }
 
-    @Test void capturesCreateCopyMoveOpenTruncateAndDelete() throws Exception {
+    @Test
+    void capturesCreateCopyMoveOpenTruncateAndDelete() throws Exception {
         FileInterceptorRuntime.configure(100, false, 4096);
         Class<?> fixture = transformed();
         Path directory = Files.createTempDirectory("jpi-file-operations-");

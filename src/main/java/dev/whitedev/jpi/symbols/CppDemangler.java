@@ -6,7 +6,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 public final class CppDemangler {
-    private CppDemangler() {}
+    private CppDemangler() {
+    }
 
     public static String demangle(String name) {
         if (name == null || name.isBlank()) return "";
@@ -140,5 +141,6 @@ public final class CppDemangler {
         return String.join(", ", values);
     }
 
-    private record ParseResult(List<String> parts, int offset) {}
+    private record ParseResult(List<String> parts, int offset) {
+    }
 }

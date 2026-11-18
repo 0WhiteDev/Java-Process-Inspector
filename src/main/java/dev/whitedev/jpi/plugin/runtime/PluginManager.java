@@ -1,8 +1,8 @@
 package dev.whitedev.jpi.plugin.runtime;
 
 import dev.whitedev.jpi.attach.InspectorSession;
-import dev.whitedev.jpi.plugin.api.JpiPlugin;
 import dev.whitedev.jpi.plugin.api.JpiContext;
+import dev.whitedev.jpi.plugin.api.JpiPlugin;
 import dev.whitedev.jpi.plugin.api.JpiSession;
 import dev.whitedev.jpi.plugin.api.Registration;
 
@@ -17,12 +17,12 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.ServiceLoader;
 import java.util.Set;
-import java.util.Optional;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 public final class PluginManager implements AutoCloseable {
     public static final int API_VERSION = 1;
@@ -46,8 +46,14 @@ public final class PluginManager implements AutoCloseable {
         this.dataDirectory = (parent == null ? this.pluginDirectory : parent).resolve("plugin-data").normalize();
     }
 
-    public ExtensionRegistry extensions() { return registry; }
-    public Path pluginDirectory() { return pluginDirectory; }
+    public ExtensionRegistry extensions() {
+        return registry;
+    }
+
+    public Path pluginDirectory() {
+        return pluginDirectory;
+    }
+
     public synchronized List<PluginDescriptor> descriptors() {
         List<PluginDescriptor> values = new ArrayList<>();
         for (PluginDescriptor descriptor : descriptors) {
@@ -91,7 +97,8 @@ public final class PluginManager implements AutoCloseable {
         Files.createDirectories(pluginDirectory);
         Path destination = pluginDirectory.resolve(source.getFileName()).normalize();
         if (!destination.startsWith(pluginDirectory)) throw new IOException("Invalid plugin file name");
-        if (Files.exists(destination)) throw new IOException("A plugin JAR with this name is already installed: " + destination.getFileName());
+        if (Files.exists(destination))
+            throw new IOException("A plugin JAR with this name is already installed: " + destination.getFileName());
         return Files.copy(source, destination, StandardCopyOption.COPY_ATTRIBUTES);
     }
 
@@ -124,7 +131,10 @@ public final class PluginManager implements AutoCloseable {
                     plugin.initialize(context);
                 } catch (Throwable error) {
                     context.close();
-                    try { plugin.shutdown(); } catch (Throwable ignored) {}
+                    try {
+                        plugin.shutdown();
+                    } catch (Throwable ignored) {
+                    }
                     throw error;
                 }
                 loaded.add(new LoadedPlugin(plugin, context, loader, jar));
@@ -141,23 +151,33 @@ public final class PluginManager implements AutoCloseable {
             descriptors.add(new PluginDescriptor("", jar.getFileName().toString(), "", jar,
                     PluginDescriptor.Status.FAILED, message(error), 0));
         } finally {
-            if (loader != null && !retained) try { loader.close(); } catch (IOException ignored) {}
+            if (loader != null && !retained) try {
+                loader.close();
+            } catch (IOException ignored) {
+            }
         }
     }
 
     private synchronized void unload() {
         for (int index = loaded.size() - 1; index >= 0; index--) {
             LoadedPlugin value = loaded.get(index);
-            try { value.plugin.shutdown(); } catch (Throwable ignored) {}
+            try {
+                value.plugin.shutdown();
+            } catch (Throwable ignored) {
+            }
             value.context.close();
-            try { value.loader.close(); } catch (IOException ignored) {}
+            try {
+                value.loader.close();
+            } catch (IOException ignored) {
+            }
         }
         loaded.clear();
         contexts.clear();
         descriptors.clear();
     }
 
-    @Override public synchronized void close() {
+    @Override
+    public synchronized void close() {
         unload();
         session = null;
         changed();
@@ -195,5 +215,6 @@ public final class PluginManager implements AutoCloseable {
         return current.getClass().getSimpleName() + (message == null || message.isBlank() ? "" : ": " + message);
     }
 
-    private record LoadedPlugin(JpiPlugin plugin, PluginContext context, URLClassLoader loader, Path source) {}
+    private record LoadedPlugin(JpiPlugin plugin, PluginContext context, URLClassLoader loader, Path source) {
+    }
 }

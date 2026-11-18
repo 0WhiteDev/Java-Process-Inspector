@@ -1,7 +1,7 @@
 package dev.whitedev.jpi.ui.heap;
 
-import dev.whitedev.jpi.heap.HprofSnapshot;
 import dev.whitedev.jpi.heap.HprofAnalysis;
+import dev.whitedev.jpi.heap.HprofSnapshot;
 import dev.whitedev.jpi.ui.Async;
 import dev.whitedev.jpi.ui.Ui;
 
@@ -10,22 +10,24 @@ import javax.swing.JCheckBox;
 import javax.swing.JFileChooser;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.JSpinner;
 import javax.swing.JSplitPane;
 import javax.swing.JTabbedPane;
 import javax.swing.JTable;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.ListSelectionModel;
-import javax.swing.JSpinner;
 import javax.swing.SpinnerNumberModel;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import javax.swing.table.DefaultTableModel;
 import java.awt.BorderLayout;
 import java.awt.FlowLayout;
+import java.awt.GridLayout;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.concurrent.Callable;
 import java.util.function.Consumer;
 
 public final class HprofPanel extends JPanel {
@@ -57,7 +59,7 @@ public final class HprofPanel extends JPanel {
     public HprofPanel() {
         super(new BorderLayout(0, 8));
         setOpaque(false);
-        JPanel controls = new JPanel(new java.awt.GridLayout(0, 1, 0, 6));
+        JPanel controls = new JPanel(new GridLayout(0, 1, 0, 6));
         controls.setOpaque(false);
         JPanel files = row();
         files.add(open);
@@ -89,7 +91,8 @@ public final class HprofPanel extends JPanel {
         follow(incoming);
         follow(outgoing);
         loaderClasses.addMouseListener(new MouseAdapter() {
-            @Override public void mouseClicked(MouseEvent event) {
+            @Override
+            public void mouseClicked(MouseEvent event) {
                 if (event.getClickCount() != 2 || busy || loaderClasses.getSelectedRow() < 0) return;
                 filter.setText(loaderClasses.getValueAt(loaderClasses.getSelectedRow(), 1).toString());
                 search();
@@ -124,7 +127,12 @@ public final class HprofPanel extends JPanel {
         int memoryMiB = ((Number) memory.getValue()).intValue();
         HprofAnalysis previous = snapshot;
         run("Opening HPROF snapshot...", () -> HprofAnalysis.open(file, memoryMiB), loaded -> {
-            if (previous != null) Async.run(() -> { previous.close(); return null; }, ignored -> {}, ignored -> {});
+            if (previous != null) Async.run(() -> {
+                previous.close();
+                return null;
+            }, ignored -> {
+            }, ignored -> {
+            });
             snapshot = loaded;
             clear();
             status.setText("Loaded " + loaded.file() + ". Search a class or inspect a snapshot object ID.");
@@ -136,7 +144,8 @@ public final class HprofPanel extends JPanel {
         filter.setText(className);
         retained.setSelected(true);
         if (snapshot != null && !busy) search();
-        else status.setText("Open HPROF to find loader instances. Choose the matching snapshot object; live and HPROF IDs differ.");
+        else
+            status.setText("Open HPROF to find loader instances. Choose the matching snapshot object; live and HPROF IDs differ.");
     }
 
     private void chooseFile() {
@@ -153,9 +162,14 @@ public final class HprofPanel extends JPanel {
         clear();
         status.setText("Closing heap analyzer...");
         long closedGeneration = generation;
-        if (current != null) Async.run(() -> { current.close(); return null; }, ignored -> {
-            if (generation == closedGeneration) status.setText("Snapshot closed. Analyzer process and mapped files have been released.");
-        }, ignored -> {});
+        if (current != null) Async.run(() -> {
+            current.close();
+            return null;
+        }, ignored -> {
+            if (generation == closedGeneration)
+                status.setText("Snapshot closed. Analyzer process and mapped files have been released.");
+        }, ignored -> {
+        });
         updateControls();
     }
 
@@ -197,31 +211,36 @@ public final class HprofPanel extends JPanel {
 
     private void renderObjects(List<HprofSnapshot.ObjectSummary> rows) {
         objectsModel.setRowCount(0);
-        for (var row : rows) objectsModel.addRow(new Object[]{hex(row.id()), row.label(), row.shallowSize(),
-                row.retainedSize() < 0 ? "not computed" : row.retainedSize()});
+        for (var row : rows)
+            objectsModel.addRow(new Object[]{hex(row.id()), row.label(), row.shallowSize(),
+                    row.retainedSize() < 0 ? "not computed" : row.retainedSize()});
     }
 
     private void renderReport(HprofSnapshot.ObjectReport report) {
         renderReferences(incomingModel, report.incoming());
         renderReferences(outgoingModel, report.outgoing());
         loaderModel.setRowCount(0);
-        for (var defined : report.loaderClasses()) loaderModel.addRow(new Object[]{hex(defined.classId()),
-                defined.name(), defined.instances(), defined.shallowBytes()});
+        for (var defined : report.loaderClasses())
+            loaderModel.addRow(new Object[]{hex(defined.classId()),
+                    defined.name(), defined.instances(), defined.shallowBytes()});
         StringBuilder text = new StringBuilder();
         for (int index = 0; index < report.paths().size(); index++) {
             var path = report.paths().get(index);
             text.append("Path ").append(index + 1).append(" | GC ROOT: ").append(path.kind()).append('\n');
             for (var step : path.steps()) {
                 text.append(step.object()).append('\n');
-                if (!"selected object".equals(step.edgeToChild())) text.append("  | ").append(step.edgeToChild()).append("\n  v\n");
+                if (!"selected object".equals(step.edgeToChild()))
+                    text.append("  | ").append(step.edgeToChild()).append("\n  v\n");
             }
             text.append('\n');
         }
-        if (report.paths().isEmpty()) text.append("No GC root path found under the selected reference policy and search limits.\n");
+        if (report.paths().isEmpty())
+            text.append("No GC root path found under the selected reference policy and search limits.\n");
         text.append("Search visited ").append(report.visitedObjects()).append(" objects.\n")
                 .append("Up to 8 distinct roots, 50,000 visited objects and depth 128.\n")
                 .append("Weak / soft / phantom referents: ").append(excludeWeak.isSelected() ? "excluded" : "included").append('\n');
-        if (report.pathsLimited()) text.append("Path results are limited; explore incoming references for additional paths.\n");
+        if (report.pathsLimited())
+            text.append("Path results are limited; explore incoming references for additional paths.\n");
         paths.setText(text.toString());
         paths.setCaretPosition(0);
         summary.setText(report.object().label() + "\nSnapshot: " + snapshot.file()
@@ -241,18 +260,24 @@ public final class HprofPanel extends JPanel {
 
     private void renderReferences(DefaultTableModel model, List<HprofSnapshot.Reference> references) {
         model.setRowCount(0);
-        for (var reference : references) model.addRow(new Object[]{hex(reference.id()), reference.object(),
-                reference.edge(), reference.weak()});
+        for (var reference : references)
+            model.addRow(new Object[]{hex(reference.id()), reference.object(),
+                    reference.edge(), reference.weak()});
     }
 
-    private <T> void run(String message, java.util.concurrent.Callable<T> task, Consumer<T> success) {
+    private <T> void run(String message, Callable<T> task, Consumer<T> success) {
         long currentGeneration = ++generation;
         busy = true;
         status.setText(message);
         updateControls();
         Async.run(task, result -> {
             if (currentGeneration != generation) {
-                if (result instanceof HprofAnalysis unused) Async.run(() -> { unused.close(); return null; }, ignored -> {}, ignored -> {});
+                if (result instanceof HprofAnalysis unused) Async.run(() -> {
+                    unused.close();
+                    return null;
+                }, ignored -> {
+                }, ignored -> {
+                });
                 return;
             }
             busy = false;
@@ -269,7 +294,8 @@ public final class HprofPanel extends JPanel {
 
     private void follow(JTable table) {
         table.addMouseListener(new MouseAdapter() {
-            @Override public void mouseClicked(MouseEvent event) {
+            @Override
+            public void mouseClicked(MouseEvent event) {
                 if (event.getClickCount() != 2 || busy || table.getSelectedRow() < 0) return;
                 objectId.setText(table.getValueAt(table.getSelectedRow(), 0).toString());
                 inspect();
@@ -319,7 +345,8 @@ public final class HprofPanel extends JPanel {
 
     private static DefaultTableModel model(String... columns) {
         return new DefaultTableModel(columns, 0) {
-            @Override public boolean isCellEditable(int row, int column) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
                 return false;
             }
         };

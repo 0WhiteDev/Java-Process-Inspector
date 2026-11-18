@@ -3,7 +3,7 @@ package dev.whitedev.jpi.attach;
 import java.util.List;
 
 public record JvmAgentPolicy(AttachRestriction attachRestriction, DynamicLoading dynamicLoading) {
-    public enum DynamicLoading { DISABLED, EXPLICITLY_ENABLED, UNKNOWN }
+    public enum DynamicLoading {DISABLED, EXPLICITLY_ENABLED, UNKNOWN}
 
     public static JvmAgentPolicy inspect(String pid) {
         List<String> arguments = AttachRestriction.observedArguments(pid);

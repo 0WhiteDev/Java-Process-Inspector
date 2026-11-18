@@ -18,7 +18,8 @@ public final class Ui {
     public static final Color TEXT = new Color(235, 240, 248);
     public static final Color MUTED = new Color(144, 158, 180);
 
-    private Ui() {}
+    private Ui() {
+    }
 
     public static void install() {
         FlatDarkLaf.setup();

@@ -4,7 +4,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 public final class CommandLineTokenizer {
-    private CommandLineTokenizer() {}
+    private CommandLineTokenizer() {
+    }
 
     public static List<String> parse(String commandLine) {
         List<String> result = new ArrayList<>();

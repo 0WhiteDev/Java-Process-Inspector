@@ -195,5 +195,6 @@ public final class PeSymbolParser {
         };
     }
 
-    private record Section(String name, long virtualSize, long virtualAddress, long rawSize, long rawOffset) {}
+    private record Section(String name, long virtualSize, long virtualAddress, long rawSize, long rawOffset) {
+    }
 }

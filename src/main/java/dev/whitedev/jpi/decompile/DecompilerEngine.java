@@ -17,7 +17,8 @@ public enum DecompilerEngine {
         return resources.clone();
     }
 
-    @Override public String toString() {
+    @Override
+    public String toString() {
         return displayName;
     }
 }

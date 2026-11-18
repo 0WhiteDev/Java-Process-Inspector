@@ -13,10 +13,21 @@ public final class JpiMcpRuntime implements AutoCloseable {
         this(Path.of(System.getProperty("user.home"), ".jpi", "mcp"));
     }
 
-    public JpiMcpRuntime(Path auditDirectory) { audit = new McpAuditLog(auditDirectory); }
-    public McpSessionState sessions() { return sessions; }
-    public McpAuditLog audit() { return audit; }
-    public boolean running() { return server != null && server.running(); }
+    public JpiMcpRuntime(Path auditDirectory) {
+        audit = new McpAuditLog(auditDirectory);
+    }
+
+    public McpSessionState sessions() {
+        return sessions;
+    }
+
+    public McpAuditLog audit() {
+        return audit;
+    }
+
+    public boolean running() {
+        return server != null && server.running();
+    }
 
     public void serve(InputStream input, OutputStream output) {
         synchronized (this) {
@@ -26,7 +37,8 @@ public final class JpiMcpRuntime implements AutoCloseable {
         server.run();
     }
 
-    @Override public void close() {
+    @Override
+    public void close() {
         JpiMcpServer current = server;
         if (current != null) current.close();
     }

@@ -21,12 +21,14 @@ import java.util.Locale;
 import java.util.Map;
 
 public final class XrefAnalyzer {
-    private XrefAnalyzer() {}
+    private XrefAnalyzer() {
+    }
 
     public static List<Reference> references(byte[] bytecode, String methodName, String descriptor) throws IOException {
         ClassNode type = read(bytecode);
         MethodNode selected = find(type, methodName, descriptor);
-        if (selected == null) throw new IOException("Method is not present in the selected class: " + methodName + descriptor);
+        if (selected == null)
+            throw new IOException("Method is not present in the selected class: " + methodName + descriptor);
         Map<String, Reference> references = new LinkedHashMap<String, Reference>();
         for (AbstractInsnNode instruction : selected.instructions.toArray()) {
             Reference reference = reference(instruction);
@@ -36,7 +38,7 @@ public final class XrefAnalyzer {
     }
 
     public static List<Reference> callers(byte[] bytecode, String classIdentifier, String className,
-                                   String owner, String methodName, String descriptor) throws IOException {
+                                          String owner, String methodName, String descriptor) throws IOException {
         ClassNode type = read(bytecode);
         Map<String, Reference> references = new LinkedHashMap<String, Reference>();
         for (MethodNode method : type.methods) {
@@ -44,7 +46,8 @@ public final class XrefAnalyzer {
             for (AbstractInsnNode instruction : method.instructions.toArray()) {
                 if (instruction instanceof MethodInsnNode) {
                     MethodInsnNode call = (MethodInsnNode) instruction;
-                    if (owner.equals(call.owner) && methodName.equals(call.name) && descriptor.equals(call.desc)) count++;
+                    if (owner.equals(call.owner) && methodName.equals(call.name) && descriptor.equals(call.desc))
+                        count++;
                 }
             }
             if (count > 0) add(references, new Reference("CALLED_BY", classIdentifier, className,
@@ -54,7 +57,7 @@ public final class XrefAnalyzer {
     }
 
     public static List<Reference> symbolUsers(byte[] bytecode, String identifier, String className,
-                                               String owner, String fieldName, String descriptor) throws IOException {
+                                              String owner, String fieldName, String descriptor) throws IOException {
         ClassNode type = read(bytecode);
         List<Reference> users = new ArrayList<Reference>();
         for (MethodNode method : type.methods) {
@@ -77,7 +80,7 @@ public final class XrefAnalyzer {
     }
 
     public static List<Reference> stringUsers(byte[] bytecode, String classIdentifier, String className,
-                                       String query) throws IOException {
+                                              String query) throws IOException {
         ClassNode type = read(bytecode);
         String needle = query.toLowerCase(Locale.ROOT);
         Map<String, Reference> references = new LinkedHashMap<String, Reference>();
@@ -131,7 +134,8 @@ public final class XrefAnalyzer {
     }
 
     private static Handle bootstrapTarget(InvokeDynamicInsnNode call) {
-        if (call.bsmArgs != null) for (Object argument : call.bsmArgs) if (argument instanceof Handle) return (Handle) argument;
+        if (call.bsmArgs != null)
+            for (Object argument : call.bsmArgs) if (argument instanceof Handle) return (Handle) argument;
         return null;
     }
 
@@ -146,7 +150,8 @@ public final class XrefAnalyzer {
     }
 
     private static MethodNode find(ClassNode type, String name, String descriptor) {
-        for (MethodNode method : type.methods) if (name.equals(method.name) && descriptor.equals(method.desc)) return method;
+        for (MethodNode method : type.methods)
+            if (name.equals(method.name) && descriptor.equals(method.desc)) return method;
         return null;
     }
 
@@ -160,19 +165,32 @@ public final class XrefAnalyzer {
 
     private static String opcode(int opcode) {
         switch (opcode) {
-            case Opcodes.INVOKEVIRTUAL: return "INVOKEVIRTUAL";
-            case Opcodes.INVOKESPECIAL: return "INVOKESPECIAL";
-            case Opcodes.INVOKESTATIC: return "INVOKESTATIC";
-            case Opcodes.INVOKEINTERFACE: return "INVOKEINTERFACE";
-            case Opcodes.GETSTATIC: return "GETSTATIC";
-            case Opcodes.PUTSTATIC: return "PUTSTATIC";
-            case Opcodes.GETFIELD: return "GETFIELD";
-            case Opcodes.PUTFIELD: return "PUTFIELD";
-            case Opcodes.NEW: return "NEW";
-            case Opcodes.ANEWARRAY: return "ANEWARRAY";
-            case Opcodes.CHECKCAST: return "CHECKCAST";
-            case Opcodes.INSTANCEOF: return "INSTANCEOF";
-            default: return String.valueOf(opcode);
+            case Opcodes.INVOKEVIRTUAL:
+                return "INVOKEVIRTUAL";
+            case Opcodes.INVOKESPECIAL:
+                return "INVOKESPECIAL";
+            case Opcodes.INVOKESTATIC:
+                return "INVOKESTATIC";
+            case Opcodes.INVOKEINTERFACE:
+                return "INVOKEINTERFACE";
+            case Opcodes.GETSTATIC:
+                return "GETSTATIC";
+            case Opcodes.PUTSTATIC:
+                return "PUTSTATIC";
+            case Opcodes.GETFIELD:
+                return "GETFIELD";
+            case Opcodes.PUTFIELD:
+                return "PUTFIELD";
+            case Opcodes.NEW:
+                return "NEW";
+            case Opcodes.ANEWARRAY:
+                return "ANEWARRAY";
+            case Opcodes.CHECKCAST:
+                return "CHECKCAST";
+            case Opcodes.INSTANCEOF:
+                return "INSTANCEOF";
+            default:
+                return String.valueOf(opcode);
         }
     }
 

@@ -9,7 +9,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class BlockDetailsViewTest {
-    @Test void executionUpdateKeepsTheScrollPosition() throws Exception {
+    @Test
+    void executionUpdateKeepsTheScrollPosition() throws Exception {
         AtomicInteger before = new AtomicInteger();
         AtomicInteger after = new AtomicInteger();
 

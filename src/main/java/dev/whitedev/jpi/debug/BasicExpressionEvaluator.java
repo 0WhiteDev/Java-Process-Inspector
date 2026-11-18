@@ -46,8 +46,10 @@ public final class BasicExpressionEvaluator {
             return target(object.referenceType().fieldByName(text.substring(separator + 1)), object);
         }
         try {
-            if (frame.visibleVariableByName(text) != null) throw new IllegalArgumentException("Local variables cannot have JVM field watchpoints");
-        } catch (AbsentInformationException ignored) { }
+            if (frame.visibleVariableByName(text) != null)
+                throw new IllegalArgumentException("Local variables cannot have JVM field watchpoints");
+        } catch (AbsentInformationException ignored) {
+        }
         ObjectReference receiver = frame.thisObject();
         Field field = receiver == null ? null : receiver.referenceType().fieldByName(text);
         if (field != null) return target(field, receiver);
@@ -61,7 +63,8 @@ public final class BasicExpressionEvaluator {
         return new FieldTarget(field, field.isStatic() ? null : object);
     }
 
-    public record FieldTarget(Field field, ObjectReference object) {}
+    public record FieldTarget(Field field, ObjectReference object) {
+    }
 
     private Value resolve(StackFrame frame, String expression) throws Exception {
         int position = boundary(expression, 0);
@@ -139,7 +142,8 @@ public final class BasicExpressionEvaluator {
             return vm.mirrorOf(text.substring(1, text.length() - 1));
         }
         try {
-            if (text.endsWith("L") || text.endsWith("l")) return vm.mirrorOf(Long.parseLong(text.substring(0, text.length() - 1)));
+            if (text.endsWith("L") || text.endsWith("l"))
+                return vm.mirrorOf(Long.parseLong(text.substring(0, text.length() - 1)));
             if (text.contains(".") || text.endsWith("D") || text.endsWith("d")) {
                 String value = text.endsWith("D") || text.endsWith("d") ? text.substring(0, text.length() - 1) : text;
                 return vm.mirrorOf(Double.parseDouble(value));

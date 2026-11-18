@@ -28,7 +28,8 @@ final class TraceInstrumenter {
     private static final String FAIL_DESCRIPTOR = "(JLjava/lang/Throwable;)V";
     private static final String EDGE_DESCRIPTOR = "(JLjava/lang/String;Ljava/lang/String;Ljava/lang/String;Z)V";
 
-    private TraceInstrumenter() {}
+    private TraceInstrumenter() {
+    }
 
     static byte[] instrument(byte[] bytecode, ClassLoader loader, Collection<TraceProbe> probes) throws IOException {
         try {
@@ -55,7 +56,8 @@ final class TraceInstrumenter {
                 break;
             }
         }
-        if (selected == null) throw new IOException("Method is not present in the selected class: " + probe.methodKey());
+        if (selected == null)
+            throw new IOException("Method is not present in the selected class: " + probe.methodKey());
         if ("<init>".equals(selected.name) || "<clinit>".equals(selected.name)) {
             throw new IOException("Constructors and class initializers cannot be traced");
         }
@@ -221,7 +223,8 @@ final class TraceInstrumenter {
             this.loader = loader;
         }
 
-        @Override protected String getCommonSuperClass(String left, String right) {
+        @Override
+        protected String getCommonSuperClass(String left, String right) {
             try {
                 Class<?> leftType = Class.forName(left.replace('/', '.'), false, loader);
                 Class<?> rightType = Class.forName(right.replace('/', '.'), false, loader);

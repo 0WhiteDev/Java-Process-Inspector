@@ -11,6 +11,7 @@ import org.netbeans.lib.profiler.heap.ObjectFieldValue;
 import org.netbeans.lib.profiler.heap.Value;
 
 import java.io.IOException;
+import java.io.Serializable;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
@@ -51,7 +52,8 @@ public final class HprofSnapshot {
             JavaClass type = (JavaClass) item;
             if (!type.getName().toLowerCase(Locale.ROOT).contains(filter)) continue;
             var instances = type.getInstancesIterator();
-            while (instances.hasNext() && result.size() < limit) result.add(summary((Instance) instances.next(), false));
+            while (instances.hasNext() && result.size() < limit)
+                result.add(summary((Instance) instances.next(), false));
             if (result.size() == limit) break;
         }
         return List.copyOf(result);
@@ -66,7 +68,8 @@ public final class HprofSnapshot {
 
     public synchronized ObjectReport inspect(long id, boolean retained, boolean excludeWeak) {
         Instance selected = heap.getInstanceByID(id);
-        if (selected == null) throw new IllegalArgumentException("Object ID is not present in this snapshot: 0x" + Long.toHexString(id));
+        if (selected == null)
+            throw new IllegalArgumentException("Object ID is not present in this snapshot: 0x" + Long.toHexString(id));
         List<Reference> incoming = new ArrayList<>();
         List<?> allIncoming = selected.getReferences();
         for (Object value : allIncoming) {
@@ -211,15 +214,31 @@ public final class HprofSnapshot {
         return false;
     }
 
-    public record ObjectSummary(long id, String label, long shallowSize, long retainedSize) implements java.io.Serializable {}
-    public record Reference(long id, String object, String edge, boolean weak) implements java.io.Serializable {}
-    public record PathStep(long id, String object, String edgeToChild) implements java.io.Serializable {}
-    public record RootPath(String kind, List<PathStep> steps) implements java.io.Serializable {}
-    public record LoaderClass(long classId, String name, long instances, long shallowBytes) implements java.io.Serializable {}
+    public record ObjectSummary(long id, String label, long shallowSize, long retainedSize) implements Serializable {
+    }
+
+    public record Reference(long id, String object, String edge, boolean weak) implements Serializable {
+    }
+
+    public record PathStep(long id, String object, String edgeToChild) implements Serializable {
+    }
+
+    public record RootPath(String kind, List<PathStep> steps) implements Serializable {
+    }
+
+    public record LoaderClass(long classId, String name, long instances, long shallowBytes) implements Serializable {
+    }
+
     public record ObjectReport(ObjectSummary object, long incomingCount, long outgoingCount,
                                List<Reference> incoming, List<Reference> outgoing, List<RootPath> paths,
                                boolean pathsLimited, int visitedObjects, List<LoaderClass> loaderClasses,
-                               int loaderClassCount, long loaderInstances, long loaderShallowBytes) implements java.io.Serializable {}
-    private record SearchNode(Instance instance, SearchNode child, String edge, int depth) {}
-    private record Paths(List<RootPath> paths, boolean limited, int visited) {}
+                               int loaderClassCount, long loaderInstances,
+                               long loaderShallowBytes) implements Serializable {
+    }
+
+    private record SearchNode(Instance instance, SearchNode child, String edge, int depth) {
+    }
+
+    private record Paths(List<RootPath> paths, boolean limited, int visited) {
+    }
 }

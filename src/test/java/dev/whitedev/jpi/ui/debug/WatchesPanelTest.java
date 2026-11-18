@@ -14,9 +14,11 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 class WatchesPanelTest {
-    @TempDir Path directory;
+    @TempDir
+    Path directory;
 
-    @Test void keepsExpressionsButClearsValuesWithoutSuspendedFrame() throws Exception {
+    @Test
+    void keepsExpressionsButClearsValuesWithoutSuspendedFrame() throws Exception {
         WatchExpressionStore store = new WatchExpressionStore(directory.resolve("watches.txt"));
         store.save(List.of("player.health", "session.token"));
         SwingUtilities.invokeAndWait(() -> {
@@ -32,7 +34,9 @@ class WatchesPanelTest {
                 table.setRowSelectionInterval(0, 0);
                 assertFalse(field(panel, "arm", JButton.class).isEnabled());
                 assertTrue(field(panel, "edit", JButton.class).isEnabled());
-            } catch (Exception error) { throw new AssertionError(error); }
+            } catch (Exception error) {
+                throw new AssertionError(error);
+            }
         });
     }
 

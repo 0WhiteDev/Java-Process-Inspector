@@ -11,6 +11,7 @@ import com.sun.jdi.Location;
 import com.sun.jdi.ObjectReference;
 import com.sun.jdi.ReferenceType;
 import com.sun.jdi.StackFrame;
+import com.sun.jdi.StringReference;
 import com.sun.jdi.ThreadReference;
 import com.sun.jdi.Value;
 import com.sun.jdi.VirtualMachine;
@@ -180,7 +181,7 @@ public final class StackFrameManager {
 
     private static boolean expandable(Value value, int depth) {
         return depth < MAX_DEPTH && value instanceof ObjectReference
-                && !(value instanceof com.sun.jdi.StringReference);
+                && !(value instanceof StringReference);
     }
 
     private static String typeName(Value value) {
@@ -197,7 +198,8 @@ public final class StackFrameManager {
 
     public record FrameView(long threadId, int index, String className, String methodName,
                             String descriptor, int sourceLine, long codeIndex, String sourcePath) {
-        @Override public String toString() {
+        @Override
+        public String toString() {
             return "#" + index + " " + className + "." + methodName + descriptor
                     + (sourceLine < 0 ? " @ BCI " + codeIndex : "  line " + sourceLine);
         }
@@ -238,20 +240,38 @@ public final class StackFrameManager {
             this.depth = depth;
         }
 
-        public String name() { return name; }
-        public String type() { return type; }
-        public String displayValue() { return displayValue; }
-        public boolean expandable() { return expandable; }
-        public Kind kind() { return kind; }
+        public String name() {
+            return name;
+        }
+
+        public String type() {
+            return type;
+        }
+
+        public String displayValue() {
+            return displayValue;
+        }
+
+        public boolean expandable() {
+            return expandable;
+        }
+
+        public Kind kind() {
+            return kind;
+        }
+
         public boolean editable() {
             return local != null || field != null && (object != null || owner instanceof ClassType) || array != null;
         }
 
-        @Override public String toString() {
+        @Override
+        public String toString() {
             return name + " : " + type + " = " + displayValue;
         }
     }
 
-    public enum Kind { THIS, ARGUMENT, ARGUMENT_READ_ONLY, LOCAL, INSTANCE_FIELD, STATIC_FIELD, ARRAY_ITEM }
-    public record Change(String name, String before, String after) { }
+    public enum Kind {THIS, ARGUMENT, ARGUMENT_READ_ONLY, LOCAL, INSTANCE_FIELD, STATIC_FIELD, ARRAY_ITEM}
+
+    public record Change(String name, String before, String after) {
+    }
 }

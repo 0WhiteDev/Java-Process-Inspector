@@ -10,6 +10,7 @@ import dev.whitedev.jpi.mcp.McpSessionState;
 import dev.whitedev.jpi.mcp.tools.McpTools;
 import dev.whitedev.jpi.protocol.Operation;
 import org.junit.jupiter.api.Test;
+
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -17,10 +18,12 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 class McpIntegrationIT {
-    @Test void packagedStdioServerKeepsStdoutCleanAndExitsOnClientDisconnect() throws Exception {
+    @Test
+    void packagedStdioServerKeepsStdoutCleanAndExitsOnClientDisconnect() throws Exception {
         String javaExe = Path.of(System.getProperty("java.home"), "bin", System.getProperty("os.name").startsWith("Windows") ? "java.exe" : "java").toString();
         Path home = Files.createTempDirectory("jpi-mcp-home-");
         Process server = new ProcessBuilder(javaExe, "-Djava.awt.headless=true", "-Duser.home=" + home,
@@ -41,10 +44,13 @@ class McpIntegrationIT {
             assertTrue(server.waitFor(5, TimeUnit.SECONDS));
             assertEquals(0, server.exitValue(), new String(server.getErrorStream().readAllBytes(), StandardCharsets.UTF_8));
             assertNull(input.readLine());
-        } finally { server.destroyForcibly(); }
+        } finally {
+            server.destroyForcibly();
+        }
     }
 
-    @Test void analyzesARealAttachedJvmWithEveryMvpTool() throws Exception {
+    @Test
+    void analyzesARealAttachedJvmWithEveryMvpTool() throws Exception {
         String java = Path.of(System.getProperty("java.home"), "bin", System.getProperty("os.name").startsWith("Windows") ? "java.exe" : "java").toString();
         Process target = new ProcessBuilder(java, "-cp", System.getProperty("jpi.test.classes", "target/test-classes"), AttachTarget.class.getName())
                 .redirectErrorStream(true).start();

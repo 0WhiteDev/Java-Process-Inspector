@@ -21,11 +21,14 @@ public record ThreadAnalysisSnapshot(long timestamp, long intervalMillis, boolea
         }
     }
 
-    public record HeldLock(String kind, String identity, int stackDepth) {}
+    public record HeldLock(String kind, String identity, int stackDepth) {
+    }
 
-    public record StateChange(long timestamp, String state, String lock, String owner) {}
+    public record StateChange(long timestamp, String state, String lock, String owner) {
+    }
 
-    public record Lifetime(long id, String name, long firstSeen, long endedAt) {}
+    public record Lifetime(long id, String name, long firstSeen, long endedAt) {
+    }
 
     public static ThreadAnalysisSnapshot parse(String raw) {
         Meta meta = new Meta();

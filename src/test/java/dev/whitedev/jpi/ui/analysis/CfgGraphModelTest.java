@@ -10,7 +10,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CfgGraphModelTest {
-    @Test void parsesGraphAndAppliesRuntimeCounts() {
+    @Test
+    void parsesGraphAndAppliesRuntimeCounts() {
         String graph = "G\t" + encoded("sample.Target") + "\t" + encoded("verify") + "\t"
                 + encoded("()Z") + "\t2\t3\t2\t0\n"
                 + "B\tB0\t0\t2\t10\t10\ttrue\t\t" + encoded("B0") + "\t"

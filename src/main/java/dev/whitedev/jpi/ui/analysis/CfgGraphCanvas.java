@@ -9,10 +9,10 @@ import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.FontMetrics;
-import java.awt.Graphics;
 import java.awt.Graphics2D;
-import java.awt.RenderingHints;
+import java.awt.Graphics;
 import java.awt.Rectangle;
+import java.awt.RenderingHints;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.geom.Path2D;
@@ -41,14 +41,16 @@ final class CfgGraphCanvas extends JComponent {
     private final Map<String, Rectangle> bounds = new LinkedHashMap<String, Rectangle>();
     private CfgGraphModel model;
     private CfgGraphModel.Block selected;
-    private Consumer<CfgGraphModel.Block> selectionListener = block -> {};
+    private Consumer<CfgGraphModel.Block> selectionListener = block -> {
+    };
 
     CfgGraphCanvas() {
         setOpaque(true);
         setBackground(Ui.BACKGROUND);
         ToolTipManager.sharedInstance().registerComponent(this);
         addMouseListener(new MouseAdapter() {
-            @Override public void mouseClicked(MouseEvent event) {
+            @Override
+            public void mouseClicked(MouseEvent event) {
                 CfgGraphModel.Block block = blockAt(event.getX(), event.getY());
                 if (block == null) return;
                 selected = block;
@@ -59,7 +61,8 @@ final class CfgGraphCanvas extends JComponent {
     }
 
     void setSelectionListener(Consumer<CfgGraphModel.Block> listener) {
-        selectionListener = listener == null ? block -> {} : listener;
+        selectionListener = listener == null ? block -> {
+        } : listener;
     }
 
     void setModel(CfgGraphModel value) {
@@ -78,13 +81,15 @@ final class CfgGraphCanvas extends JComponent {
         return selected;
     }
 
-    @Override public String getToolTipText(MouseEvent event) {
+    @Override
+    public String getToolTipText(MouseEvent event) {
         CfgGraphModel.Block block = blockAt(event.getX(), event.getY());
         if (block == null) return null;
         return block.id + " | lines " + block.lineRange() + " | " + block.executions + " executions";
     }
 
-    @Override protected void paintComponent(Graphics graphics) {
+    @Override
+    protected void paintComponent(Graphics graphics) {
         super.paintComponent(graphics);
         if (model == null) return;
         Graphics2D output = (Graphics2D) graphics.create();
@@ -171,7 +176,7 @@ final class CfgGraphCanvas extends JComponent {
             output.drawString("instructions " + block.startInstruction + ".." + block.endInstruction
                     + "   lines " + block.lineRange(), rectangle.x + 12, rectangle.y + 43);
             output.drawString("idom " + (block.immediateDominator.isEmpty() ? "none" : block.immediateDominator)
-                    + "   in " + block.incoming.size() + "   out " + block.outgoing.size(),
+                            + "   in " + block.incoming.size() + "   out " + block.outgoing.size(),
                     rectangle.x + 12, rectangle.y + 62);
             output.setColor(Ui.TEXT);
             output.drawString(clipped(block.firstInstruction(), output.getFontMetrics(text), rectangle.width - 24),
@@ -230,7 +235,8 @@ final class CfgGraphCanvas extends JComponent {
         for (CfgGraphModel.Block block : model.blocks) identifiers.add(block.id);
         identifiers.add("EXIT");
         Collections.sort(identifiers, new Comparator<String>() {
-            @Override public int compare(String left, String right) {
+            @Override
+            public int compare(String left, String right) {
                 int byRank = Integer.compare(ranks.get(left).intValue(), ranks.get(right).intValue());
                 if (byRank != 0) return byRank;
                 return Integer.compare(order(left), order(right));

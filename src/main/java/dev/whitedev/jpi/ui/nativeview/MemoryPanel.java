@@ -1,15 +1,14 @@
 package dev.whitedev.jpi.ui.nativeview;
 
-import dev.whitedev.jpi.ui.Async;
-import dev.whitedev.jpi.ui.SessionAware;
-import dev.whitedev.jpi.ui.Ui;
-
 import dev.whitedev.jpi.attach.InspectorSession;
 import dev.whitedev.jpi.nativeaccess.MemoryDataType;
 import dev.whitedev.jpi.nativeaccess.MemoryMatch;
 import dev.whitedev.jpi.nativeaccess.ProcessInfo;
 import dev.whitedev.jpi.nativeaccess.WindowsNativeAccess;
 import dev.whitedev.jpi.protocol.Operation;
+import dev.whitedev.jpi.ui.Async;
+import dev.whitedev.jpi.ui.SessionAware;
+import dev.whitedev.jpi.ui.Ui;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -28,7 +27,10 @@ public final class MemoryPanel extends JPanel implements SessionAware {
     private final JComboBox<ProcessInfo> processes = new JComboBox<>();
     private final JCheckBox visibleOnly = new JCheckBox("Visible windows only");
     private final DefaultTableModel model = new DefaultTableModel(new Object[]{"Address", "Current value", "Bytes"}, 0) {
-        @Override public boolean isCellEditable(int row, int column) { return false; }
+        @Override
+        public boolean isCellEditable(int row, int column) {
+            return false;
+        }
     };
     private final JTable table = new JTable(model);
     private final JButton newScan = Ui.primaryButton("New scan");
@@ -43,7 +45,7 @@ public final class MemoryPanel extends JPanel implements SessionAware {
         setBorder(new EmptyBorder(4, 0, 0, 0));
         setOpaque(false);
         add(Ui.sectionHeader("Memory scanner",
-                "Find typed values, refine their addresses, and explicitly write selected results", null),
+                        "Find typed values, refine their addresses, and explicitly write selected results", null),
                 BorderLayout.NORTH);
 
         JPanel body = new JPanel(new BorderLayout(0, 12));
@@ -129,13 +131,15 @@ public final class MemoryPanel extends JPanel implements SessionAware {
         return row;
     }
 
-    @Override public void setSession(final InspectorSession session) {
+    @Override
+    public void setSession(final InspectorSession session) {
         if (session == null) return;
         Async.run(() -> session.requestText(Operation.METRICS, ""), raw -> {
             for (String line : raw.split("\\n")) {
                 if (line.startsWith("pid=")) pid.setText(line.substring(4));
             }
-        }, error -> { });
+        }, error -> {
+        });
     }
 
     private void loadProcesses() {

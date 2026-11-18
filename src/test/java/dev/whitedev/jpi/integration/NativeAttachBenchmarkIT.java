@@ -4,19 +4,25 @@ import dev.whitedev.jpi.attach.*;
 import dev.whitedev.jpi.attach.jvmti.NativeAgentArtifact;
 import dev.whitedev.jpi.protocol.Operation;
 import org.junit.jupiter.api.*;
+
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.util.*;
 import java.util.concurrent.*;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 @Timeout(300)
 class NativeAttachBenchmarkIT {
     private final AttachService service = new AttachService(new File(System.getProperty("jpi.agent.jar", "target/jpi.jar")));
-    private record Sample(String route, int trial, boolean warmup, double milliseconds, long rssBefore, long rssAfter, String error) {}
 
-    @Test void measureNativeLoadingAndBindingWithEquivalentPreloadedJavaAgentBaselines() throws Exception {
+    private record Sample(String route, int trial, boolean warmup, double milliseconds, long rssBefore, long rssAfter,
+                          String error) {
+    }
+
+    @Test
+    void measureNativeLoadingAndBindingWithEquivalentPreloadedJavaAgentBaselines() throws Exception {
         Assumptions.assumeTrue(Boolean.getBoolean("jpi.benchmark") && System.getProperty("os.name").equals("Linux"));
         int count = Integer.getInteger("jpi.benchmark.samples", 7);
         assertTrue(count >= 3 && count <= 30, "Use 3 to 30 measured samples per route");
@@ -25,15 +31,17 @@ class NativeAttachBenchmarkIT {
         for (int trial = -2; trial < count; trial++) {
             List<String> order = new ArrayList<>(List.of("attach-native", "ptrace-native", "java-session", "native-plus-java-session"));
             if (trial % 2 != 0) Collections.reverse(order);
-            for (String route : order) samples.add(route.endsWith("-session") ? measureFull(route, trial, artifact) : measure(route, trial, artifact));
+            for (String route : order)
+                samples.add(route.endsWith("-session") ? measureFull(route, trial, artifact) : measure(route, trial, artifact));
         }
         Path output = Path.of(System.getProperty("jpi.benchmark.output", "target/native-benchmark"));
         Files.createDirectories(output);
         StringBuilder csv = new StringBuilder("route,trial,warmup,load_and_bind_ms,rss_before_kib,rss_after_kib,rss_delta_kib,error\n");
-        for (Sample sample : samples) csv.append(sample.route).append(',').append(sample.trial).append(',').append(sample.warmup)
-                .append(',').append(String.format(Locale.ROOT, "%.3f", sample.milliseconds)).append(',').append(sample.rssBefore)
-                .append(',').append(sample.rssAfter).append(',').append(sample.rssAfter - sample.rssBefore).append(',')
-                .append('"').append(sample.error.replace("\"", "\"\"").replace('\n', ' ').replace('\r', ' ')).append('"').append('\n');
+        for (Sample sample : samples)
+            csv.append(sample.route).append(',').append(sample.trial).append(',').append(sample.warmup)
+                    .append(',').append(String.format(Locale.ROOT, "%.3f", sample.milliseconds)).append(',').append(sample.rssBefore)
+                    .append(',').append(sample.rssAfter).append(',').append(sample.rssAfter - sample.rssBefore).append(',')
+                    .append('"').append(sample.error.replace("\"", "\"\"").replace('\n', ' ').replace('\r', ' ')).append('"').append('\n');
         Files.writeString(output.resolve("samples.csv"), csv, StandardCharsets.UTF_8);
         StringBuilder summary = new StringBuilder("# Native load-and-bind benchmark\n\n")
                 .append("JDK: ").append(System.getProperty("java.runtime.version")).append("; OS: ").append(System.getProperty("os.version"))
@@ -69,7 +77,11 @@ class NativeAttachBenchmarkIT {
                     .redirectError(ProcessBuilder.Redirect.DISCARD).start();
             Process running = target;
             String ready = CompletableFuture.supplyAsync(() -> {
-                try { return running.inputReader().readLine(); } catch (IOException failure) { throw new CompletionException(failure); }
+                try {
+                    return running.inputReader().readLine();
+                } catch (IOException failure) {
+                    throw new CompletionException(failure);
+                }
             }).get(15, TimeUnit.SECONDS);
             assertEquals(Long.toString(target.pid()), ready);
             try (InspectorSession session = prepared.await(ready, "benchmark fixture")) {
@@ -85,11 +97,15 @@ class NativeAttachBenchmarkIT {
                 after = rss(target.pid());
                 assertEquals("pong", session.requestText(Operation.PING, ""));
             }
-        } catch (Throwable failure) { error = failure.toString(); }
-        finally {
+        } catch (Throwable failure) {
+            error = failure.toString();
+        } finally {
             if (target != null) {
                 target.destroy();
-                if (!target.waitFor(5, TimeUnit.SECONDS)) { target.destroyForcibly(); target.waitFor(5, TimeUnit.SECONDS); }
+                if (!target.waitFor(5, TimeUnit.SECONDS)) {
+                    target.destroyForcibly();
+                    target.waitFor(5, TimeUnit.SECONDS);
+                }
             }
         }
         return new Sample(route, trial, trial < 0, milliseconds, before, after, error);
@@ -99,19 +115,27 @@ class NativeAttachBenchmarkIT {
         return Files.readAllLines(Path.of("/proc", Long.toString(pid), "status")).stream().filter(s -> s.startsWith("VmRSS:"))
                 .mapToLong(s -> Long.parseLong(s.trim().split("\\s+")[1])).findFirst().orElseThrow();
     }
+
     private Sample measureFull(String route, int trial, NativeAgentArtifact artifact) throws Exception {
         Process target = null;
-        double milliseconds = Double.NaN; long before = 0, after = 0; String error = "";
+        double milliseconds = Double.NaN;
+        long before = 0, after = 0;
+        String error = "";
         try {
             target = new ProcessBuilder(Path.of(System.getProperty("java.home"), "bin", "java").toString(),
                     "-cp", System.getProperty("jpi.test.classes", "target/test-classes"), AttachTarget.class.getName())
                     .redirectError(ProcessBuilder.Redirect.DISCARD).start();
             Process running = target;
             String ready = CompletableFuture.supplyAsync(() -> {
-                try { return running.inputReader().readLine(); } catch (IOException failure) { throw new CompletionException(failure); }
+                try {
+                    return running.inputReader().readLine();
+                } catch (IOException failure) {
+                    throw new CompletionException(failure);
+                }
             }).get(15, TimeUnit.SECONDS);
             assertEquals(Long.toString(target.pid()), ready);
-            Thread.sleep(150); before = rss(target.pid());
+            Thread.sleep(150);
+            before = rss(target.pid());
             long begin = System.nanoTime();
             if (route.equals("native-plus-java-session")) new ProcessInjector().inject(ready, artifact);
             try (InspectorSession session = service.attach(new JvmDescriptor(ready, "full-session benchmark"))) {
@@ -120,18 +144,24 @@ class NativeAttachBenchmarkIT {
                     assertTrue(status.contains("phase=live"), status);
                 }
                 milliseconds = (System.nanoTime() - begin) / 1_000_000.0;
-                Thread.sleep(100); after = rss(target.pid());
+                Thread.sleep(100);
+                after = rss(target.pid());
                 assertEquals("pong", session.requestText(Operation.PING, ""));
             }
-        } catch (Throwable failure) { error = failure.toString(); }
-        finally {
+        } catch (Throwable failure) {
+            error = failure.toString();
+        } finally {
             if (target != null) {
                 target.destroy();
-                if (!target.waitFor(5, TimeUnit.SECONDS)) { target.destroyForcibly(); target.waitFor(5, TimeUnit.SECONDS); }
+                if (!target.waitFor(5, TimeUnit.SECONDS)) {
+                    target.destroyForcibly();
+                    target.waitFor(5, TimeUnit.SECONDS);
+                }
             }
         }
         return new Sample(route, trial, trial < 0, milliseconds, before, after, error);
     }
+
     private static double percentile(double[] sorted, double fraction) {
         return sorted.length == 0 ? Double.NaN : sorted[Math.max(0, (int) Math.ceil(sorted.length * fraction) - 1)];
     }

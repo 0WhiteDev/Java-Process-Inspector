@@ -7,7 +7,8 @@ import java.io.InputStream;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class DecompilerServiceTest {
-    @Test void everyEmbeddedEngineDecompilesAClassAndMethod() throws Exception {
+    @Test
+    void everyEmbeddedEngineDecompilesAClassAndMethod() throws Exception {
         String resource = "/" + Fixture.class.getName().replace('.', '/') + ".class";
         byte[] bytecode;
         try (InputStream input = Fixture.class.getResourceAsStream(resource)) {

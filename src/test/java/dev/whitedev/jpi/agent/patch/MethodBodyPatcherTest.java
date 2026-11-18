@@ -8,7 +8,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MethodBodyPatcherTest {
-    @Test void replacesOneMethodWithoutChangingTheClassSchema() throws Exception {
+    @Test
+    void replacesOneMethodWithoutChangingTheClassSchema() throws Exception {
         String resource = "/" + Fixture.class.getName().replace('.', '/') + ".class";
         byte[] original;
         try (InputStream input = Fixture.class.getResourceAsStream(resource)) {
@@ -25,11 +26,19 @@ class MethodBodyPatcherTest {
 
     public static class Fixture {
         private int seed = 1;
-        public int value() { return seed; }
+
+        public int value() {
+            return seed;
+        }
     }
 
     private static final class BytecodeLoader extends ClassLoader {
-        BytecodeLoader() { super(null); }
-        Class<?> define(byte[] bytecode) { return defineClass(null, bytecode, 0, bytecode.length); }
+        BytecodeLoader() {
+            super(null);
+        }
+
+        Class<?> define(byte[] bytecode) {
+            return defineClass(null, bytecode, 0, bytecode.length);
+        }
     }
 }

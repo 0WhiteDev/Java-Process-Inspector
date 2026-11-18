@@ -1,11 +1,12 @@
 package dev.whitedev.jpi.agent.hook;
 
+import dev.whitedev.jpi.agent.RuntimeAccess;
+
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.instrument.ClassDefinition;
 import java.lang.instrument.Instrumentation;
-import dev.whitedev.jpi.agent.RuntimeAccess;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -28,7 +29,8 @@ public final class ApiHookManager {
     private final HookClassRegistry registry;
     private final Map<Class<?>, HookedClass> hooked = new IdentityHashMap<Class<?>, HookedClass>();
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(new ThreadFactory() {
-        @Override public Thread newThread(Runnable task) {
+        @Override
+        public Thread newThread(Runnable task) {
             Thread thread = new Thread(task, "jpi-api-hook-expiration");
             thread.setDaemon(true);
             thread.setContextClassLoader(ApiHookRuntime.class.getClassLoader());
@@ -65,7 +67,8 @@ public final class ApiHookManager {
         List<Class<?>> candidates = new ArrayList<Class<?>>();
         Collections.addAll(candidates, loaded);
         Collections.sort(candidates, new Comparator<Class<?>>() {
-            @Override public int compare(Class<?> left, Class<?> right) {
+            @Override
+            public int compare(Class<?> left, Class<?> right) {
                 return left.getName().compareTo(right.getName());
             }
         });
@@ -122,7 +125,8 @@ public final class ApiHookManager {
 
         ApiHookRuntime.configure(profiles, config, hooked.size(), appliedSites);
         expiration = scheduler.schedule(new Runnable() {
-            @Override public void run() {
+            @Override
+            public void run() {
                 stopAll();
             }
         }, config.stopAfterMillis, TimeUnit.MILLISECONDS);

@@ -8,7 +8,8 @@ import java.util.List;
 import java.util.Map;
 
 public final class TargetSearchResults {
-    private TargetSearchResults() {}
+    private TargetSearchResults() {
+    }
 
     public static SearchReport parse(String raw) {
         List<SearchHit> hits = new ArrayList<>();
@@ -24,7 +25,8 @@ public final class TargetSearchResults {
                 membersPartial = Boolean.parseBoolean(v[7]);
                 notices.add("Target: " + v[2] + " loaded definitions considered, " + v[3] + " bytecode reads, "
                         + v[4] + " unavailable or unreadable. Searches use available bytecode without retransformation.");
-                if (classesPartial || membersPartial) notices.add("Target search is partial: class, time, bytecode, or availability limits were reached.");
+                if (classesPartial || membersPartial)
+                    notices.add("Target search is partial: class, time, bytecode, or availability limits were reached.");
             } else if (v.length == 4 && v[0].equals("C")) {
                 SearchCategory category = SearchCategory.valueOf(v[1]);
                 counts.put(category, new SearchReport.Count(Math.min(200, Integer.parseInt(v[2])), Boolean.parseBoolean(v[3])));
@@ -39,7 +41,8 @@ public final class TargetSearchResults {
                         location, location + "\nDefinition: " + id + "\n\n" + value, id, owner, member, descriptor, value));
             } else if (!row.isBlank()) throw new IllegalArgumentException("Unsupported search response");
         }
-        if (!header) throw new IllegalArgumentException("The agent did not return a Search Everything snapshot. Update the target agent.");
+        if (!header)
+            throw new IllegalArgumentException("The agent did not return a Search Everything snapshot. Update the target agent.");
         for (SearchCategory category : List.of(SearchCategory.CLASSES, SearchCategory.METHODS, SearchCategory.FIELDS, SearchCategory.STRINGS)) {
             var count = counts.getOrDefault(category, new SearchReport.Count(0, false));
             counts.put(category, new SearchReport.Count(count.matches(), count.partial() || (category == SearchCategory.CLASSES ? classesPartial : membersPartial)));
@@ -47,5 +50,7 @@ public final class TargetSearchResults {
         return new SearchReport(hits, counts, notices);
     }
 
-    private static String decode(String value) { return new String(Base64.getDecoder().decode(value), StandardCharsets.UTF_8); }
+    private static String decode(String value) {
+        return new String(Base64.getDecoder().decode(value), StandardCharsets.UTF_8);
+    }
 }

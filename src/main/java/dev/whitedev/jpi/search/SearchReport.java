@@ -6,14 +6,18 @@ import java.util.List;
 import java.util.Map;
 
 public record SearchReport(List<SearchHit> hits, Map<SearchCategory, Count> counts, List<String> notices) {
-    public record Count(int matches, boolean partial) {}
+    public record Count(int matches, boolean partial) {
+    }
+
     public SearchReport {
         hits = List.copyOf(hits);
         counts = Map.copyOf(counts);
         notices = List.copyOf(notices);
     }
 
-    public static SearchReport empty() { return new SearchReport(List.of(), Map.of(), List.of()); }
+    public static SearchReport empty() {
+        return new SearchReport(List.of(), Map.of(), List.of());
+    }
 
     public SearchReport merge(SearchReport other) {
         List<SearchHit> combined = new ArrayList<>(hits);

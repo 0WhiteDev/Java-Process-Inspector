@@ -7,10 +7,11 @@ import dev.whitedev.jpi.search.SearchCategory;
 import dev.whitedev.jpi.search.SearchHit;
 import dev.whitedev.jpi.ui.timeline.RuntimeTimelineStore;
 import org.junit.jupiter.api.Test;
+
 import javax.swing.JButton;
+import javax.swing.JList;
 import javax.swing.JTable;
 import javax.swing.JTextField;
-import javax.swing.JList;
 import javax.swing.SwingUtilities;
 import java.awt.Component;
 import java.awt.Container;
@@ -19,10 +20,12 @@ import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 class SearchEverythingPanelTest {
-    @Test void searchesOfflineMappingsAndOpensTheSelectedResultWithoutAttaching() throws Exception {
+    @Test
+    void searchesOfflineMappingsAndOpensTheSelectedResultWithoutAttaching() throws Exception {
         CountDownLatch rendered = new CountDownLatch(1);
         AtomicReference<SearchEverythingPanel> panel = new AtomicReference<>();
         AtomicReference<SearchHit> opened = new AtomicReference<>();
@@ -35,7 +38,9 @@ class SearchEverythingPanelTest {
             panel.set(view);
             view.setSession(null);
             JTable table = component(view, JTable.class);
-            table.getModel().addTableModelListener(event -> { if (table.getRowCount() > 0) rendered.countDown(); });
+            table.getModel().addTableModelListener(event -> {
+                if (table.getRowCount() > 0) rendered.countDown();
+            });
             JTextField query = component(view, JTextField.class);
             query.setText("authentication");
             query.postActionEvent();
@@ -58,16 +63,20 @@ class SearchEverythingPanelTest {
                     assertTrue(component(view, JTextField.class).getWidth() > 100);
                 }
             });
-        } finally { SwingUtilities.invokeAndWait(() -> panel.get().close()); }
+        } finally {
+            SwingUtilities.invokeAndWait(() -> panel.get().close());
+        }
     }
 
     private static void layout(Container parent) {
         parent.doLayout();
         for (Component child : parent.getComponents()) if (child instanceof Container container) layout(container);
     }
+
     private static <T> T component(Container parent, Class<T> type) {
         return components(parent).stream().filter(type::isInstance).map(type::cast).findFirst().orElseThrow();
     }
+
     private static List<Component> components(Container parent) {
         List<Component> result = new ArrayList<>();
         for (Component child : parent.getComponents()) {

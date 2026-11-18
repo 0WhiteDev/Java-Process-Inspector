@@ -19,15 +19,19 @@ public final class DataBreakpointManager {
     private final ValueFormatter formatter = new ValueFormatter();
     private long identifiers;
 
-    public DataBreakpointManager(VirtualMachine vm) { this.vm = vm; }
+    public DataBreakpointManager(VirtualMachine vm) {
+        this.vm = vm;
+    }
 
     public synchronized View add(String expression, BasicExpressionEvaluator.FieldTarget target, String condition,
                                  BreakpointSpec.SuspendPolicy policy) {
-        if (!vm.canWatchFieldModification()) throw new IllegalStateException("Target JVM does not support field modification watchpoints");
+        if (!vm.canWatchFieldModification())
+            throw new IllegalStateException("Target JVM does not support field modification watchpoints");
         if (entries.size() >= 100) throw new IllegalStateException("Limit of 100 active data breakpoints reached");
         WatchCondition predicate = condition == null || condition.isBlank() ? null : WatchCondition.parse(condition);
-        if (predicate != null) predicate.matches(target.field().isStatic() ? target.field().declaringType().getValue(target.field())
-                : target.object().getValue(target.field()));
+        if (predicate != null)
+            predicate.matches(target.field().isStatic() ? target.field().declaringType().getValue(target.field())
+                    : target.object().getValue(target.field()));
         long objectId = target.object() == null ? -1 : target.object().uniqueID();
         ModificationWatchpointRequest request = vm.eventRequestManager().createModificationWatchpointRequest(target.field());
         long id = ++identifiers;
@@ -66,7 +70,9 @@ public final class DataBreakpointManager {
         }
     }
 
-    public synchronized List<View> snapshot() { return entries.values().stream().map(Entry::view).toList(); }
+    public synchronized List<View> snapshot() {
+        return entries.values().stream().map(Entry::view).toList();
+    }
 
     public synchronized void setEnabled(long id, boolean enabled) {
         Entry entry = require(id);
@@ -79,7 +85,9 @@ public final class DataBreakpointManager {
         if (entry != null) vm.eventRequestManager().deleteEventRequest(entry.request);
     }
 
-    public synchronized void clear() { for (long id : List.copyOf(entries.keySet())) remove(id); }
+    public synchronized void clear() {
+        for (long id : List.copyOf(entries.keySet())) remove(id);
+    }
 
     private Entry require(long id) {
         Entry entry = entries.get(id);
@@ -96,16 +104,30 @@ public final class DataBreakpointManager {
         long hits;
         boolean enabled = true;
         String lastWrite = "", error = "";
+
         Entry(long id, String expression, String field, long objectId, WatchCondition condition, String text,
               BreakpointSpec.SuspendPolicy policy, ModificationWatchpointRequest request) {
-            this.id = id; this.expression = expression; this.field = field; this.objectId = objectId;
-            this.condition = condition; this.text = text; this.policy = policy; this.request = request;
+            this.id = id;
+            this.expression = expression;
+            this.field = field;
+            this.objectId = objectId;
+            this.condition = condition;
+            this.text = text;
+            this.policy = policy;
+            this.request = request;
         }
-        View view() { return new View(id, expression, field, objectId, text.isEmpty() ? "Value changes" : text,
-                policy, enabled, hits, lastWrite, error); }
+
+        View view() {
+            return new View(id, expression, field, objectId, text.isEmpty() ? "Value changes" : text,
+                    policy, enabled, hits, lastWrite, error);
+        }
     }
 
     public record View(long id, String expression, String field, long objectId, String condition,
-                       BreakpointSpec.SuspendPolicy suspendPolicy, boolean enabled, long hits, String lastWrite, String error) {}
-    public record Hit(long id, String details) {}
+                       BreakpointSpec.SuspendPolicy suspendPolicy, boolean enabled, long hits, String lastWrite,
+                       String error) {
+    }
+
+    public record Hit(long id, String details) {
+    }
 }

@@ -1,16 +1,14 @@
 package dev.whitedev.jpi.ui.tracing;
 
-import dev.whitedev.jpi.ui.context.AnalysisTarget;
-import dev.whitedev.jpi.ui.context.ContextActions;
-
-import dev.whitedev.jpi.ui.Async;
-import dev.whitedev.jpi.ui.SessionAware;
-import dev.whitedev.jpi.ui.Ui;
-import dev.whitedev.jpi.ui.debug.DebuggerPanel;
-
 import dev.whitedev.jpi.attach.InspectorSession;
 import dev.whitedev.jpi.deobfuscation.DeobfuscationWorkspace;
 import dev.whitedev.jpi.protocol.Operation;
+import dev.whitedev.jpi.ui.Async;
+import dev.whitedev.jpi.ui.SessionAware;
+import dev.whitedev.jpi.ui.Ui;
+import dev.whitedev.jpi.ui.context.AnalysisTarget;
+import dev.whitedev.jpi.ui.context.ContextActions;
+import dev.whitedev.jpi.ui.debug.DebuggerPanel;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -22,7 +20,9 @@ import java.awt.event.MouseEvent;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.function.Consumer;
 
 public final class XrefsPanel extends JPanel implements SessionAware {
     private static final Color FAILED = new Color(255, 95, 86);
@@ -68,9 +68,11 @@ public final class XrefsPanel extends JPanel implements SessionAware {
         actions.add(debugBreakpoint);
         actions.add(refresh);
         actions.add(layers);
-        layers.addActionListener(event -> { if (!selectingTarget) refresh(); });
+        layers.addActionListener(event -> {
+            if (!selectingTarget) refresh();
+        });
         add(Ui.sectionHeader("Xrefs and call graph",
-                "Static bytecode references combined with calls observed by Live Tracer", actions),
+                        "Static bytecode references combined with calls observed by Live Tracer", actions),
                 BorderLayout.NORTH);
 
         JPanel card = Ui.card(new BorderLayout(0, 12));
@@ -145,13 +147,13 @@ public final class XrefsPanel extends JPanel implements SessionAware {
     }
 
     public void prepareRelatedTrace(AnalysisTarget target, boolean callers,
-                                    java.util.function.Consumer<AnalysisTarget> prepare) {
+                                    Consumer<AnalysisTarget> prepare) {
         InspectorSession current = session;
         if (current == null) return;
         String payload = target.identifier() + "\n" + target.member() + "\n" + target.descriptor();
         Async.run(() -> current.requestText(Operation.METHOD_XREFS, payload), raw -> {
             if (session != current) return;
-            var candidates = new java.util.LinkedHashMap<String, XrefRow>();
+            var candidates = new LinkedHashMap<String, XrefRow>();
             for (XrefRow row : parse(raw)) {
                 if (!(callers ? "CALLED_BY" : "CALLS").equals(row.relation)
                         || row.className.startsWith("<") || !row.descriptor.startsWith("(")) continue;
@@ -169,7 +171,9 @@ public final class XrefsPanel extends JPanel implements SessionAware {
             if (choice instanceof XrefRow row) prepare.accept(AnalysisTarget.method(
                     row.targetIdentifier.isEmpty() ? row.className : row.targetIdentifier,
                     row.className, row.member, row.descriptor));
-        }, error -> { if (session == current) Ui.error(this, error); });
+        }, error -> {
+            if (session == current) Ui.error(this, error);
+        });
     }
 
     public void setDebuggerIntegration(DebuggerPanel debugger, Runnable openDebugger) {
@@ -178,7 +182,8 @@ public final class XrefsPanel extends JPanel implements SessionAware {
         debugBreakpoint.setEnabled(debugger != null && !actualClassName.isEmpty() && !method.getText().isEmpty());
     }
 
-    @Override public void setSession(InspectorSession value) {
+    @Override
+    public void setSession(InspectorSession value) {
         session = value;
         boolean attached = value != null;
         refresh.setEnabled(attached && !classIdentifier.isEmpty());
@@ -341,7 +346,10 @@ public final class XrefsPanel extends JPanel implements SessionAware {
     private final class ReferenceTable {
         private final DefaultTableModel model = new DefaultTableModel(
                 new Object[]{"Layer", "Class", "Member", "Descriptor", "Kind or value", "Hits"}, 0) {
-            @Override public boolean isCellEditable(int row, int column) { return false; }
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return false;
+            }
         };
         private final JTable table = new JTable(model);
         private final List<XrefRow> rows = new ArrayList<>();
@@ -356,7 +364,8 @@ public final class XrefsPanel extends JPanel implements SessionAware {
             table.getColumnModel().getColumn(3).setPreferredWidth(300);
             table.getColumnModel().getColumn(4).setPreferredWidth(220);
             table.addMouseListener(new MouseAdapter() {
-                @Override public void mouseClicked(MouseEvent event) {
+                @Override
+                public void mouseClicked(MouseEvent event) {
                     if (event.getClickCount() != 2) return;
                     int view = table.getSelectedRow();
                     if (view >= 0) navigate(rows.get(table.convertRowIndexToModel(view)));
@@ -412,8 +421,9 @@ public final class XrefsPanel extends JPanel implements SessionAware {
         }
 
         private final class LayerRenderer extends DefaultTableCellRenderer {
-            @Override public Component getTableCellRendererComponent(JTable source, Object value,
-                    boolean selected, boolean focused, int row, int column) {
+            @Override
+            public Component getTableCellRendererComponent(JTable source, Object value,
+                                                           boolean selected, boolean focused, int row, int column) {
                 Component component = super.getTableCellRendererComponent(
                         source, value, selected, focused, row, column);
                 if (!selected) {
@@ -455,7 +465,8 @@ public final class XrefsPanel extends JPanel implements SessionAware {
             this.detail = detail;
         }
 
-        @Override public String toString() {
+        @Override
+        public String toString() {
             return className + "." + member + descriptor + " [" + layer + ", " + targetIdentifier + "]";
         }
     }

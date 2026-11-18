@@ -2,8 +2,10 @@ package dev.whitedev.jpi.analysis.difference;
 
 import dev.whitedev.jpi.ui.timeline.TimelineEvent;
 import dev.whitedev.jpi.ui.timeline.TimelineSource;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -61,8 +63,8 @@ class DifferenceAnalyzerTest {
 
     @Test
     void hidesOnlyUnchangedCommonCallsAndPreservesCountAndReturnDifferences() {
-        List<TimelineEvent> baseline = new java.util.ArrayList<>();
-        List<TimelineEvent> action = new java.util.ArrayList<>();
+        List<TimelineEvent> baseline = new ArrayList<>();
+        List<TimelineEvent> action = new ArrayList<>();
         for (int index = 0; index < 100; index++) {
             baseline.add(trace("a" + index, index, "Noise.tick()V", "ENTER", ""));
             action.add(trace("b" + index, index, "Noise.tick()V", "ENTER", ""));
@@ -104,8 +106,8 @@ class DifferenceAnalyzerTest {
         DifferenceReport report = new DifferenceAnalyzer().compare(empty, empty);
         assertEquals(0, report.noiseView(100).hiddenCalls());
         assertEquals(List.of(), report.noiseView(95).methods());
-        org.junit.jupiter.api.Assertions.assertNull(report.firstDivergence());
-        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> report.noiseView(101));
+        Assertions.assertNull(report.firstDivergence());
+        Assertions.assertThrows(IllegalArgumentException.class, () -> report.noiseView(101));
     }
 
     private static TimelineEvent trace(String key, long timestamp, String subject, String phase, String value) {

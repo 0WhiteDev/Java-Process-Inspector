@@ -24,9 +24,9 @@ import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
+import javax.swing.JSlider;
 import javax.swing.JSpinner;
 import javax.swing.JSplitPane;
-import javax.swing.JSlider;
 import javax.swing.JTabbedPane;
 import javax.swing.JTable;
 import javax.swing.JTextArea;
@@ -53,7 +53,10 @@ public final class DifferenceTracingPanel extends JPanel implements SessionAware
         actions.install(methodName, () -> classIdentifier.isEmpty() ? null
                 : AnalysisTarget.method(classIdentifier, actualClass, actualMethod, actualDescriptor));
     }
-    public boolean canStartRecording() { return session != null && capture == null && !preparing && !comparing; }
+
+    public boolean canStartRecording() {
+        return session != null && capture == null && !preparing && !comparing;
+    }
 
     public void recordBaseline(String identifier, String owner, String method, String descriptor) {
         if (!canStartRecording()) return;
@@ -61,6 +64,7 @@ public final class DifferenceTracingPanel extends JPanel implements SessionAware
         branches.setSelected(true);
         start(true);
     }
+
     private final DeobfuscationWorkspace workspace;
     private final RuntimeTimelineStore timeline;
     private final DifferenceAnalyzer analyzer = new DifferenceAnalyzer();
@@ -242,7 +246,8 @@ public final class DifferenceTracingPanel extends JPanel implements SessionAware
         updateButtons();
     }
 
-    @Override public void setSession(InspectorSession value) {
+    @Override
+    public void setSession(InspectorSession value) {
         session = value;
         preparing = false;
         comparing = false;
@@ -559,11 +564,13 @@ public final class DifferenceTracingPanel extends JPanel implements SessionAware
 
     private static DefaultTableModel readOnlyModel(String... columns) {
         return new DefaultTableModel(columns, 0) {
-            @Override public Class<?> getColumnClass(int column) {
+            @Override
+            public Class<?> getColumnClass(int column) {
                 return columns[column].endsWith(" calls") ? Long.class : String.class;
             }
 
-            @Override public boolean isCellEditable(int row, int column) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
                 return false;
             }
         };

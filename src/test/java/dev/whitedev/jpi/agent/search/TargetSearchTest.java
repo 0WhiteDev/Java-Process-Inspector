@@ -5,13 +5,16 @@ import dev.whitedev.jpi.search.TargetSearchResults;
 import org.junit.jupiter.api.Test;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Opcodes;
+
 import java.io.IOException;
 import java.util.HashSet;
 import java.util.Set;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 class TargetSearchTest {
-    @Test void findsSymbolsAndLiteralStringsWithoutMergingClassloaderDefinitions() throws Exception {
+    @Test
+    void findsSymbolsAndLiteralStringsWithoutMergingClassloaderDefinitions() throws Exception {
         byte[] bytes = fixture(1);
         Class<?> left = new Loader().define(bytes), right = new Loader().define(bytes);
         var report = TargetSearchResults.parse(TargetSearch.search(new Class<?>[]{left, right}, "auth", source(bytes)));
@@ -27,7 +30,8 @@ class TargetSearchTest {
         assertFalse(report.counts().get(SearchCategory.METHODS).partial());
     }
 
-    @Test void capsPerCategoryAndMarksMissingBytecodeAsPartial() throws Exception {
+    @Test
+    void capsPerCategoryAndMarksMissingBytecodeAsPartial() throws Exception {
         byte[] bytes = fixture(240);
         Class<?> type = new Loader().define(bytes);
         var report = TargetSearchResults.parse(TargetSearch.search(new Class<?>[]{type}, "auth", source(bytes)));
@@ -43,9 +47,20 @@ class TargetSearchTest {
 
     private static TargetSearch.Source source(byte[] bytes) {
         return new TargetSearch.Source() {
-            @Override public String identifier(Class<?> type) { return "c:" + System.identityHashCode(type); }
-            @Override public String loader(Class<?> type) { return "loader@" + System.identityHashCode(type.getClassLoader()); }
-            @Override public byte[] bytes(Class<?> type) { return bytes; }
+            @Override
+            public String identifier(Class<?> type) {
+                return "c:" + System.identityHashCode(type);
+            }
+
+            @Override
+            public String loader(Class<?> type) {
+                return "loader@" + System.identityHashCode(type.getClassLoader());
+            }
+
+            @Override
+            public byte[] bytes(Class<?> type) {
+                return bytes;
+            }
         };
     }
 
@@ -66,6 +81,8 @@ class TargetSearchTest {
     }
 
     private static final class Loader extends ClassLoader {
-        Class<?> define(byte[] bytes) { return defineClass(null, bytes, 0, bytes.length); }
+        Class<?> define(byte[] bytes) {
+            return defineClass(null, bytes, 0, bytes.length);
+        }
     }
 }

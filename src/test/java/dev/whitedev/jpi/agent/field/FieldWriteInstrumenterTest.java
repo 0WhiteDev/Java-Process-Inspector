@@ -14,11 +14,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class FieldWriteInstrumenterTest {
-    @AfterEach void clearRuntime() {
+    @AfterEach
+    void clearRuntime() {
         FieldWriteRuntime.clear();
     }
 
-    @Test void capturesStaticValueBeforeAndAfterTheWrite() throws Exception {
+    @Test
+    void capturesStaticValueBeforeAndAfterTheWrite() throws Exception {
         String output = execute("licensed", "Z", "setLicensed", new Class<?>[]{boolean.class}, new Object[]{true});
 
         assertTrue(output.contains(encoded("false")));
@@ -26,7 +28,8 @@ class FieldWriteInstrumenterTest {
         assertTrue(output.contains("PUTSTATIC"));
     }
 
-    @Test void capturesInstanceIdentityAndValueTransition() throws Exception {
+    @Test
+    void capturesInstanceIdentityAndValueTransition() throws Exception {
         String output = execute("state", "I", "setState", new Class<?>[]{int.class}, new Object[]{7});
 
         assertTrue(output.contains(encoded("0")));

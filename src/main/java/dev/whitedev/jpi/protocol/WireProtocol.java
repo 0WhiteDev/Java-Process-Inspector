@@ -10,7 +10,8 @@ public final class WireProtocol {
     public static final short VERSION = 1;
     public static final int MAX_PAYLOAD = 32 * 1024 * 1024;
 
-    private WireProtocol() {}
+    private WireProtocol() {
+    }
 
     public static void writeRequest(DataOutputStream out, Operation operation, byte[] payload) throws IOException {
         writeHeader(out, operation.ordinal(), payload);
@@ -63,23 +64,51 @@ public final class WireProtocol {
         return payload;
     }
 
-    public static byte[] utf8(String value) { return value.getBytes(StandardCharsets.UTF_8); }
-    public static String text(byte[] value) { return new String(value, StandardCharsets.UTF_8); }
+    public static byte[] utf8(String value) {
+        return value.getBytes(StandardCharsets.UTF_8);
+    }
+
+    public static String text(byte[] value) {
+        return new String(value, StandardCharsets.UTF_8);
+    }
 
     public static final class Request {
         private final Operation operation;
         private final byte[] payload;
-        public Request(Operation operation, byte[] payload) { this.operation = operation; this.payload = payload; }
-        public Operation operation() { return operation; }
-        public byte[] payload() { return payload; }
+
+        public Request(Operation operation, byte[] payload) {
+            this.operation = operation;
+            this.payload = payload;
+        }
+
+        public Operation operation() {
+            return operation;
+        }
+
+        public byte[] payload() {
+            return payload;
+        }
     }
 
     public static final class Response {
         private final boolean success;
         private final byte[] payload;
-        public Response(boolean success, byte[] payload) { this.success = success; this.payload = payload; }
-        public boolean success() { return success; }
-        public byte[] payload() { return payload; }
-        public String text() { return WireProtocol.text(payload); }
+
+        public Response(boolean success, byte[] payload) {
+            this.success = success;
+            this.payload = payload;
+        }
+
+        public boolean success() {
+            return success;
+        }
+
+        public byte[] payload() {
+            return payload;
+        }
+
+        public String text() {
+            return WireProtocol.text(payload);
+        }
     }
 }

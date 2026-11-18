@@ -7,12 +7,14 @@ import java.util.Arrays;
 import static org.junit.jupiter.api.Assertions.*;
 
 class CommandLineTokenizerTest {
-    @Test void preservesQuotedArgumentsAndSpaces() {
+    @Test
+    void preservesQuotedArgumentsAndSpaces() {
         assertEquals(Arrays.asList("-Xmx2g", "-Dname=hello world", "--flag"),
                 CommandLineTokenizer.parse("-Xmx2g \"-Dname=hello world\" --flag"));
     }
 
-    @Test void rejectsAnUnclosedQuote() {
+    @Test
+    void rejectsAnUnclosedQuote() {
         assertThrows(IllegalArgumentException.class,
                 () -> CommandLineTokenizer.parse("\"unfinished"));
     }

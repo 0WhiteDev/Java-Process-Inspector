@@ -65,7 +65,8 @@ public final class JfrProfilerManager {
         message = "Recording JFR events";
         final Object expected = created;
         Thread thread = new Thread(new Runnable() {
-            @Override public void run() {
+            @Override
+            public void run() {
                 try {
                     Thread.sleep(durationMillis);
                 } catch (InterruptedException ignored) {
@@ -195,11 +196,14 @@ public final class JfrProfilerManager {
     private static JfrCategory category(String name) {
         if (name.endsWith("ExecutionSample") || name.endsWith("NativeMethodSample")) return JfrCategory.CPU;
         if (name.contains("ObjectAllocation")) return JfrCategory.ALLOCATIONS;
-        if (name.endsWith("JavaMonitorEnter") || name.endsWith("JavaMonitorWait") || name.endsWith("ThreadPark")) return JfrCategory.LOCKS;
+        if (name.endsWith("JavaMonitorEnter") || name.endsWith("JavaMonitorWait") || name.endsWith("ThreadPark"))
+            return JfrCategory.LOCKS;
         if (name.endsWith("JavaExceptionThrow") || name.endsWith("JavaErrorThrow")) return JfrCategory.EXCEPTIONS;
         if (name.contains("GarbageCollection") || name.endsWith("GCHeapSummary")) return JfrCategory.GC;
-        if (name.endsWith("ThreadStart") || name.endsWith("ThreadEnd") || name.endsWith("ThreadSleep")) return JfrCategory.THREADS;
-        if (name.endsWith("FileRead") || name.endsWith("FileWrite") || name.endsWith("SocketRead") || name.endsWith("SocketWrite")) return JfrCategory.IO;
+        if (name.endsWith("ThreadStart") || name.endsWith("ThreadEnd") || name.endsWith("ThreadSleep"))
+            return JfrCategory.THREADS;
+        if (name.endsWith("FileRead") || name.endsWith("FileWrite") || name.endsWith("SocketRead") || name.endsWith("SocketWrite"))
+            return JfrCategory.IO;
         return null;
     }
 
@@ -312,7 +316,8 @@ public final class JfrProfilerManager {
                                       Map<String, Metric> source) {
         List<Map.Entry<String, Metric>> ordered = new ArrayList<Map.Entry<String, Metric>>(source.entrySet());
         Collections.sort(ordered, new Comparator<Map.Entry<String, Metric>>() {
-            @Override public int compare(Map.Entry<String, Metric> left, Map.Entry<String, Metric> right) {
+            @Override
+            public int compare(Map.Entry<String, Metric> left, Map.Entry<String, Metric> right) {
                 int value = Long.compare(right.getValue().value, left.getValue().value);
                 return value == 0 ? left.getKey().compareTo(right.getKey()) : value;
             }
@@ -384,7 +389,8 @@ public final class JfrProfilerManager {
         String value = setting(settings, key);
         if (value.isEmpty()) return fallback;
         int parsed = Integer.parseInt(value);
-        if (parsed < minimum || parsed > maximum) throw new IllegalArgumentException(key + " is outside its allowed range");
+        if (parsed < minimum || parsed > maximum)
+            throw new IllegalArgumentException(key + " is outside its allowed range");
         return parsed;
     }
 

@@ -1,14 +1,13 @@
 package dev.whitedev.jpi.ui.inspection;
 
-import dev.whitedev.jpi.ui.context.AnalysisTarget;
-import dev.whitedev.jpi.ui.context.ContextActions;
-
 import dev.whitedev.jpi.attach.InspectorSession;
 import dev.whitedev.jpi.deobfuscation.DeobfuscationWorkspace;
 import dev.whitedev.jpi.protocol.Operation;
 import dev.whitedev.jpi.ui.Async;
 import dev.whitedev.jpi.ui.SessionAware;
 import dev.whitedev.jpi.ui.Ui;
+import dev.whitedev.jpi.ui.context.AnalysisTarget;
+import dev.whitedev.jpi.ui.context.ContextActions;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -26,7 +25,10 @@ public final class ConstantSearchPanel extends JPanel implements SessionAware {
     private final JLabel resultCount = new JLabel("Not attached");
     private final DefaultTableModel model = new DefaultTableModel(
             new Object[]{"Class", "Class loader", "Matching constant or symbol"}, 0) {
-        @Override public boolean isCellEditable(int row, int column) { return false; }
+        @Override
+        public boolean isCellEditable(int row, int column) {
+            return false;
+        }
     };
     private final JTable results = new JTable(model);
     private InspectorSession session;
@@ -50,7 +52,8 @@ public final class ConstantSearchPanel extends JPanel implements SessionAware {
         investigate.addActionListener(e -> investigate());
         JButton copy = Ui.secondaryButton("Copy results");
         copy.addActionListener(e -> copyResults());
-        actions.add(query); actions.add(copy);
+        actions.add(query);
+        actions.add(copy);
         if (investigation != null) actions.add(investigate);
         actions.add(search);
         add(Ui.sectionHeader("Constant search",
@@ -70,7 +73,8 @@ public final class ConstantSearchPanel extends JPanel implements SessionAware {
         setSession(null);
     }
 
-    @Override public void setSession(InspectorSession session) {
+    @Override
+    public void setSession(InspectorSession session) {
         this.session = session;
         search.setEnabled(session != null);
         investigate.setEnabled(session != null && investigation != null);

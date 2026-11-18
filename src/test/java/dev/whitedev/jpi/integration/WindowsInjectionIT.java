@@ -7,12 +7,14 @@ import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.objectweb.asm.ClassReader;
+
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 @Timeout(90)
@@ -27,7 +29,8 @@ class WindowsInjectionIT {
         return NativeAgentArtifact.extractBundled();
     }
 
-    @Test void directlyInjectsInitializesAndBindsWithoutAttachFallback() throws Exception {
+    @Test
+    void directlyInjectsInitializesAndBindsWithoutAttachFallback() throws Exception {
         NativeAgentArtifact bundled = artifact();
         Path directory = Files.createTempDirectory("jpi-injection-");
         Path copy = directory.resolve("agent with spaces.dll");
@@ -50,22 +53,30 @@ class WindowsInjectionIT {
                 assertFalse(session.requestText(Operation.MEMORY_REGIONS, "").isEmpty());
                 for (int i = 0; i < 10; i++) assertEquals("pong", session.requestText(Operation.PING, ""));
                 assertTrue(target.isAlive());
-            } finally { stop(target); }
-        } finally { JvmFixtureCleanup.delete(copy, directory); }
+            } finally {
+                stop(target);
+            }
+        } finally {
+            JvmFixtureCleanup.delete(copy, directory);
+        }
     }
 
-    @Test void serviceLoadsAndInitializesTheWindowsBackend() throws Exception {
+    @Test
+    void serviceLoadsAndInitializesTheWindowsBackend() throws Exception {
         NativeAgentArtifact agent = artifact();
         try (AttachService.PreparedAgentSession prepared = service.prepareEarlyAgent()) {
             Process target = start(prepared.jvmArgument());
             try (InspectorSession session = prepared.await(Long.toString(target.pid()), "Windows service fixture")) {
                 assertTrue(service.enableNativeBackendWithInjection(session, agent).contains("backend=JVMTI"));
                 assertEquals("pong", session.requestText(Operation.PING, ""));
-            } finally { stop(target); }
+            } finally {
+                stop(target);
+            }
         }
     }
 
-    @Test void unicodeDllPathLoadsAndInitializesWithoutLossyModuleNames() throws Exception {
+    @Test
+    void unicodeDllPathLoadsAndInitializesWithoutLossyModuleNames() throws Exception {
         NativeAgentArtifact bundled = artifact();
         Path directory = Files.createTempDirectory("jpi-\uD83D\uDD0E-");
         Path copy = directory.resolve("agent with spaces.dll");
@@ -77,11 +88,16 @@ class WindowsInjectionIT {
                 new ProcessInjector().inject(Long.toString(target.pid()), agent);
                 new ProcessInjector().inject(Long.toString(target.pid()), agent);
                 assertEquals("pong", session.requestText(Operation.PING, ""));
-            } finally { stop(target); }
-        } finally { JvmFixtureCleanup.delete(copy, directory); }
+            } finally {
+                stop(target);
+            }
+        } finally {
+            JvmFixtureCleanup.delete(copy, directory);
+        }
     }
 
-    @Test void missingInitializationEntryLeavesTargetResponsive() throws Exception {
+    @Test
+    void missingInitializationEntryLeavesTargetResponsive() throws Exception {
         NativeAgentArtifact agent = artifact();
         NativeAgentArtifact wrong = NativeAgentArtifact.extractBundled("process_injector");
         try (AttachService.PreparedAgentSession prepared = service.prepareEarlyAgent()) {
@@ -92,7 +108,9 @@ class WindowsInjectionIT {
                 assertEquals("pong", session.requestText(Operation.PING, ""));
                 assertTrue(service.enableNativeBackendWithInjection(session, agent).contains("backend=JVMTI"));
                 assertEquals("pong", session.requestText(Operation.PING, ""));
-            } finally { stop(target); }
+            } finally {
+                stop(target);
+            }
         }
     }
 

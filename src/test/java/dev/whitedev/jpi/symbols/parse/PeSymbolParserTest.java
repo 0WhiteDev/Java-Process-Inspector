@@ -14,9 +14,11 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PeSymbolParserTest {
-    @TempDir Path directory;
+    @TempDir
+    Path directory;
 
-    @Test void readsExportsAndCodeViewPdbReference() throws Exception {
+    @Test
+    void readsExportsAndCodeViewPdbReference() throws Exception {
         byte[] bytes = new byte[0x800];
         ByteBuffer data = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN);
         bytes[0] = 'M';

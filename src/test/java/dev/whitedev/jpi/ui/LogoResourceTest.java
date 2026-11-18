@@ -9,7 +9,8 @@ import java.awt.image.BufferedImage;
 import static org.junit.jupiter.api.Assertions.*;
 
 class LogoResourceTest {
-    @Test void logoRendersFromThePackagedSvgResource() {
+    @Test
+    void logoRendersFromThePackagedSvgResource() {
         FlatSVGIcon icon = new FlatSVGIcon("assets/logo.svg", 128, 128);
         BufferedImage image = new BufferedImage(128, 128, BufferedImage.TYPE_INT_ARGB);
         Graphics2D graphics = image.createGraphics();

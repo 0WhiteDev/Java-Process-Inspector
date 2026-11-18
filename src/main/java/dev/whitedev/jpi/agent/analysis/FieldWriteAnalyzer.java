@@ -15,7 +15,8 @@ import java.util.List;
 import java.util.Map;
 
 public final class FieldWriteAnalyzer {
-    private FieldWriteAnalyzer() { }
+    private FieldWriteAnalyzer() {
+    }
 
     public static List<WriteSite> find(byte[] bytecode, String classIdentifier, String className,
                                        String owner, String fieldName, String descriptor) throws IOException {

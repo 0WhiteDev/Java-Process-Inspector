@@ -2,6 +2,7 @@ package dev.whitedev.jpi.attach;
 
 import dev.whitedev.jpi.protocol.Operation;
 import dev.whitedev.jpi.protocol.WireProtocol;
+
 import java.io.Closeable;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -28,8 +29,13 @@ public final class InspectorSession implements Closeable {
         this.output = new DataOutputStream(socket.getOutputStream());
     }
 
-    public JvmDescriptor target() { return target; }
-    public boolean isTunneled() { return tunneled; }
+    public JvmDescriptor target() {
+        return target;
+    }
+
+    public boolean isTunneled() {
+        return tunneled;
+    }
 
     public synchronized byte[] request(Operation operation, String payload) throws IOException {
         ensureOpen();
@@ -39,7 +45,10 @@ public final class InspectorSession implements Closeable {
             response = WireProtocol.readResponse(input);
         } catch (IOException error) {
             closed = true;
-            try { socket.close(); } catch (IOException ignored) { }
+            try {
+                socket.close();
+            } catch (IOException ignored) {
+            }
             throw error;
         }
         if (!response.success()) throw new IOException(response.text());
@@ -54,10 +63,17 @@ public final class InspectorSession implements Closeable {
         return WireProtocol.text(request(operation, payload));
     }
 
-    @Override public synchronized void close() {
+    @Override
+    public synchronized void close() {
         if (closed) return;
-        try { WireProtocol.writeRequest(output, Operation.DISCONNECT, new byte[0]); } catch (IOException ignored) {}
+        try {
+            WireProtocol.writeRequest(output, Operation.DISCONNECT, new byte[0]);
+        } catch (IOException ignored) {
+        }
         closed = true;
-        try { socket.close(); } catch (IOException ignored) {}
+        try {
+            socket.close();
+        } catch (IOException ignored) {
+        }
     }
 }

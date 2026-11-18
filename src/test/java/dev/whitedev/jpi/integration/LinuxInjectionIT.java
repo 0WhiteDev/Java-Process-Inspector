@@ -3,17 +3,27 @@ package dev.whitedev.jpi.integration;
 import dev.whitedev.jpi.attach.*;
 import dev.whitedev.jpi.attach.jvmti.NativeAgentArtifact;
 import dev.whitedev.jpi.protocol.Operation;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
-import org.junit.jupiter.api.Assumptions;
 import org.objectweb.asm.ClassReader;
+
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.PosixFilePermissions;
+import java.security.MessageDigest;
 import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeUnit;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 @Timeout(90)
@@ -28,7 +38,8 @@ class LinuxInjectionIT {
         return NativeAgentArtifact.extractBundled("jvmti_agent");
     }
 
-    @Test void injectsIntoDedicatedJvmAndKeepsItResponsive() throws Exception {
+    @Test
+    void injectsIntoDedicatedJvmAndKeepsItResponsive() throws Exception {
         NativeAgentArtifact bundled = artifact();
         Path directory = Files.createTempDirectory("jpi-\uD83D\uDD0E-");
         Path copy = directory.resolve("agent with spaces.so");
@@ -55,11 +66,17 @@ class LinuxInjectionIT {
                 for (int i = 0; i < 10; ++i) assertEquals("pong", session.requestText(Operation.PING, ""));
                 assertTrue(target.isAlive());
                 assertDetached(target.pid());
-            } finally { stop(target); }
-        } finally { Files.deleteIfExists(copy); Files.deleteIfExists(directory); }
+            } finally {
+                stop(target);
+            }
+        } finally {
+            Files.deleteIfExists(copy);
+            Files.deleteIfExists(directory);
+        }
     }
 
-    @Test void initializesNativeBackendBeforeAnyJavaAgentIsLoaded() throws Exception {
+    @Test
+    void initializesNativeBackendBeforeAnyJavaAgentIsLoaded() throws Exception {
         NativeAgentArtifact agent = artifact();
         Process target = start();
         try {
@@ -76,16 +93,19 @@ class LinuxInjectionIT {
                 assertEquals("pong", session.requestText(Operation.PING, ""));
             }
             assertTrue(target.isAlive());
-        } finally { stop(target); }
+        } finally {
+            stop(target);
+        }
     }
 
-    @Test void dlopenFailureRestoresTargetAndAllowsRetry() throws Exception {
+    @Test
+    void dlopenFailureRestoresTargetAndAllowsRetry() throws Exception {
         NativeAgentArtifact agent = artifact();
         Path broken = Files.createTempFile("jpi-invalid-elf-", ".so");
         try {
-            byte[] contents = "not an ELF shared library".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            byte[] contents = "not an ELF shared library".getBytes(StandardCharsets.UTF_8);
             Files.write(broken, contents);
-            String digest = java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(contents));
+            String digest = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(contents));
             NativeAgentArtifact invalid = NativeAgentArtifact.verify(broken, digest);
             try (AttachService.PreparedAgentSession prepared = service.prepareEarlyAgent()) {
                 Process target = start(unquote(prepared.jvmArgument()));
@@ -97,9 +117,13 @@ class LinuxInjectionIT {
                     new ProcessInjector().inject(Long.toString(target.pid()), agent);
                     assertTrue(session.requestText(Operation.JVMTI_BIND, agent.bindingOptions()).contains("phase=live"));
                     assertDetached(target.pid());
-                } finally { stop(target); }
+                } finally {
+                    stop(target);
+                }
             }
-        } finally { Files.deleteIfExists(broken); }
+        } finally {
+            Files.deleteIfExists(broken);
+        }
     }
 
     private void assertNativePatchAndRollback(InspectorSession session) throws Exception {
@@ -117,13 +141,15 @@ class LinuxInjectionIT {
     private NativeAgentArtifact lifecycleFixture(String name) throws Exception {
         artifact();
         Path path = Path.of("target", "native-test-fixtures", "libjpi_test_" + name + ".so").toAbsolutePath();
-        if (Boolean.getBoolean("jpi.native.required")) assertTrue(Files.isRegularFile(path), "Build with -DJPI_BUILD_TEST_FIXTURES=ON");
+        if (Boolean.getBoolean("jpi.native.required"))
+            assertTrue(Files.isRegularFile(path), "Build with -DJPI_BUILD_TEST_FIXTURES=ON");
         else Assumptions.assumeTrue(Files.isRegularFile(path));
-        String digest = java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(path)));
+        String digest = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(path)));
         return NativeAgentArtifact.verify(path, digest);
     }
 
-    @Test void initializationFailureIsNotReportedAsSuccessfulLibraryLoading() throws Exception {
+    @Test
+    void initializationFailureIsNotReportedAsSuccessfulLibraryLoading() throws Exception {
         NativeAgentArtifact fixture = lifecycleFixture("entry_error");
         try (AttachService.PreparedAgentSession prepared = service.prepareEarlyAgent()) {
             Process target = start(unquote(prepared.jvmArgument()));
@@ -134,11 +160,14 @@ class LinuxInjectionIT {
                 assertTrue(session.requestText(Operation.JVMTI_STATUS, "").contains("not-bound"));
                 assertDetached(target.pid());
                 assertEquals("pong", session.requestText(Operation.PING, ""));
-            } finally { stop(target); }
+            } finally {
+                stop(target);
+            }
         }
     }
 
-    @Test void ownershipAwareEntryCanReleaseItsUnneededLoaderReference() throws Exception {
+    @Test
+    void ownershipAwareEntryCanReleaseItsUnneededLoaderReference() throws Exception {
         NativeAgentArtifact fixture = lifecycleFixture("entry_release");
         try (AttachService.PreparedAgentSession prepared = service.prepareEarlyAgent()) {
             Process target = start(unquote(prepared.jvmArgument()));
@@ -148,11 +177,14 @@ class LinuxInjectionIT {
                 assertTrue(session.requestText(Operation.JVMTI_STATUS, "").contains("not-bound"));
                 assertDetached(target.pid());
                 assertEquals("pong", session.requestText(Operation.PING, ""));
-            } finally { stop(target); }
+            } finally {
+                stop(target);
+            }
         }
     }
 
-    @Test void timedOutWorkerCanFinishWithoutItsCodeBeingFreed() throws Exception {
+    @Test
+    void timedOutWorkerCanFinishWithoutItsCodeBeingFreed() throws Exception {
         NativeAgentArtifact fixture = lifecycleFixture("entry_slow");
         try (AttachService.PreparedAgentSession prepared = service.prepareEarlyAgent()) {
             Process target = start(unquote(prepared.jvmArgument()));
@@ -170,21 +202,26 @@ class LinuxInjectionIT {
                 assertTrue(target.isAlive());
                 assertEquals("pong", session.requestText(Operation.PING, ""));
                 assertDetached(target.pid());
-            } finally { stop(target); }
+            } finally {
+                stop(target);
+            }
         }
     }
 
     private static boolean hasSlowWorker(long pid) throws IOException {
         try (var tasks = Files.list(Path.of("/proc", Long.toString(pid), "task"))) {
             for (Path task : tasks.toList()) {
-                try { if (Files.readString(task.resolve("comm")).trim().equals("jpi-audit-slow")) return true; }
-                catch (java.nio.file.NoSuchFileException exited) { }
+                try {
+                    if (Files.readString(task.resolve("comm")).trim().equals("jpi-audit-slow")) return true;
+                } catch (NoSuchFileException exited) {
+                }
             }
         }
         return false;
     }
 
-    @Test void missingAgentEntryRestoresTargetAndAllowsAttachFallback() throws Exception {
+    @Test
+    void missingAgentEntryRestoresTargetAndAllowsAttachFallback() throws Exception {
         artifact();
         NativeAgentArtifact wrongAgent = NativeAgentArtifact.extractBundled("process_injector");
         try (AttachService.PreparedAgentSession prepared = service.prepareEarlyAgent()) {
@@ -196,11 +233,14 @@ class LinuxInjectionIT {
                 assertEquals("pong", session.requestText(Operation.PING, ""));
                 assertTrue(service.enableNativeBackend(session, NativeAgentArtifact.extractBundled()).contains("backend=JVMTI"));
                 assertEquals("pong", session.requestText(Operation.PING, ""));
-            } finally { stop(target); }
+            } finally {
+                stop(target);
+            }
         }
     }
 
-    @Test void serviceDoesNotInjectWhenNonJvmPolicyCannotBeEstablished() throws Exception {
+    @Test
+    void serviceDoesNotInjectWhenNonJvmPolicyCannotBeEstablished() throws Exception {
         NativeAgentArtifact agent = artifact();
         Process target = new ProcessBuilder("sleep", "60").start();
         try {
@@ -208,15 +248,18 @@ class LinuxInjectionIT {
             assertEquals(0, failure.getSuppressed().length);
             assertTrue(failure.getMessage().contains("No OS injection fallback"), failure.toString());
             assertTrue(target.isAlive());
-        } finally { stop(target); }
+        } finally {
+            stop(target);
+        }
     }
 
-    @Test void unsafeAgentPermissionsRejectInjectionAndUseAttachFallback() throws Exception {
+    @Test
+    void unsafeAgentPermissionsRejectInjectionAndUseAttachFallback() throws Exception {
         NativeAgentArtifact agent = artifact();
         Path copy = Files.createTempFile("jpi-injection-permissions-", ".so");
         try {
-            Files.copy(agent.library(), copy, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-            Files.setPosixFilePermissions(copy, java.nio.file.attribute.PosixFilePermissions.fromString("rw-rw-rw-"));
+            Files.copy(agent.library(), copy, StandardCopyOption.REPLACE_EXISTING);
+            Files.setPosixFilePermissions(copy, PosixFilePermissions.fromString("rw-rw-rw-"));
             NativeAgentArtifact writable = NativeAgentArtifact.verify(copy, agent.sha256());
             try (AttachService.PreparedAgentSession prepared = service.prepareEarlyAgent()) {
                 Process target = start(unquote(prepared.jvmArgument()));
@@ -226,9 +269,13 @@ class LinuxInjectionIT {
                     assertEquals("pong", session.requestText(Operation.PING, ""));
                     assertTrue(service.enableNativeBackendWithInjection(session, writable).contains("backend=JVMTI"));
                     assertEquals("pong", session.requestText(Operation.PING, ""));
-                } finally { stop(target); }
+                } finally {
+                    stop(target);
+                }
             }
-        } finally { Files.deleteIfExists(copy); }
+        } finally {
+            Files.deleteIfExists(copy);
+        }
     }
 
     private Process start(String... earlyAgent) throws Exception {
@@ -238,29 +285,44 @@ class LinuxInjectionIT {
         command.addAll(List.of("-cp", System.getProperty("jpi.test.classes", "target/test-classes"), AttachTarget.class.getName()));
         Process target = new ProcessBuilder(command).redirectError(ProcessBuilder.Redirect.DISCARD).start();
         try {
-            String ready = java.util.concurrent.CompletableFuture.supplyAsync(() -> {
-                try { return target.inputReader().readLine(); }
-                catch (IOException error) { throw new java.util.concurrent.CompletionException(error); }
+            String ready = CompletableFuture.supplyAsync(() -> {
+                try {
+                    return target.inputReader().readLine();
+                } catch (IOException error) {
+                    throw new CompletionException(error);
+                }
             }).get(15, TimeUnit.SECONDS);
             assertEquals(Long.toString(target.pid()), ready, "Fixture must reach main before native loading");
             return target;
-        } catch (Throwable error) { stop(target); throw error; }
+        } catch (Throwable error) {
+            stop(target);
+            throw error;
+        }
     }
 
     private static void assertDetached(long pid) throws IOException {
         try (var tasks = Files.list(Path.of("/proc", Long.toString(pid), "task"))) {
             for (Path task : tasks.toList()) {
                 String status;
-                try { status = Files.readString(task.resolve("status")); }
-                catch (java.nio.file.NoSuchFileException exited) { continue; }
+                try {
+                    status = Files.readString(task.resolve("status"));
+                } catch (NoSuchFileException exited) {
+                    continue;
+                }
                 assertTrue(status.lines().anyMatch(line -> line.matches("TracerPid:\\s+0")), status);
             }
         }
     }
 
-    private static String unquote(String argument) { return argument.startsWith("\"") ? argument.substring(1, argument.length() - 1) : argument; }
+    private static String unquote(String argument) {
+        return argument.startsWith("\"") ? argument.substring(1, argument.length() - 1) : argument;
+    }
+
     private static void stop(Process process) throws Exception {
         process.destroy();
-        if (!process.waitFor(5, TimeUnit.SECONDS)) { process.destroyForcibly(); assertTrue(process.waitFor(5, TimeUnit.SECONDS)); }
+        if (!process.waitFor(5, TimeUnit.SECONDS)) {
+            process.destroyForcibly();
+            assertTrue(process.waitFor(5, TimeUnit.SECONDS));
+        }
     }
 }

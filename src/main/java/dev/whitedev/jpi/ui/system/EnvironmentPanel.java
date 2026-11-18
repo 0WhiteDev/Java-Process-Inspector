@@ -1,12 +1,11 @@
 package dev.whitedev.jpi.ui.system;
 
+import dev.whitedev.jpi.attach.InspectorSession;
+import dev.whitedev.jpi.export.SessionSnapshotExporter;
+import dev.whitedev.jpi.protocol.Operation;
 import dev.whitedev.jpi.ui.Async;
 import dev.whitedev.jpi.ui.SessionAware;
 import dev.whitedev.jpi.ui.Ui;
-
-import dev.whitedev.jpi.attach.InspectorSession;
-import dev.whitedev.jpi.protocol.Operation;
-import dev.whitedev.jpi.export.SessionSnapshotExporter;
 import dev.whitedev.jpi.ui.timeline.RuntimeTimelineStore;
 import dev.whitedev.jpi.ui.timeline.TimelineEvent;
 import dev.whitedev.jpi.ui.timeline.TimelineSource;
@@ -53,7 +52,8 @@ public final class EnvironmentPanel extends JPanel implements SessionAware {
         add(card, BorderLayout.CENTER);
     }
 
-    @Override public void setSession(InspectorSession session) {
+    @Override
+    public void setSession(InspectorSession session) {
         this.session = session;
         refresh.setEnabled(session != null);
         export.setEnabled(session != null);
@@ -87,7 +87,8 @@ public final class EnvironmentPanel extends JPanel implements SessionAware {
         chooser.setSelectedFile(new File("jpi-snapshot-" + current.target().id() + ".zip"));
         if (chooser.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) return;
         File selected = chooser.getSelectedFile();
-        if (!selected.getName().toLowerCase(Locale.ROOT).endsWith(".zip")) selected = new File(selected.getParentFile(), selected.getName() + ".zip");
+        if (!selected.getName().toLowerCase(Locale.ROOT).endsWith(".zip"))
+            selected = new File(selected.getParentFile(), selected.getName() + ".zip");
         final File destination = selected;
         refresh.setEnabled(false);
         output.setText("Collecting session snapshot...");

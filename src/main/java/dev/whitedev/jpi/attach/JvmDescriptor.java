@@ -5,5 +5,8 @@ public record JvmDescriptor(String id, String displayName) {
         displayName = displayName == null || displayName.isBlank() ? "<unknown>" : displayName;
     }
 
-    @Override public String toString() { return id + "  -  " + displayName; }
+    @Override
+    public String toString() {
+        return id + "  -  " + displayName;
+    }
 }

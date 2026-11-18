@@ -8,6 +8,11 @@ public final class McpException extends RuntimeException {
         this.code = code;
     }
 
-    public McpErrorCode code() { return code; }
-    public boolean retryable() { return code == McpErrorCode.SESSION_CHANGED || code == McpErrorCode.OPERATION_TIMEOUT; }
+    public McpErrorCode code() {
+        return code;
+    }
+
+    public boolean retryable() {
+        return code == McpErrorCode.SESSION_CHANGED || code == McpErrorCode.OPERATION_TIMEOUT;
+    }
 }

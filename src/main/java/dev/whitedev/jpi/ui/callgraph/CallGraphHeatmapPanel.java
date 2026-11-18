@@ -1,14 +1,13 @@
 package dev.whitedev.jpi.ui.callgraph;
 
-import dev.whitedev.jpi.ui.context.ContextAction;
-import dev.whitedev.jpi.ui.context.ContextActions;
-
 import dev.whitedev.jpi.attach.InspectorSession;
 import dev.whitedev.jpi.deobfuscation.DeobfuscationWorkspace;
 import dev.whitedev.jpi.protocol.Operation;
 import dev.whitedev.jpi.ui.Async;
 import dev.whitedev.jpi.ui.SessionAware;
 import dev.whitedev.jpi.ui.Ui;
+import dev.whitedev.jpi.ui.context.ContextAction;
+import dev.whitedev.jpi.ui.context.ContextActions;
 
 import javax.swing.BorderFactory;
 import javax.swing.BoxLayout;
@@ -24,6 +23,7 @@ import javax.swing.JSplitPane;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.SpinnerNumberModel;
+import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 import javax.swing.border.EmptyBorder;
 import javax.swing.event.DocumentEvent;
@@ -40,7 +40,11 @@ import java.util.Comparator;
 import java.util.List;
 
 public final class CallGraphHeatmapPanel extends JPanel implements SessionAware {
-    public void filterTarget(String value) { search.setText(value); refresh(); }
+    public void filterTarget(String value) {
+        search.setText(value);
+        refresh();
+    }
+
     private final DeobfuscationWorkspace workspace;
     private final CallGraphCanvas graph;
     private final JTextField search = new JTextField();
@@ -148,11 +152,22 @@ public final class CallGraphHeatmapPanel extends JPanel implements SessionAware 
         maximumNodes.addChangeListener(event -> render());
         heat.addActionListener(event -> render());
         search.getDocument().addDocumentListener(new DocumentListener() {
-            @Override public void insertUpdate(DocumentEvent event) { render(); }
-            @Override public void removeUpdate(DocumentEvent event) { render(); }
-            @Override public void changedUpdate(DocumentEvent event) { render(); }
+            @Override
+            public void insertUpdate(DocumentEvent event) {
+                render();
+            }
+
+            @Override
+            public void removeUpdate(DocumentEvent event) {
+                render();
+            }
+
+            @Override
+            public void changedUpdate(DocumentEvent event) {
+                render();
+            }
         });
-        workspace.addListener(() -> javax.swing.SwingUtilities.invokeLater(() -> {
+        workspace.addListener(() -> SwingUtilities.invokeLater(() -> {
             graph.repaint();
             select(selected);
         }));
@@ -164,7 +179,8 @@ public final class CallGraphHeatmapPanel extends JPanel implements SessionAware 
         graph.setContextActions(actions);
     }
 
-    @Override public void setSession(InspectorSession value) {
+    @Override
+    public void setSession(InspectorSession value) {
         session = value;
         loading = false;
         paused.setSelected(false);

@@ -33,7 +33,8 @@ public final class FileRuleEngine {
     public List<FileRule> rules() {
         List<FileRule> result = new ArrayList<FileRule>(rules);
         Collections.sort(result, new Comparator<FileRule>() {
-            @Override public int compare(FileRule left, FileRule right) {
+            @Override
+            public int compare(FileRule left, FileRule right) {
                 return left.id.compareTo(right.id);
             }
         });
@@ -41,7 +42,8 @@ public final class FileRuleEngine {
     }
 
     public void policy(FileDecision value) {
-        if (value == FileDecision.REDIRECT) throw new IllegalArgumentException("Global redirect requires an explicit rule");
+        if (value == FileDecision.REDIRECT)
+            throw new IllegalArgumentException("Global redirect requires an explicit rule");
         policy = value;
         fallback = fallback(value);
     }

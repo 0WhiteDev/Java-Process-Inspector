@@ -12,7 +12,8 @@ import java.util.concurrent.locks.ReentrantLock;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ThreadAnalyzerTest {
-    @Test void readOnlySnapshotDoesNotEnableTargetMonitoring() {
+    @Test
+    void readOnlySnapshotDoesNotEnableTargetMonitoring() {
         var bean = ManagementFactory.getThreadMXBean();
         boolean cpu = bean.isThreadCpuTimeSupported() && bean.isThreadCpuTimeEnabled();
         boolean contention = bean.isThreadContentionMonitoringSupported() && bean.isThreadContentionMonitoringEnabled();
@@ -22,7 +23,8 @@ class ThreadAnalyzerTest {
             ThreadAnalyzer analyzer = new ThreadAnalyzer();
             assertTrue(analyzer.snapshot(false).contains("\nT\t"));
             if (bean.isThreadCpuTimeSupported()) Assertions.assertFalse(bean.isThreadCpuTimeEnabled());
-            if (bean.isThreadContentionMonitoringSupported()) Assertions.assertFalse(bean.isThreadContentionMonitoringEnabled());
+            if (bean.isThreadContentionMonitoringSupported())
+                Assertions.assertFalse(bean.isThreadContentionMonitoringEnabled());
         } finally {
             if (bean.isThreadCpuTimeSupported()) bean.setThreadCpuTimeEnabled(cpu);
             if (bean.isThreadContentionMonitoringSupported()) bean.setThreadContentionMonitoringEnabled(contention);

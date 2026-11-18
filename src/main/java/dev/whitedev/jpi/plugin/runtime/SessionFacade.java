@@ -13,19 +13,23 @@ final class SessionFacade implements JpiSession {
         this.session = session;
     }
 
-    @Override public String targetId() {
+    @Override
+    public String targetId() {
         return session.target().id();
     }
 
-    @Override public String targetDisplayName() {
+    @Override
+    public String targetDisplayName() {
         return session.target().displayName();
     }
 
-    @Override public byte[] request(Operation operation, String payload) throws IOException {
+    @Override
+    public byte[] request(Operation operation, String payload) throws IOException {
         return session.request(operation, payload);
     }
 
-    @Override public String requestText(Operation operation, String payload) throws IOException {
+    @Override
+    public String requestText(Operation operation, String payload) throws IOException {
         return session.requestText(operation, payload);
     }
 }

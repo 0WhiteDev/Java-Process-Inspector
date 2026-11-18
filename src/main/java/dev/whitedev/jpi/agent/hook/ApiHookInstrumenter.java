@@ -19,7 +19,8 @@ final class ApiHookInstrumenter {
     private static final String HIT_DESCRIPTOR = "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;"
             + "Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V";
 
-    private ApiHookInstrumenter() {}
+    private ApiHookInstrumenter() {
+    }
 
     static Result instrument(byte[] source, Set<ApiHookProfile> profiles) {
         ClassReader reader = new ClassReader(source);
@@ -28,7 +29,7 @@ final class ApiHookInstrumenter {
         int sites = 0;
         for (MethodNode method : type.methods) {
             if ((method.access & (Opcodes.ACC_ABSTRACT | Opcodes.ACC_NATIVE)) != 0) continue;
-            for (AbstractInsnNode instruction = method.instructions.getFirst(); instruction != null;) {
+            for (AbstractInsnNode instruction = method.instructions.getFirst(); instruction != null; ) {
                 AbstractInsnNode next = instruction.getNext();
                 if (instruction instanceof MethodInsnNode) {
                     MethodInsnNode call = (MethodInsnNode) instruction;

@@ -6,6 +6,7 @@ import dev.whitedev.jpi.protocol.WireProtocol;
 import dev.whitedev.jpi.ui.search.SearchEverythingPanel;
 import dev.whitedev.jpi.ui.timeline.RuntimeTimelineStore;
 import org.junit.jupiter.api.Test;
+
 import javax.swing.JTable;
 import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
@@ -25,10 +26,12 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 class SearchEverythingSessionTest {
-    @Test void coalescesQueriesAndDiscardsThePreviousResponse() throws Exception {
+    @Test
+    void coalescesQueriesAndDiscardsThePreviousResponse() throws Exception {
         CountDownLatch first = new CountDownLatch(1), release = new CountDownLatch(1), displayed = new CountDownLatch(1);
         List<String> queries = Collections.synchronizedList(new ArrayList<>());
         CompletableFuture<Void> finished = new CompletableFuture<>();
@@ -47,7 +50,10 @@ class SearchEverythingSessionTest {
                         if (request.operation() == Operation.SEARCH_EVERYTHING) {
                             String query = WireProtocol.text(request.payload());
                             queries.add(query);
-                            if (query.equals("old")) { first.countDown(); assertTrue(release.await(5, TimeUnit.SECONDS)); }
+                            if (query.equals("old")) {
+                                first.countDown();
+                                assertTrue(release.await(5, TimeUnit.SECONDS));
+                            }
                             response = "S\t1\t1\t1\t0\t64\tfalse\tfalse\nC\tCLASSES\t1\tfalse\nR\tCLASSES\t"
                                     + encoded("c:" + query) + '\t' + encoded(query) + "\t\t\t" + encoded("loader") + '\t' + encoded(query) + '\n';
                         } else {
@@ -57,11 +63,14 @@ class SearchEverythingSessionTest {
                         WireProtocol.writeResponse(output, true, WireProtocol.utf8(response));
                     }
                     finished.complete(null);
-                } catch (Throwable error) { finished.completeExceptionally(error); }
+                } catch (Throwable error) {
+                    finished.completeExceptionally(error);
+                }
             });
             AtomicReference<SearchEverythingPanel> reference = new AtomicReference<>();
             SwingUtilities.invokeAndWait(() -> {
-                var panel = new SearchEverythingPanel(new DeobfuscationWorkspace(), new RuntimeTimelineStore(), () -> null, ignored -> {});
+                var panel = new SearchEverythingPanel(new DeobfuscationWorkspace(), new RuntimeTimelineStore(), () -> null, ignored -> {
+                });
                 reference.set(panel);
                 panel.setSession(session);
                 JTable table = find(panel, JTable.class);
@@ -72,7 +81,10 @@ class SearchEverythingSessionTest {
             });
             try {
                 assertTrue(first.await(3, TimeUnit.SECONDS));
-                SwingUtilities.invokeAndWait(() -> { submit(reference.get(), "middle"); submit(reference.get(), "new"); });
+                SwingUtilities.invokeAndWait(() -> {
+                    submit(reference.get(), "middle");
+                    submit(reference.get(), "new");
+                });
                 release.countDown();
                 assertTrue(displayed.await(5, TimeUnit.SECONDS));
                 SwingUtilities.invokeAndWait(() -> assertEquals("new", find(reference.get(), JTable.class).getValueAt(0, 1)));
@@ -91,7 +103,11 @@ class SearchEverythingSessionTest {
         query.setText(text);
         query.postActionEvent();
     }
-    private static String encoded(String value) { return Base64.getEncoder().encodeToString(value.getBytes(StandardCharsets.UTF_8)); }
+
+    private static String encoded(String value) {
+        return Base64.getEncoder().encodeToString(value.getBytes(StandardCharsets.UTF_8));
+    }
+
     private static <T> T find(Container root, Class<T> type) {
         for (Component component : root.getComponents()) {
             if (type.isInstance(component)) return type.cast(component);

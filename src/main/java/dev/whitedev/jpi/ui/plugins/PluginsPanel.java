@@ -1,6 +1,8 @@
 package dev.whitedev.jpi.ui.plugins;
 
 import dev.whitedev.jpi.attach.InspectorSession;
+import dev.whitedev.jpi.plugin.api.JpiContext;
+import dev.whitedev.jpi.plugin.api.JpiSession;
 import dev.whitedev.jpi.plugin.api.export.ExportRequest;
 import dev.whitedev.jpi.plugin.api.export.PluginExporter;
 import dev.whitedev.jpi.plugin.runtime.PluginDescriptor;
@@ -28,7 +30,10 @@ import java.awt.BorderLayout;
 import java.awt.Desktop;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
+import java.awt.Font;
+import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
@@ -68,7 +73,7 @@ public final class PluginsPanel extends JPanel implements SessionAware {
         details.setText("Select a plugin to inspect its status and registered extensions.");
         JPanel detailCard = Ui.card(new BorderLayout(0, 8));
         JLabel title = new JLabel("Plugin details");
-        title.setFont(title.getFont().deriveFont(java.awt.Font.BOLD, 13f));
+        title.setFont(title.getFont().deriveFont(Font.BOLD, 13f));
         detailCard.add(title, BorderLayout.NORTH);
         detailCard.add(Ui.scroll(details), BorderLayout.CENTER);
         JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, Ui.scroll(table), detailCard);
@@ -94,7 +99,9 @@ public final class PluginsPanel extends JPanel implements SessionAware {
         refresh();
     }
 
-    @Override public void setSession(InspectorSession session) {}
+    @Override
+    public void setSession(InspectorSession session) {
+    }
 
     private void refresh() {
         model.setValues(manager.descriptors());
@@ -142,7 +149,7 @@ public final class PluginsPanel extends JPanel implements SessionAware {
 
     private void openDirectory() {
         try {
-            java.nio.file.Files.createDirectories(manager.pluginDirectory());
+            Files.createDirectories(manager.pluginDirectory());
             if (!Desktop.isDesktopSupported() || !Desktop.getDesktop().isSupported(Desktop.Action.OPEN)) {
                 throw new IOException("Opening directories is not supported on this system");
             }
@@ -160,14 +167,14 @@ public final class PluginsPanel extends JPanel implements SessionAware {
         if (selected == null) return;
         JFileChooser chooser = new JFileChooser();
         String extension = selected.value.extension().fileExtension().replace(".", "").trim();
-        chooser.setSelectedFile(new java.io.File("jpi-export" + (extension.isEmpty() ? "" : "." + extension)));
+        chooser.setSelectedFile(new File("jpi-export" + (extension.isEmpty() ? "" : "." + extension)));
         if (chooser.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) return;
         Path destination = chooser.getSelectedFile().toPath();
-        if (java.nio.file.Files.exists(destination) && JOptionPane.showConfirmDialog(this,
+        if (Files.exists(destination) && JOptionPane.showConfirmDialog(this,
                 "Replace the existing file?\n" + destination, "Confirm export",
                 JOptionPane.OK_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE) != JOptionPane.OK_OPTION) return;
-        Optional<dev.whitedev.jpi.plugin.api.JpiSession> session = manager.context(selected.value.pluginId())
-                .flatMap(dev.whitedev.jpi.plugin.api.JpiContext::session);
+        Optional<JpiSession> session = manager.context(selected.value.pluginId())
+                .flatMap(JpiContext::session);
         export.setEnabled(false);
         Async.run(() -> {
             selected.value.extension().export(new ExportRequest(destination, session));
@@ -215,7 +222,8 @@ public final class PluginsPanel extends JPanel implements SessionAware {
     private static void append(StringBuilder output, String title, List<? extends RegisteredExtension<?>> values,
                                String pluginId) {
         int count = 0;
-        for (RegisteredExtension<?> value : values) if (pluginId.isEmpty() || pluginId.equals(value.pluginId())) count++;
+        for (RegisteredExtension<?> value : values)
+            if (pluginId.isEmpty() || pluginId.equals(value.pluginId())) count++;
         if (count > 0) output.append(title).append(": ").append(count).append('\n');
     }
 
@@ -226,7 +234,8 @@ public final class PluginsPanel extends JPanel implements SessionAware {
             this.value = value;
         }
 
-        @Override public String toString() {
+        @Override
+        public String toString() {
             return value.extension().name() + "  [" + value.pluginId() + "]";
         }
     }
@@ -240,11 +249,27 @@ public final class PluginsPanel extends JPanel implements SessionAware {
             fireTableDataChanged();
         }
 
-        PluginDescriptor value(int row) { return values.get(row); }
-        @Override public int getRowCount() { return values.size(); }
-        @Override public int getColumnCount() { return COLUMNS.length; }
-        @Override public String getColumnName(int column) { return COLUMNS[column]; }
-        @Override public Object getValueAt(int row, int column) {
+        PluginDescriptor value(int row) {
+            return values.get(row);
+        }
+
+        @Override
+        public int getRowCount() {
+            return values.size();
+        }
+
+        @Override
+        public int getColumnCount() {
+            return COLUMNS.length;
+        }
+
+        @Override
+        public String getColumnName(int column) {
+            return COLUMNS[column];
+        }
+
+        @Override
+        public Object getValueAt(int row, int column) {
             PluginDescriptor value = values.get(row);
             return switch (column) {
                 case 0 -> value.name();

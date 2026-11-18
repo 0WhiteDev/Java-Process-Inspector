@@ -1,11 +1,12 @@
 package dev.whitedev.jpi.agent.search;
 
 import org.objectweb.asm.ClassReader;
+import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldNode;
 import org.objectweb.asm.tree.LdcInsnNode;
 import org.objectweb.asm.tree.MethodNode;
-import org.objectweb.asm.tree.AbstractInsnNode;
+
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
@@ -20,7 +21,9 @@ import java.util.Set;
 public final class TargetSearch {
     public interface Source {
         String identifier(Class<?> type);
+
         String loader(Class<?> type);
+
         byte[] bytes(Class<?> type);
     }
 
@@ -52,7 +55,8 @@ public final class TargetSearch {
     private String run(Class<?>[] loaded, final Source source) {
         Class<?>[] catalog = Arrays.copyOf(loaded, Math.min(CLASS_LIMIT, loaded.length));
         Arrays.sort(catalog, new Comparator<Class<?>>() {
-            @Override public int compare(Class<?> left, Class<?> right) {
+            @Override
+            public int compare(Class<?> left, Class<?> right) {
                 int matched = Boolean.compare(matches(right.getName()), matches(left.getName()));
                 if (matched != 0) return matched;
                 int application = Boolean.compare(left.getClassLoader() == null, right.getClassLoader() == null);
@@ -72,16 +76,23 @@ public final class TargetSearch {
             }
             inspected++;
             byte[] code = source.bytes(type);
-            if (code == null || code.length > 4 * 1024 * 1024) { unavailable++; continue; }
-            if (bytes + code.length > BYTE_BUDGET) { partial = true; continue; }
+            if (code == null || code.length > 4 * 1024 * 1024) {
+                unavailable++;
+                continue;
+            }
+            if (bytes + code.length > BYTE_BUDGET) {
+                partial = true;
+                continue;
+            }
             bytes += code.length;
             scan(code, id, owner, loader);
         }
         StringBuilder out = new StringBuilder("S\t1\t").append(catalog.length).append('\t').append(inspected)
                 .append('\t').append(unavailable).append('\t').append(bytes).append('\t')
                 .append(loaded.length > catalog.length).append('\t').append(partial || unavailable > 0).append('\n');
-        for (Map.Entry<String, Integer> entry : counts.entrySet()) out.append("C\t").append(entry.getKey())
-                .append('\t').append(entry.getValue()).append('\t').append(entry.getValue() > RESULT_LIMIT).append('\n');
+        for (Map.Entry<String, Integer> entry : counts.entrySet())
+            out.append("C\t").append(entry.getKey())
+                    .append('\t').append(entry.getValue()).append('\t').append(entry.getValue() > RESULT_LIMIT).append('\n');
         return out.append(rows).toString();
     }
 
@@ -89,18 +100,22 @@ public final class TargetSearch {
         try {
             ClassNode node = new ClassNode();
             new ClassReader(bytes).accept(node, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
-            for (FieldNode field : node.fields) if (matches(owner + "." + field.name + " " + field.desc))
-                hit("FIELDS", id, owner, field.name, field.desc, loader, field.name);
+            for (FieldNode field : node.fields)
+                if (matches(owner + "." + field.name + " " + field.desc))
+                    hit("FIELDS", id, owner, field.name, field.desc, loader, field.name);
             for (MethodNode method : node.methods) {
                 if (matches(owner + "." + method.name + " " + method.desc))
                     hit("METHODS", id, owner, method.name, method.desc, loader, method.name);
-                for (AbstractInsnNode instruction : method.instructions) if (instruction instanceof LdcInsnNode) {
-                    Object constant = ((LdcInsnNode) instruction).cst;
-                    if (constant instanceof String && matches((String) constant))
-                        hit("STRINGS", id, owner, method.name, method.desc, loader, (String) constant);
-                }
+                for (AbstractInsnNode instruction : method.instructions)
+                    if (instruction instanceof LdcInsnNode) {
+                        Object constant = ((LdcInsnNode) instruction).cst;
+                        if (constant instanceof String && matches((String) constant))
+                            hit("STRINGS", id, owner, method.name, method.desc, loader, (String) constant);
+                    }
             }
-        } catch (RuntimeException error) { unavailable++; }
+        } catch (RuntimeException error) {
+            unavailable++;
+        }
     }
 
     private boolean matches(String text) {
@@ -111,7 +126,10 @@ public final class TargetSearch {
 
     private void hit(String kind, String id, String owner, String member, String descriptor, String loader, String value) {
         int count = counts.get(kind);
-        if (count >= RESULT_LIMIT) { counts.put(kind, count + 1); return; }
+        if (count >= RESULT_LIMIT) {
+            counts.put(kind, count + 1);
+            return;
+        }
         String bounded = value.length() > 4096 ? value.substring(0, 4093) + "..." : value;
         String key = kind + '\0' + id + '\0' + member + '\0' + descriptor + '\0' + bounded;
         if (!seen.add(key)) return;
@@ -121,5 +139,7 @@ public final class TargetSearch {
                 .append('\t').append(encoded(loader)).append('\t').append(encoded(bounded)).append('\n');
     }
 
-    private static String encoded(String value) { return Base64.getEncoder().encodeToString(value.getBytes(StandardCharsets.UTF_8)); }
+    private static String encoded(String value) {
+        return Base64.getEncoder().encodeToString(value.getBytes(StandardCharsets.UTF_8));
+    }
 }

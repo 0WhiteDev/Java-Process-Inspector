@@ -13,7 +13,8 @@ import java.util.Base64;
 import static org.junit.jupiter.api.Assertions.*;
 
 class XrefsPanelTest {
-    @Test void runtimeViewExcludesStaticRowsAndRetainsFailedAndReflectiveEdges() throws Exception {
+    @Test
+    void runtimeViewExcludesStaticRowsAndRetainsFailedAndReflectiveEdges() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
             XrefsPanel panel = new XrefsPanel(new DeobfuscationWorkspace());
             panel.selectUsages(AnalysisTarget.method("c:1", "app.Target", "run", "()V"), true);
@@ -27,7 +28,8 @@ class XrefsPanelTest {
         });
     }
 
-    @Test void staticViewExcludesObservedRowsAndEmptyRuntimeViewDoesNotInventUsages() throws Exception {
+    @Test
+    void staticViewExcludesObservedRowsAndEmptyRuntimeViewDoesNotInventUsages() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
             XrefsPanel panel = new XrefsPanel(new DeobfuscationWorkspace());
             AnalysisTarget target = AnalysisTarget.type("c:1", "app.Target");

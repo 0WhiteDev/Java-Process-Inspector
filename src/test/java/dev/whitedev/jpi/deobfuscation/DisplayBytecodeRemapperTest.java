@@ -14,7 +14,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class DisplayBytecodeRemapperTest {
-    @Test void createsADecompilableReadOnlyCopyWithMappedSymbols() throws Exception {
+    @Test
+    void createsADecompilableReadOnlyCopyWithMappedSymbols() throws Exception {
         String owner = DisplayRemapFixture.class.getName();
         DeobfuscationWorkspace workspace = new DeobfuscationWorkspace();
         workspace.update(mapped(new MappingEntry(MappingKind.CLASS, "", owner, "", -1, 0),

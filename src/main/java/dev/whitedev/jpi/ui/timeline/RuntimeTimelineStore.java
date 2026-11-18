@@ -153,5 +153,6 @@ public final class RuntimeTimelineStore {
         for (Runnable listener : listeners) listener.run();
     }
 
-    public record CorrelatedEvent(TimelineEvent event, String correlation, String correlationBasis) { }
+    public record CorrelatedEvent(TimelineEvent event, String correlation, String correlationBasis) {
+    }
 }

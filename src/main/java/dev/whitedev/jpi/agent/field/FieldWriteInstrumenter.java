@@ -22,7 +22,8 @@ final class FieldWriteInstrumenter {
     private static final String RECORD_DESCRIPTOR = "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;"
             + "Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)V";
 
-    private FieldWriteInstrumenter() { }
+    private FieldWriteInstrumenter() {
+    }
 
     static Result instrument(byte[] bytecode, ClassLoader loader, FieldWriteProbe probe) throws IOException {
         try {
@@ -104,15 +105,40 @@ final class FieldWriteInstrumenter {
         String owner;
         String descriptor;
         switch (type.getSort()) {
-            case Type.BOOLEAN: owner = "java/lang/Boolean"; descriptor = "(Z)Ljava/lang/Boolean;"; break;
-            case Type.BYTE: owner = "java/lang/Byte"; descriptor = "(B)Ljava/lang/Byte;"; break;
-            case Type.CHAR: owner = "java/lang/Character"; descriptor = "(C)Ljava/lang/Character;"; break;
-            case Type.SHORT: owner = "java/lang/Short"; descriptor = "(S)Ljava/lang/Short;"; break;
-            case Type.INT: owner = "java/lang/Integer"; descriptor = "(I)Ljava/lang/Integer;"; break;
-            case Type.FLOAT: owner = "java/lang/Float"; descriptor = "(F)Ljava/lang/Float;"; break;
-            case Type.LONG: owner = "java/lang/Long"; descriptor = "(J)Ljava/lang/Long;"; break;
-            case Type.DOUBLE: owner = "java/lang/Double"; descriptor = "(D)Ljava/lang/Double;"; break;
-            default: return;
+            case Type.BOOLEAN:
+                owner = "java/lang/Boolean";
+                descriptor = "(Z)Ljava/lang/Boolean;";
+                break;
+            case Type.BYTE:
+                owner = "java/lang/Byte";
+                descriptor = "(B)Ljava/lang/Byte;";
+                break;
+            case Type.CHAR:
+                owner = "java/lang/Character";
+                descriptor = "(C)Ljava/lang/Character;";
+                break;
+            case Type.SHORT:
+                owner = "java/lang/Short";
+                descriptor = "(S)Ljava/lang/Short;";
+                break;
+            case Type.INT:
+                owner = "java/lang/Integer";
+                descriptor = "(I)Ljava/lang/Integer;";
+                break;
+            case Type.FLOAT:
+                owner = "java/lang/Float";
+                descriptor = "(F)Ljava/lang/Float;";
+                break;
+            case Type.LONG:
+                owner = "java/lang/Long";
+                descriptor = "(J)Ljava/lang/Long;";
+                break;
+            case Type.DOUBLE:
+                owner = "java/lang/Double";
+                descriptor = "(D)Ljava/lang/Double;";
+                break;
+            default:
+                return;
         }
         output.add(new MethodInsnNode(Opcodes.INVOKESTATIC, owner, "valueOf", descriptor, false));
     }
@@ -139,7 +165,8 @@ final class FieldWriteInstrumenter {
             this.loader = loader;
         }
 
-        @Override protected String getCommonSuperClass(String left, String right) {
+        @Override
+        protected String getCommonSuperClass(String left, String right) {
             try {
                 Class<?> leftType = Class.forName(left.replace('/', '.'), false, loader);
                 Class<?> rightType = Class.forName(right.replace('/', '.'), false, loader);

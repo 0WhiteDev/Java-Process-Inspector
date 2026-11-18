@@ -1,11 +1,11 @@
 package dev.whitedev.jpi.agent.fingerprint;
 
 import org.objectweb.asm.ClassReader;
+import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldNode;
-import org.objectweb.asm.tree.MethodNode;
-import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.LineNumberNode;
+import org.objectweb.asm.tree.MethodNode;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -19,9 +19,12 @@ import java.util.Set;
 import java.util.TreeSet;
 
 public final class TargetFingerprintCapture {
-    public interface BytecodeSource { byte[] read(Class<?> type) throws Exception; }
+    public interface BytecodeSource {
+        byte[] read(Class<?> type) throws Exception;
+    }
 
-    private TargetFingerprintCapture() {}
+    private TargetFingerprintCapture() {
+    }
 
     public static String capture(Class<?>[] loaded, String selection, BytecodeSource source) throws Exception {
         if (selection.length() > 32768) throw new IOException("Fingerprint selection is too large");
@@ -67,7 +70,8 @@ public final class TargetFingerprintCapture {
                         for (MethodNode method : node.methods) {
                             Set<Integer> lines = new TreeSet<>();
                             for (AbstractInsnNode instruction : method.instructions) {
-                                if (instruction instanceof LineNumberNode) lines.add(((LineNumberNode) instruction).line);
+                                if (instruction instanceof LineNumberNode)
+                                    lines.add(((LineNumberNode) instruction).line);
                             }
                             StringBuilder lineList = new StringBuilder();
                             for (Integer line : lines) {
@@ -123,7 +127,8 @@ public final class TargetFingerprintCapture {
 
     private static String hash(byte[] bytes) throws Exception {
         StringBuilder result = new StringBuilder();
-        for (byte value : MessageDigest.getInstance("SHA-256").digest(bytes)) result.append(String.format("%02x", value & 255));
+        for (byte value : MessageDigest.getInstance("SHA-256").digest(bytes))
+            result.append(String.format("%02x", value & 255));
         return result.toString();
     }
 }

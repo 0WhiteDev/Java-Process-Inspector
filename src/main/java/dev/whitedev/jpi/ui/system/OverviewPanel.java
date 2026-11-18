@@ -1,11 +1,10 @@
 package dev.whitedev.jpi.ui.system;
 
+import dev.whitedev.jpi.attach.InspectorSession;
+import dev.whitedev.jpi.protocol.Operation;
 import dev.whitedev.jpi.ui.Async;
 import dev.whitedev.jpi.ui.SessionAware;
 import dev.whitedev.jpi.ui.Ui;
-
-import dev.whitedev.jpi.attach.InspectorSession;
-import dev.whitedev.jpi.protocol.Operation;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -85,7 +84,8 @@ public final class OverviewPanel extends JPanel implements SessionAware {
         return card;
     }
 
-    @Override public void setSession(InspectorSession session) {
+    @Override
+    public void setSession(InspectorSession session) {
         this.session = session;
         threadDump.setEnabled(session != null);
         if (session == null) {
@@ -156,14 +156,19 @@ public final class OverviewPanel extends JPanel implements SessionAware {
     }
 
     private String bytes(String value) {
-        try { return String.format("%.1f MiB", Long.parseLong(value) / 1048576d); }
-        catch (Exception ignored) { return "--"; }
+        try {
+            return String.format("%.1f MiB", Long.parseLong(value) / 1048576d);
+        } catch (Exception ignored) {
+            return "--";
+        }
     }
 
     private String duration(String value) {
         try {
             long seconds = Long.parseLong(value) / 1000;
             return String.format("%dh %02dm", seconds / 3600, seconds / 60 % 60);
-        } catch (Exception ignored) { return "--"; }
+        } catch (Exception ignored) {
+            return "--";
+        }
     }
 }
