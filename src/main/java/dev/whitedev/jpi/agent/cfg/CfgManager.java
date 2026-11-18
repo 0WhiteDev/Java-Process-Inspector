@@ -1,10 +1,9 @@
 package dev.whitedev.jpi.agent.cfg;
 
-import dev.whitedev.jpi.agent.RuntimeAccess;
+import dev.whitedev.jpi.agent.ClassTransformationCoordinator;
+import dev.whitedev.jpi.agent.ClassTransformationCoordinator.Layer;
 
 import java.io.IOException;
-import java.lang.instrument.ClassDefinition;
-import java.lang.instrument.Instrumentation;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -15,7 +14,7 @@ import java.util.concurrent.atomic.AtomicLong;
 public final class CfgManager {
     private static final AtomicLong IDS = new AtomicLong();
 
-    private final RuntimeAccess instrumentation;
+    private final ClassTransformationCoordinator coordinator;
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(new ThreadFactory() {
         @Override
         public Thread newThread(Runnable task) {
@@ -27,12 +26,8 @@ public final class CfgManager {
     });
     private Probe active;
 
-    public CfgManager(Instrumentation instrumentation) {
-        this(RuntimeAccess.instrumentation(instrumentation));
-    }
-
-    public CfgManager(RuntimeAccess instrumentation) {
-        this.instrumentation = instrumentation;
+    public CfgManager(ClassTransformationCoordinator coordinator) {
+        this.coordinator = coordinator;
     }
 
     public synchronized String start(Class<?> target, String methodName, String descriptor,
@@ -46,15 +41,21 @@ public final class CfgManager {
         String id = "cfg-" + IDS.incrementAndGet();
         BytecodeCfgAnalyzer.Instrumented replacement =
                 BytecodeCfgAnalyzer.instrument(bytecode, methodName, descriptor, id);
+        String layout = replacement.layout;
         CfgRuntime.register(id, replacement.blockCount);
         try {
-            instrumentation.redefineClasses(new ClassDefinition(target, replacement.bytecode));
+            coordinator.install(target, Layer.CFG, bytes -> {
+                BytecodeCfgAnalyzer.Instrumented next = BytecodeCfgAnalyzer.instrument(bytes, methodName, descriptor, id);
+                if (!layout.equals(next.layout)) {
+                    throw new IOException("Stop the CFG probe before changing its block layout");
+                }
+                return next.bytecode;
+            });
         } catch (Throwable error) {
             CfgRuntime.discard(id);
             throw error;
         }
-        Probe probe = new Probe(id, target, bytecode.clone(),
-                System.currentTimeMillis() + durationMillis);
+        Probe probe = new Probe(id, target, System.currentTimeMillis() + durationMillis);
         active = probe;
         probe.expiration = scheduler.schedule(new Runnable() {
             @Override
@@ -77,15 +78,11 @@ public final class CfgManager {
         if (probeId != null && !probeId.trim().isEmpty() && !current.id.equals(probeId.trim())) {
             throw new IOException("CFG block trace is no longer active: " + probeId);
         }
-        instrumentation.redefineClasses(new ClassDefinition(current.target, current.baseBytecode));
+        coordinator.remove(current.target, Layer.CFG);
         if (current.expiration != null) current.expiration.cancel(false);
         active = null;
         CfgRuntime.deactivate(current.id);
-        return "Stopped " + current.id + " and restored " + current.target.getName();
-    }
-
-    public synchronized void stopForClass(Class<?> target) throws Exception {
-        if (active != null && active.target == target) stop(active.id);
+        return "Stopped " + current.id + " on " + current.target.getName();
     }
 
     public synchronized String stopAll() {
@@ -129,14 +126,12 @@ public final class CfgManager {
     private static final class Probe {
         final String id;
         final Class<?> target;
-        final byte[] baseBytecode;
         final long expiresAt;
         volatile ScheduledFuture<?> expiration;
 
-        Probe(String id, Class<?> target, byte[] baseBytecode, long expiresAt) {
+        Probe(String id, Class<?> target, long expiresAt) {
             this.id = id;
             this.target = target;
-            this.baseBytecode = baseBytecode;
             this.expiresAt = expiresAt;
         }
     }

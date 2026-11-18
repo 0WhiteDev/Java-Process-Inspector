@@ -1,10 +1,9 @@
 package dev.whitedev.jpi.agent.trace;
 
-import dev.whitedev.jpi.agent.RuntimeAccess;
+import dev.whitedev.jpi.agent.ClassTransformationCoordinator;
+import dev.whitedev.jpi.agent.ClassTransformationCoordinator.Layer;
 
 import java.io.IOException;
-import java.lang.instrument.ClassDefinition;
-import java.lang.instrument.Instrumentation;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.IdentityHashMap;
@@ -20,7 +19,7 @@ import java.util.concurrent.atomic.AtomicLong;
 public final class TraceManager {
     private static final AtomicLong IDS = new AtomicLong();
 
-    private final RuntimeAccess instrumentation;
+    private final ClassTransformationCoordinator coordinator;
     private final Map<Class<?>, TracedClass> classes = new IdentityHashMap<Class<?>, TracedClass>();
     private final Map<String, TraceProbe> probes = new LinkedHashMap<String, TraceProbe>();
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(new ThreadFactory() {
@@ -33,23 +32,19 @@ public final class TraceManager {
         }
     });
 
-    public TraceManager(Instrumentation instrumentation) {
-        this(RuntimeAccess.instrumentation(instrumentation));
-    }
-
-    public TraceManager(RuntimeAccess instrumentation) {
-        this.instrumentation = instrumentation;
+    public TraceManager(ClassTransformationCoordinator coordinator) {
+        this.coordinator = coordinator;
     }
 
     public synchronized String start(Class<?> target, String targetIdentifier, String methodName,
-                                     String descriptor, String settings, byte[] currentBytecode) throws Exception {
+                                     String descriptor, String settings) throws Exception {
         requireRuntimeVisibility(target);
         TraceConfig config = TraceConfig.parse(settings);
         String id = "trace-" + IDS.incrementAndGet();
         TraceProbe probe = new TraceProbe(id, targetIdentifier, target.getName(), methodName, descriptor, config);
         TracedClass traced = classes.get(target);
         boolean created = traced == null;
-        if (created) traced = new TracedClass(target, currentBytecode.clone());
+        if (created) traced = new TracedClass(target);
         for (TraceProbe active : traced.probes.values()) {
             if (active.methodKey().equals(probe.methodKey())) {
                 throw new IOException("This method already has an active trace probe: " + active.id);
@@ -59,7 +54,7 @@ public final class TraceManager {
         TraceRuntime.register(probe);
         traced.probes.put(probe.id, probe);
         try {
-            redefine(traced, traced.probes.values());
+            updateLayer(target, traced.probes.values());
         } catch (Throwable error) {
             traced.probes.remove(probe.id);
             TraceRuntime.unregister(probe.id);
@@ -86,25 +81,13 @@ public final class TraceManager {
         TracedClass traced = find(probe);
         List<TraceProbe> remaining = new ArrayList<TraceProbe>(traced.probes.values());
         remaining.remove(probe);
-        redefine(traced, remaining);
+        updateLayer(traced.target, remaining);
         traced.probes.remove(probe.id);
         probes.remove(probe.id);
         TraceRuntime.unregister(probe.id);
         if (probe.expiration != null) probe.expiration.cancel(false);
         if (traced.probes.isEmpty()) classes.remove(traced.target);
-        return "Stopped " + probe.id + " and restored " + probe.className;
-    }
-
-    public synchronized void stopForClass(Class<?> target) throws Exception {
-        TracedClass traced = classes.get(target);
-        if (traced == null) return;
-        instrumentation.redefineClasses(new ClassDefinition(target, traced.baseBytecode));
-        classes.remove(target);
-        for (TraceProbe probe : traced.probes.values()) {
-            probes.remove(probe.id);
-            TraceRuntime.unregister(probe.id);
-            if (probe.expiration != null) probe.expiration.cancel(false);
-        }
+        return "Stopped " + probe.id + " on " + probe.className;
     }
 
     public synchronized String stopAll() {
@@ -112,20 +95,21 @@ public final class TraceManager {
         List<String> failures = new ArrayList<String>();
         for (TracedClass traced : new ArrayList<TracedClass>(classes.values())) {
             try {
-                instrumentation.redefineClasses(new ClassDefinition(traced.target, traced.baseBytecode));
+                coordinator.remove(traced.target, Layer.LIVE_TRACER);
                 stopped += traced.probes.size();
             } catch (Throwable error) {
                 failures.add(traced.target.getName() + ": " + message(error));
+                continue;
             }
+            classes.remove(traced.target);
             for (TraceProbe probe : traced.probes.values()) {
+                probes.remove(probe.id);
                 TraceRuntime.unregister(probe.id);
                 if (probe.expiration != null) probe.expiration.cancel(false);
             }
         }
-        classes.clear();
-        probes.clear();
         if (!failures.isEmpty()) return "Stopped " + stopped + " probes. Restore failures: " + failures;
-        return "Stopped " + stopped + " trace probes and restored all classes";
+        return "Stopped " + stopped + " trace probes";
     }
 
     public String events() {
@@ -151,10 +135,14 @@ public final class TraceManager {
         TraceRuntime.clear();
     }
 
-    private void redefine(TracedClass traced, Collection<TraceProbe> active) throws Exception {
-        byte[] replacement = active.isEmpty() ? traced.baseBytecode
-                : TraceInstrumenter.instrument(traced.baseBytecode, traced.target.getClassLoader(), active);
-        instrumentation.redefineClasses(new ClassDefinition(traced.target, replacement));
+    private void updateLayer(Class<?> target, Collection<TraceProbe> active) throws Exception {
+        if (active.isEmpty()) {
+            coordinator.remove(target, Layer.LIVE_TRACER);
+        } else {
+            List<TraceProbe> snapshot = new ArrayList<>(active);
+            coordinator.install(target, Layer.LIVE_TRACER,
+                    bytes -> TraceInstrumenter.instrument(bytes, target.getClassLoader(), snapshot));
+        }
     }
 
     private TracedClass find(TraceProbe probe) throws IOException {
@@ -184,12 +172,10 @@ public final class TraceManager {
 
     private static final class TracedClass {
         final Class<?> target;
-        final byte[] baseBytecode;
         final Map<String, TraceProbe> probes = new LinkedHashMap<String, TraceProbe>();
 
-        TracedClass(Class<?> target, byte[] baseBytecode) {
+        TracedClass(Class<?> target) {
             this.target = target;
-            this.baseBytecode = baseBytecode;
         }
     }
 }

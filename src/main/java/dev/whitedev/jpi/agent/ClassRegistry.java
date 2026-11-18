@@ -1,7 +1,5 @@
 package dev.whitedev.jpi.agent;
 
-import dev.whitedev.jpi.agent.hook.HookClassRegistry;
-
 import java.lang.instrument.ClassFileTransformer;
 import java.lang.instrument.IllegalClassFormatException;
 import java.security.ProtectionDomain;
@@ -12,7 +10,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-final class ClassRegistry implements ClassFileTransformer, HookClassRegistry {
+final class ClassRegistry implements ClassFileTransformer {
 
 
     private static final long MAX_CAPTURED_BYTES = 256L * 1024L * 1024L;

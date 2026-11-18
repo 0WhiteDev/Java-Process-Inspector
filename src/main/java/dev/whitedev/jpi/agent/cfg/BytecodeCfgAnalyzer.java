@@ -68,7 +68,12 @@ public final class BytecodeCfgAnalyzer {
         }
         ClassWriter writer = new ClassWriter(graph.reader, ClassWriter.COMPUTE_MAXS);
         graph.owner.accept(writer);
-        return new Instrumented(writer.toByteArray(), graph.blocks.size());
+        StringBuilder layout = new StringBuilder().append(graph.blocks.size()).append('\n');
+        for (Edge edge : graph.edges) {
+            layout.append(edge.from).append('\t').append(edge.to).append('\t')
+                    .append(edge.kind).append('\t').append(encoded(edge.label)).append('\n');
+        }
+        return new Instrumented(writer.toByteArray(), graph.blocks.size(), layout.toString());
     }
 
     private static Graph graph(byte[] bytecode, String methodName, String descriptor) throws IOException {
@@ -462,10 +467,12 @@ public final class BytecodeCfgAnalyzer {
     static final class Instrumented {
         final byte[] bytecode;
         final int blockCount;
+        final String layout;
 
-        Instrumented(byte[] bytecode, int blockCount) {
+        Instrumented(byte[] bytecode, int blockCount, String layout) {
             this.bytecode = bytecode;
             this.blockCount = blockCount;
+            this.layout = layout;
         }
     }
 

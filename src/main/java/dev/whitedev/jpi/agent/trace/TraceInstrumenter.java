@@ -1,5 +1,7 @@
 package dev.whitedev.jpi.agent.trace;
 
+import dev.whitedev.jpi.agent.cfg.CfgRuntime;
+import dev.whitedev.jpi.agent.field.FieldWriteRuntime;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Opcodes;
@@ -23,6 +25,8 @@ import java.util.Collection;
 
 final class TraceInstrumenter {
     private static final String RUNTIME = Type.getInternalName(TraceRuntime.class);
+    private static final String CFG_RUNTIME = Type.getInternalName(CfgRuntime.class);
+    private static final String FIELD_RUNTIME = Type.getInternalName(FieldWriteRuntime.class);
     private static final String ENTER_DESCRIPTOR = "(Ljava/lang/String;Ljava/lang/Object;[Ljava/lang/Object;)J";
     private static final String EXIT_DESCRIPTOR = "(JLjava/lang/Object;)V";
     private static final String FAIL_DESCRIPTOR = "(JLjava/lang/Throwable;)V";
@@ -90,8 +94,10 @@ final class TraceInstrumenter {
         for (AbstractInsnNode instruction : original) {
             if (instruction instanceof MethodInsnNode) {
                 MethodInsnNode call = (MethodInsnNode) instruction;
-                selected.instructions.insertBefore(instruction, edge(tokenLocal, call.owner, call.name,
-                        call.desc, reflective(call.owner)));
+                if (!CFG_RUNTIME.equals(call.owner) && !FIELD_RUNTIME.equals(call.owner)) {
+                    selected.instructions.insertBefore(instruction, edge(tokenLocal, call.owner, call.name,
+                            call.desc, reflective(call.owner)));
+                }
             } else if (instruction instanceof InvokeDynamicInsnNode) {
                 InvokeDynamicInsnNode call = (InvokeDynamicInsnNode) instruction;
                 selected.instructions.insertBefore(instruction, edge(tokenLocal, "<dynamic>", call.name,

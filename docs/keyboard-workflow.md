@@ -28,7 +28,7 @@ Debugger commands require a JDWP connection. Stepping also requires a suspended 
 
 The palette includes **Trace selected method**, **Trace field writes**, **Start difference trace (baseline)**, **Trace CFG blocks**, and **Open Live tracer**.
 
-Starting a trace uses the selected module's current limits and capture settings. Method tracing installs a probe for the exact selected definition. Field tracing uses its definition ID when available. CFG tracing analyzes the method before installing a block probe. Difference tracing records the baseline with CFG branch capture enabled. These commands follow the modules' existing rules for conflicting instrumentation and stop times.
+Starting a trace uses the selected module's current limits and capture settings. Method tracing installs a probe for the exact selected definition. Field tracing uses its definition ID when available. CFG tracing analyzes the method before installing a block probe. Difference tracing records the baseline with CFG branch capture enabled. Compatible probes can share a definition; see [Class transformation coordination](class-transformations.md).
 
 Select a method row, method selector, method-body editor, CFG, trace event, Xrefs result, or debugger frame to provide a method context. A class list selection provides a class context. Class source alone does not infer a method from the text caret. Search Everything's query field deliberately has no selected-symbol context; focus a result row before using a symbol command there. Copying original mapping identifiers also works without an attached target.
 

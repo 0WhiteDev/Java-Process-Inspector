@@ -65,14 +65,13 @@ public final class RuntimeAccess {
         instrumentation.retransformClasses(types);
     }
 
-    public void redefineClasses(ClassDefinition... definitions) throws Exception {
-        if (!nativeOnly) {
-            instrumentation.redefineClasses(definitions);
-            return;
+    void redefineClass(Class<?> type, byte[] bytecode) throws Exception {
+        if (nativeOnly || NativeJvmtiBridge.isBound()
+                && NativeJvmtiBridge.status().contains("\ncan_redefine_classes=1\n")) {
+            NativeJvmtiBridge.redefineClass(type, bytecode);
+        } else {
+            instrumentation.redefineClasses(new ClassDefinition(type, bytecode));
         }
-        if (definitions.length != 1)
-            throw new IOException("Native runtime requires a single class definition per request");
-        NativeJvmtiBridge.redefineClass(definitions[0].getDefinitionClass(), definitions[0].getDefinitionClassFile());
     }
 
     public long getObjectSize(Object value) {

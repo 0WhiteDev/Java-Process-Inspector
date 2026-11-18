@@ -1,18 +1,17 @@
 package dev.whitedev.jpi.agent.hook;
 
+import dev.whitedev.jpi.agent.ClassTransformationCoordinator;
+import dev.whitedev.jpi.agent.ClassTransformationCoordinator.Layer;
 import dev.whitedev.jpi.agent.RuntimeAccess;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.lang.instrument.ClassDefinition;
-import java.lang.instrument.Instrumentation;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.IdentityHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -26,8 +25,8 @@ public final class ApiHookManager {
     private static final long MAX_PLANNED_BYTES = 128L * 1024L * 1024L;
 
     private final RuntimeAccess instrumentation;
-    private final HookClassRegistry registry;
-    private final Map<Class<?>, HookedClass> hooked = new IdentityHashMap<Class<?>, HookedClass>();
+    private final ClassTransformationCoordinator coordinator;
+    private final Set<Class<?>> hooked = Collections.newSetFromMap(new IdentityHashMap<>());
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(new ThreadFactory() {
         @Override
         public Thread newThread(Runnable task) {
@@ -40,13 +39,9 @@ public final class ApiHookManager {
     private ScheduledFuture<?> expiration;
     private String summary = "No API hook profile is active";
 
-    public ApiHookManager(Instrumentation instrumentation, HookClassRegistry registry) {
-        this(RuntimeAccess.instrumentation(instrumentation), registry);
-    }
-
-    public ApiHookManager(RuntimeAccess instrumentation, HookClassRegistry registry) {
+    public ApiHookManager(RuntimeAccess instrumentation, ClassTransformationCoordinator coordinator) {
         this.instrumentation = instrumentation;
-        this.registry = registry;
+        this.coordinator = coordinator;
     }
 
     public synchronized String start(String payload) throws Exception {
@@ -100,26 +95,27 @@ public final class ApiHookManager {
             if (sites + result.sites > config.maxSites) break;
             long definitionBytes = source.length + result.bytecode.length;
             if (plannedBytes + definitionBytes > MAX_PLANNED_BYTES) break;
-            planned.add(new PlannedClass(type, source, result.bytecode, result.sites));
+            planned.add(new PlannedClass(type, result.sites));
             sites += result.sites;
             plannedBytes += definitionBytes;
         }
 
         int failures = 0;
+        String firstFailure = "";
         int appliedSites = 0;
         for (PlannedClass plan : planned) {
             try {
-                instrumentation.redefineClasses(new ClassDefinition(plan.target, plan.replacement));
-                hooked.put(plan.target, new HookedClass(plan.target, plan.baseBytecode));
+                install(plan.target, plan.sites, profiles);
+                hooked.add(plan.target);
                 appliedSites += plan.sites;
             } catch (Throwable error) {
-                failures++;
+                if (failures++ == 0) firstFailure = " | " + error.getMessage();
             }
         }
         if (hooked.isEmpty()) {
             ApiHookRuntime.clear();
             summary = "No matching, safely modifiable application call sites were found"
-                    + " | scanned " + scanned + " | unavailable " + unavailable + " | failures " + failures;
+                    + " | scanned " + scanned + " | unavailable " + unavailable + " | failures " + failures + firstFailure;
             return summary;
         }
 
@@ -132,8 +128,18 @@ public final class ApiHookManager {
         }, config.stopAfterMillis, TimeUnit.MILLISECONDS);
         summary = "Active " + names(profiles) + " hooks | " + hooked.size() + " classes | "
                 + appliedSites + " call sites | scanned " + scanned + " | unavailable " + unavailable
-                + " | failures " + failures;
+                + " | failures " + failures + firstFailure;
         return summary;
+    }
+
+    private void install(Class<?> type, int expectedSites, Set<ApiHookProfile> profiles) throws Exception {
+        coordinator.install(type, Layer.API_HOOKS, bytes -> {
+            ApiHookInstrumenter.Result result = ApiHookInstrumenter.instrument(bytes, profiles);
+            if (result.sites != expectedSites) {
+                throw new IOException("Active layers changed the number of API hook call sites");
+            }
+            return result.bytecode;
+        });
     }
 
     public synchronized String stopAll() {
@@ -143,34 +149,19 @@ public final class ApiHookManager {
         }
         int restored = 0;
         int failures = 0;
-        for (HookedClass value : new ArrayList<HookedClass>(hooked.values())) {
+        for (Class<?> type : new ArrayList<>(hooked)) {
             try {
-                instrumentation.redefineClasses(new ClassDefinition(value.target, value.baseBytecode));
-                registry.recordApplied(value.target, value.baseBytecode);
-                hooked.remove(value.target);
+                coordinator.remove(type, Layer.API_HOOKS);
+                hooked.remove(type);
                 restored++;
             } catch (Throwable error) {
                 failures++;
             }
         }
-        ApiHookRuntime.clear();
-        summary = "Stopped API hooks and restored " + restored + " classes"
+        if (hooked.isEmpty()) ApiHookRuntime.clear();
+        summary = "Removed API hooks from " + restored + " classes"
                 + (failures == 0 ? "" : " | restore failures " + failures);
         return summary;
-    }
-
-    public synchronized void stopForClass(Class<?> target) throws Exception {
-        HookedClass value = hooked.get(target);
-        if (value == null) return;
-        instrumentation.redefineClasses(new ClassDefinition(target, value.baseBytecode));
-        registry.recordApplied(target, value.baseBytecode);
-        hooked.remove(target);
-        if (hooked.isEmpty()) {
-            if (expiration != null) expiration.cancel(false);
-            expiration = null;
-            ApiHookRuntime.clear();
-            summary = "No API hook profile is active";
-        }
     }
 
     public synchronized String events() {
@@ -196,7 +187,7 @@ public final class ApiHookManager {
     }
 
     private byte[] bytecode(Class<?> type) {
-        byte[] captured = registry.bytecodeFor(type);
+        byte[] captured = coordinator.bytecodeFor(type);
         if (captured != null) return captured;
         String resource = "/" + type.getName().replace('.', '/') + ".class";
         InputStream stream = type.getResourceAsStream(resource);
@@ -206,9 +197,7 @@ public final class ApiHookManager {
             byte[] buffer = new byte[8192];
             int read;
             while ((read = stream.read(buffer)) >= 0) output.write(buffer, 0, read);
-            byte[] value = output.toByteArray();
-            registry.captureIfAbsent(type, value);
-            return value;
+            return output.toByteArray();
         } catch (IOException error) {
             return null;
         } finally {
@@ -230,25 +219,12 @@ public final class ApiHookManager {
 
     private static final class PlannedClass {
         final Class<?> target;
-        final byte[] baseBytecode;
-        final byte[] replacement;
         final int sites;
 
-        PlannedClass(Class<?> target, byte[] baseBytecode, byte[] replacement, int sites) {
+        PlannedClass(Class<?> target, int sites) {
             this.target = target;
-            this.baseBytecode = baseBytecode;
-            this.replacement = replacement;
             this.sites = sites;
         }
     }
 
-    private static final class HookedClass {
-        final Class<?> target;
-        final byte[] baseBytecode;
-
-        HookedClass(Class<?> target, byte[] baseBytecode) {
-            this.target = target;
-            this.baseBytecode = baseBytecode;
-        }
-    }
 }

@@ -1,10 +1,9 @@
 package dev.whitedev.jpi.agent.field;
 
-import dev.whitedev.jpi.agent.RuntimeAccess;
+import dev.whitedev.jpi.agent.ClassTransformationCoordinator;
+import dev.whitedev.jpi.agent.ClassTransformationCoordinator.Layer;
 
 import java.io.IOException;
-import java.lang.instrument.ClassDefinition;
-import java.lang.instrument.Instrumentation;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -17,7 +16,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 public final class FieldWriteManager {
     private static final AtomicLong IDS = new AtomicLong();
-    private final RuntimeAccess instrumentation;
+    private final ClassTransformationCoordinator coordinator;
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(new ThreadFactory() {
         @Override
         public Thread newThread(Runnable task) {
@@ -29,12 +28,8 @@ public final class FieldWriteManager {
     });
     private ActiveProbe active;
 
-    public FieldWriteManager(Instrumentation instrumentation) {
-        this(RuntimeAccess.instrumentation(instrumentation));
-    }
-
-    public FieldWriteManager(RuntimeAccess instrumentation) {
-        this.instrumentation = instrumentation;
+    public FieldWriteManager(ClassTransformationCoordinator coordinator) {
+        this.coordinator = coordinator;
     }
 
     public synchronized String start(String targetIdentifier, String owner, String fieldName, String descriptor,
@@ -54,8 +49,15 @@ public final class FieldWriteManager {
                 FieldWriteInstrumenter.Result result = FieldWriteInstrumenter.instrument(
                         candidate.getValue(), type.getClassLoader(), probe);
                 if (result.sites == 0) continue;
-                instrumentation.redefineClasses(new ClassDefinition(type, result.bytecode));
-                created.classes.put(type, candidate.getValue().clone());
+                int expectedSites = result.sites;
+                coordinator.install(type, Layer.FIELD_WRITES, bytes -> {
+                    FieldWriteInstrumenter.Result next = FieldWriteInstrumenter.instrument(bytes, type.getClassLoader(), probe);
+                    if (next.sites != expectedSites) {
+                        throw new IOException("Stop the field write probe before changing its write sites");
+                    }
+                    return next.bytecode;
+                });
+                created.classes.put(type, result.sites);
                 probe.classes = created.classes.size();
                 probe.sites += result.sites;
             } catch (Throwable error) {
@@ -76,7 +78,7 @@ public final class FieldWriteManager {
         }, config.stopAfterMillis, TimeUnit.MILLISECONDS);
         String result = probe.id + "\tTracing " + owner + "." + fieldName + " across "
                 + probe.sites + " write sites in " + probe.classes + " classes";
-        return failures.isEmpty() ? result : result + ". Skipped " + failures.size() + " classes";
+        return failures.isEmpty() ? result : result + ". Skipped " + failures.size() + " classes: " + failures.get(0);
     }
 
     public synchronized String stopAll() {
@@ -84,28 +86,19 @@ public final class FieldWriteManager {
         if (current == null) return "No field write probe is active";
         int restored = 0;
         List<String> failures = new ArrayList<String>();
-        for (Map.Entry<Class<?>, byte[]> entry : current.classes.entrySet()) {
+        for (Class<?> type : new ArrayList<>(current.classes.keySet())) {
             try {
-                instrumentation.redefineClasses(new ClassDefinition(entry.getKey(), entry.getValue()));
+                coordinator.remove(type, Layer.FIELD_WRITES);
+                current.probe.sites -= current.classes.remove(type);
                 restored++;
             } catch (Throwable error) {
-                failures.add(entry.getKey().getName() + ": " + message(error));
+                failures.add(type.getName() + ": " + message(error));
             }
         }
-        finish(current);
-        return failures.isEmpty() ? "Stopped " + current.probe.id + " and restored " + restored + " classes"
-                : "Stopped " + current.probe.id + ". Restore failures: " + failures;
-    }
-
-    public synchronized void stopForClass(Class<?> target) throws Exception {
-        ActiveProbe current = active;
-        if (current == null) return;
-        byte[] base = current.classes.get(target);
-        if (base == null) return;
-        instrumentation.redefineClasses(new ClassDefinition(target, base));
-        current.classes.remove(target);
         current.probe.classes = current.classes.size();
         if (current.classes.isEmpty()) finish(current);
+        return failures.isEmpty() ? "Stopped " + current.probe.id + " on " + restored + " classes"
+                : "Could not remove " + current.probe.id + " from all classes: " + failures;
     }
 
     public String events() {
@@ -147,7 +140,7 @@ public final class FieldWriteManager {
 
     private static final class ActiveProbe {
         final FieldWriteProbe probe;
-        final Map<Class<?>, byte[]> classes = new LinkedHashMap<Class<?>, byte[]>();
+        final Map<Class<?>, Integer> classes = new LinkedHashMap<>();
 
         ActiveProbe(FieldWriteProbe probe) {
             this.probe = probe;

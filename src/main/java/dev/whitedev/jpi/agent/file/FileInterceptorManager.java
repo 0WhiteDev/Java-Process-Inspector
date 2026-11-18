@@ -1,13 +1,12 @@
 package dev.whitedev.jpi.agent.file;
 
+import dev.whitedev.jpi.agent.ClassTransformationCoordinator;
+import dev.whitedev.jpi.agent.ClassTransformationCoordinator.Layer;
 import dev.whitedev.jpi.agent.RuntimeAccess;
-import dev.whitedev.jpi.agent.hook.HookClassRegistry;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.lang.instrument.ClassDefinition;
-import java.lang.instrument.Instrumentation;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -17,7 +16,6 @@ import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.IdentityHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 public final class FileInterceptorManager {
@@ -25,18 +23,14 @@ public final class FileInterceptorManager {
     private static final long MAX_SCAN_NANOS = 15_000_000_000L;
     private static final long MAX_BYTES = 128L * 1024L * 1024L;
     private final RuntimeAccess instrumentation;
-    private final HookClassRegistry registry;
+    private final ClassTransformationCoordinator coordinator;
     private final URL agentLocation;
-    private final Map<Class<?>, byte[]> transformed = new IdentityHashMap<Class<?>, byte[]>();
+    private final Set<Class<?>> transformed = Collections.newSetFromMap(new IdentityHashMap<>());
     private String summary = "File Monitor is stopped";
 
-    public FileInterceptorManager(Instrumentation instrumentation, HookClassRegistry registry) {
-        this(RuntimeAccess.instrumentation(instrumentation), registry);
-    }
-
-    public FileInterceptorManager(RuntimeAccess instrumentation, HookClassRegistry registry) {
+    public FileInterceptorManager(RuntimeAccess instrumentation, ClassTransformationCoordinator coordinator) {
         this.instrumentation = instrumentation;
-        this.registry = registry;
+        this.coordinator = coordinator;
         this.agentLocation = location(FileInterceptorRuntime.class);
     }
 
@@ -55,6 +49,7 @@ public final class FileInterceptorManager {
         int scanned = 0;
         int sites = 0;
         int failures = 0;
+        String firstFailure = "";
         long bytes = 0L;
         long deadline = System.nanoTime() + MAX_SCAN_NANOS;
         FileInterceptorRuntime.configure(config.maxEvents, config.captureContent, config.previewBytes);
@@ -70,50 +65,46 @@ public final class FileInterceptorManager {
                 if (result.sites == 0) continue;
                 if (sites + result.sites > config.maxSites || bytes + source.length + result.bytecode.length > MAX_BYTES)
                     break;
-                instrumentation.redefineClasses(new ClassDefinition(type, result.bytecode));
-                transformed.put(type, source.clone());
-                registry.recordApplied(type, result.bytecode);
+                int expectedSites = result.sites;
+                coordinator.install(type, Layer.FILE_MONITOR, definition -> {
+                    FileCallSiteTransformer.Result next = FileCallSiteTransformer.transform(definition);
+                    if (next.sites != expectedSites) {
+                        throw new IOException("Active layers changed the number of file call sites");
+                    }
+                    return next.bytecode;
+                });
+                transformed.add(type);
                 sites += result.sites;
                 bytes += source.length + result.bytecode.length;
             } catch (Throwable error) {
-                failures++;
+                if (failures++ == 0) firstFailure = " | " + error.getMessage();
             }
         }
         if (transformed.isEmpty()) {
             FileInterceptorRuntime.deactivate();
-            throw new IOException("No safely modifiable Java file call sites were found");
+            throw new IOException("No safely modifiable Java file call sites were found" + firstFailure);
         }
         summary = "File Monitor active | " + transformed.size() + " classes | " + sites
-                + " call sites | scanned " + scanned + " | failures " + failures;
+                + " call sites | scanned " + scanned + " | failures " + failures + firstFailure;
         return summary;
     }
 
     public synchronized String stop() {
         int restored = 0;
         int failures = 0;
-        for (Map.Entry<Class<?>, byte[]> entry : new ArrayList<Map.Entry<Class<?>, byte[]>>(transformed.entrySet())) {
+        for (Class<?> type : new ArrayList<>(transformed)) {
             try {
-                instrumentation.redefineClasses(new ClassDefinition(entry.getKey(), entry.getValue()));
-                registry.recordApplied(entry.getKey(), entry.getValue());
-                transformed.remove(entry.getKey());
+                coordinator.remove(type, Layer.FILE_MONITOR);
+                transformed.remove(type);
                 restored++;
             } catch (Throwable error) {
                 failures++;
             }
         }
-        FileInterceptorRuntime.deactivate();
-        summary = "File Monitor stopped | restored " + restored + " classes"
+        if (transformed.isEmpty()) FileInterceptorRuntime.deactivate();
+        summary = "File Monitor probes removed from " + restored + " classes"
                 + (failures == 0 ? "" : " | restore failures " + failures);
         return summary;
-    }
-
-    public synchronized void stopForClass(Class<?> type) throws Exception {
-        byte[] source = transformed.get(type);
-        if (source == null) return;
-        instrumentation.redefineClasses(new ClassDefinition(type, source));
-        registry.recordApplied(type, source);
-        transformed.remove(type);
-        if (transformed.isEmpty()) FileInterceptorRuntime.deactivate();
     }
 
     public String events() {
@@ -189,7 +180,7 @@ public final class FileInterceptorManager {
     }
 
     private byte[] bytecode(Class<?> type) {
-        byte[] known = registry.bytecodeFor(type);
+        byte[] known = coordinator.bytecodeFor(type);
         if (known != null) return known;
         String resource = "/" + type.getName().replace('.', '/') + ".class";
         try (InputStream input = type.getResourceAsStream(resource)) {
@@ -198,9 +189,7 @@ public final class FileInterceptorManager {
             byte[] buffer = new byte[8192];
             int read;
             while ((read = input.read(buffer)) >= 0) output.write(buffer, 0, read);
-            byte[] value = output.toByteArray();
-            registry.captureIfAbsent(type, value);
-            return value;
+            return output.toByteArray();
         } catch (Throwable error) {
             return null;
         }

@@ -144,7 +144,7 @@ class AttachIntegrationIT {
                 assertTrue(session.requestText(Operation.FIELD_TRACE_HISTORY, "").contains("E\t"));
                 assertTrue(fieldEvents.contains(Base64.getEncoder().encodeToString("\"jpi-smoke-target\"".getBytes("UTF-8"))));
                 assertTrue(fieldEvents.contains(Base64.getEncoder().encodeToString("\"changed\"".getBytes("UTF-8"))));
-                assertTrue(session.requestText(Operation.FIELD_TRACE_STOP, "").contains("restored"));
+                assertTrue(session.requestText(Operation.FIELD_TRACE_STOP, "").startsWith("Stopped field-write-"));
                 String resetField = "public class FieldReset { public static void execute(java.io.PrintStream out) { dev.whitedev.jpi.integration.AttachTarget.setMarker(\"jpi-smoke-target\"); } }";
                 session.requestText(Operation.EXECUTE, resetField);
                 String cfg = session.requestText(Operation.CFG_ANALYZE,
@@ -177,7 +177,7 @@ class AttachIntegrationIT {
                 assertTrue(hookEvents.contains("E\t"));
                 assertTrue(hookEvents.contains(Base64.getEncoder().encodeToString(
                         AttachTarget.class.getName().getBytes("UTF-8"))));
-                assertTrue(session.requestText(Operation.API_HOOK_STOP, "").contains("restored"));
+                assertTrue(session.requestText(Operation.API_HOOK_STOP, "").startsWith("Removed API hooks from"));
                 assertEquals("32", session.requestText(Operation.EXECUTE, cryptoProbe));
                 Path fileSandbox = Files.createTempDirectory("jpi-file-monitor-");
                 Path originalFile = fileSandbox.resolveSibling("jpi-file-original-").resolve("state.bin");
@@ -205,7 +205,7 @@ class AttachIntegrationIT {
                         + originalFile.toString().replace("\\", "\\\\") + "\")); } }";
                 assertThrows(IOException.class, () -> session.requestText(Operation.EXECUTE, deleteProbe));
                 assertTrue(session.requestText(Operation.FILE_EVENT_BATCH, "").contains("\tBLOCK\t"));
-                assertTrue(session.requestText(Operation.FILE_MONITOR_STOP, "").contains("restored"));
+                assertTrue(session.requestText(Operation.FILE_MONITOR_STOP, "").startsWith("File Monitor probes removed from"));
                 String probe = "public class RuntimeProbe { public static void execute(java.io.PrintStream out) { out.print(dev.whitedev.jpi.integration.AttachTarget.runtimeValue()); } }";
                 assertEquals("before", session.requestText(Operation.EXECUTE, probe));
                 assertTrue(session.requestText(Operation.CLASS_METHODS, classId)

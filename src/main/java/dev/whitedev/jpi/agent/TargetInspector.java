@@ -30,7 +30,6 @@ import org.objectweb.asm.Type;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.lang.instrument.ClassDefinition;
 import java.lang.management.*;
 import java.lang.ref.WeakReference;
 import java.lang.reflect.Field;
@@ -61,6 +60,7 @@ final class TargetInspector {
 
     private final RuntimeAccess instrumentation;
     private final ClassRegistry registry;
+    private final ClassTransformationCoordinator coordinator;
     private final TraceManager traceManager;
     private final ApiHookManager apiHookManager;
     private final CfgManager cfgManager;
@@ -76,11 +76,12 @@ final class TargetInspector {
     TargetInspector(RuntimeAccess instrumentation, ClassRegistry registry) {
         this.instrumentation = instrumentation;
         this.registry = registry;
-        this.traceManager = new TraceManager(instrumentation);
-        this.apiHookManager = new ApiHookManager(instrumentation, registry);
-        this.cfgManager = new CfgManager(instrumentation);
-        this.fieldWriteManager = new FieldWriteManager(instrumentation);
-        this.fileInterceptorManager = new FileInterceptorManager(instrumentation, registry);
+        this.coordinator = new ClassTransformationCoordinator(instrumentation, registry);
+        this.traceManager = new TraceManager(coordinator);
+        this.apiHookManager = new ApiHookManager(instrumentation, coordinator);
+        this.cfgManager = new CfgManager(coordinator);
+        this.fieldWriteManager = new FieldWriteManager(coordinator);
+        this.fileInterceptorManager = new FileInterceptorManager(instrumentation, coordinator);
         this.jfrProfilerManager = new JfrProfilerManager();
         this.threadAnalyzer = new ThreadAnalyzer();
         this.heapInspector = new HeapObjectInspector(instrumentation);
@@ -195,18 +196,8 @@ final class TargetInspector {
             return captured;
         }
         Class<?> target = resolveClass(identifier);
-        byte[] captured = registry.bytecodeFor(target);
+        byte[] captured = coordinator.captureBytecode(target);
         if (captured != null) return captured;
-        if (instrumentation.isNativeOnly()) {
-            byte[] bytes = NativeJvmtiBridge.classBytes(target);
-            registry.captureIfAbsent(target, bytes);
-            return bytes;
-        }
-        if (instrumentation.isRetransformClassesSupported() && instrumentation.isModifiableClass(target)) {
-            instrumentation.retransformClasses(target);
-            captured = registry.bytecodeFor(target);
-            if (captured != null) return captured;
-        }
         String resource = "/" + target.getName().replace('.', '/') + ".class";
         InputStream stream = target.getResourceAsStream(resource);
         if (stream == null) throw new IOException("Bytecode is unavailable for " + target.getName());
@@ -312,7 +303,7 @@ final class TargetInspector {
         if ("current".equals(values[1])) return classBytes(values[0]);
         if ("original".equals(values[1])) {
             classBytes(values[0]);
-            byte[] original = registry.originalBytecodeFor(target);
+            byte[] original = coordinator.originalBytecodeFor(target);
             if (original == null) throw new IOException("Original bytecode is unavailable");
             return original;
         }
@@ -363,11 +354,7 @@ final class TargetInspector {
         String settings = payload.substring(third + 1);
         Class<?> target = resolveClass(identifier);
         requireRedefinable(target);
-        cfgManager.stopForClass(target);
-        apiHookManager.stopForClass(target);
-        fieldWriteManager.stopForClass(target);
-        fileInterceptorManager.stopForClass(target);
-        return traceManager.start(target, identifier, method, descriptor, settings, classBytes(identifier));
+        return traceManager.start(target, identifier, method, descriptor, settings);
     }
 
     String stopTrace(String probeId) throws Exception {
@@ -408,10 +395,6 @@ final class TargetInspector {
         }
         Class<?> target = resolveClass(values[0]);
         requireRedefinable(target);
-        traceManager.stopForClass(target);
-        apiHookManager.stopForClass(target);
-        fieldWriteManager.stopForClass(target);
-        fileInterceptorManager.stopForClass(target);
         return cfgManager.start(target, values[1], values[2], classBytes(values[0]), duration);
     }
 
@@ -424,10 +407,6 @@ final class TargetInspector {
     }
 
     String startApiHooks(String payload) throws Exception {
-        cfgManager.stopAll();
-        traceManager.stopAll();
-        fieldWriteManager.stopAll();
-        fileInterceptorManager.stop();
         return apiHookManager.start(payload);
     }
 
@@ -472,7 +451,7 @@ final class TargetInspector {
     String startFieldTrace(String payload) throws Exception {
         FieldTarget field = fieldTarget(payload, true);
         fieldWriteManager.stopAll();
-        fileInterceptorManager.stop();
+        Class<?> declaringClass = resolveClass(field.targetIdentifier);
         Map<Class<?>, byte[]> candidates = new LinkedHashMap<Class<?>, byte[]>();
         String owner = field.owner.replace('.', '/');
         int maximumClasses = setting(field.settings, "maxClasses", 500, 1, 2_000);
@@ -485,7 +464,8 @@ final class TargetInspector {
             byte[] bytecode = availableBytes(candidate);
             if (bytecode == null) continue;
             try {
-                if (FieldWriteAnalyzer.count(bytecode, owner, field.name, field.descriptor) > 0) {
+                if (FieldWriteAnalyzer.count(bytecode, owner, field.name, field.descriptor) > 0
+                        && resolvesTo(candidate, declaringClass)) {
                     candidates.put(candidate, bytecode);
                 }
             } catch (IOException ignored) {
@@ -493,11 +473,6 @@ final class TargetInspector {
         }
         if (candidates.isEmpty())
             throw new IOException("No loaded bytecode writes to " + field.owner + "." + field.name);
-        for (Class<?> candidate : candidates.keySet()) {
-            cfgManager.stopForClass(candidate);
-            traceManager.stopForClass(candidate);
-            apiHookManager.stopForClass(candidate);
-        }
         return fieldWriteManager.start(field.targetIdentifier, field.owner, field.name, field.descriptor,
                 field.settings, candidates);
     }
@@ -519,10 +494,6 @@ final class TargetInspector {
     }
 
     String startFileMonitor(String settings) throws Exception {
-        cfgManager.stopAll();
-        traceManager.stopAll();
-        apiHookManager.stopAll();
-        fieldWriteManager.stopAll();
         return fileInterceptorManager.start(settings);
     }
 
@@ -711,6 +682,7 @@ final class TargetInspector {
         apiHookManager.close();
         fieldWriteManager.close();
         fileInterceptorManager.close();
+        coordinator.restoreAll();
         jfrProfilerManager.close();
         exceptionAnalyzer.close();
         threadAnalyzer.close();
@@ -741,16 +713,10 @@ final class TargetInspector {
     synchronized String rollbackClass(String identifier) throws Exception {
         Class<?> target = resolveClass(identifier);
         requireRedefinable(target);
-        cfgManager.stopForClass(target);
-        traceManager.stopForClass(target);
-        apiHookManager.stopForClass(target);
-        fieldWriteManager.stopForClass(target);
-        if (registry.originalBytecodeFor(target) == null) classBytes(identifier);
-        byte[] original = registry.originalBytecodeFor(target);
+        byte[] current = classBytes(identifier);
+        byte[] original = coordinator.originalBytecodeFor(target);
         if (original == null) throw new IOException("Original bytecode is unavailable for " + target.getName());
-        byte[] current = registry.bytecodeFor(target);
-        if (current != null) ClassSchema.verifyCompatible(current, original);
-        applyDefinition(target, current == null ? classBytes(identifier) : current, original, "Rollback original");
+        applyDefinition(target, current, original, "Rollback original");
         return "Restored the original definition of " + target.getName();
     }
 
@@ -914,7 +880,7 @@ final class TargetInspector {
                 byte[] cached = cache.get(binaryName);
                 if (cached != null) return cached;
                 Class<?> type = classes.get(binaryName);
-                byte[] bytecode = type == null ? null : registry.bytecodeFor(type);
+                byte[] bytecode = type == null ? null : coordinator.bytecodeFor(type);
                 if (bytecode == null && type != null) bytecode = resourceBytes(type);
                 if (bytecode == null) bytecode = loaderResource(target.getClassLoader(), binaryName);
                 if (bytecode == null) bytecode = loaderResource(RuntimeJavaCompiler.class.getClassLoader(), binaryName);
@@ -958,7 +924,7 @@ final class TargetInspector {
     }
 
     private byte[] availableBytes(Class<?> type) {
-        byte[] bytecode = registry.bytecodeFor(type);
+        byte[] bytecode = coordinator.bytecodeFor(type);
         return bytecode == null ? resourceBytes(type) : bytecode;
     }
 
@@ -1026,19 +992,7 @@ final class TargetInspector {
     }
 
     private void applyDefinition(Class<?> target, byte[] current, byte[] replacement, String description) throws Exception {
-        ClassSchema.verifyCompatible(current, replacement);
-        cfgManager.stopForClass(target);
-        traceManager.stopForClass(target);
-        apiHookManager.stopForClass(target);
-        fieldWriteManager.stopForClass(target);
-        fileInterceptorManager.stopForClass(target);
-        byte[] restored = registry.bytecodeFor(target);
-        if (restored != null) current = restored;
-        ClassSchema.verifyCompatible(current, replacement);
-        if (NativeJvmtiBridge.isBound()) {
-            NativeJvmtiBridge.redefineClass(target, replacement);
-        } else instrumentation.redefineClasses(new ClassDefinition(target, replacement));
-        registry.recordApplied(target, replacement);
+        coordinator.patch(target, current, replacement);
         patchHistory.record(registry.keyFor(target), target.getName(), description, current, replacement);
     }
 
@@ -1163,6 +1117,15 @@ final class TargetInspector {
         }
         return new FieldTarget(values[0], owner.getName(), selected.getName(), Type.getDescriptor(selected.getType()),
                 selected.getModifiers(), values.length < 3 ? "" : values[2]);
+    }
+
+    private static boolean resolvesTo(Class<?> writer, Class<?> declaringClass) {
+        if (writer == declaringClass) return true;
+        try {
+            return Class.forName(declaringClass.getName(), false, writer.getClassLoader()) == declaringClass;
+        } catch (ClassNotFoundException | LinkageError | SecurityException error) {
+            return false;
+        }
     }
 
     private static int setting(String settings, String key, int fallback, int minimum, int maximum) throws IOException {

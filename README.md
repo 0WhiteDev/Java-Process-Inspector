@@ -312,7 +312,7 @@ JDK, JPI agent, and recognized API-library methods are graph boundaries, not rec
 
 Open <strong>Constant search</strong>, search for a value such as <code>https://api.example.com/license</code>, and click <strong>Investigate</strong>. JPI opens the Investigation workspace with ranked method-level users and interesting related constants. Select an entry point and click <strong>Analyze selected</strong> to load its Xrefs and CFG. Use <strong>Prepare tracer</strong>, perform the action in the target, then return and click <strong>Refresh runtime</strong> to add observed calls and caller paths to the same report. Use <strong>Trace branches 30s</strong> when branch-level evidence is needed.
 
-Confidence is an analysis aid, not a correctness guarantee. CFG target-block hits approximate taken branch counts when several edges can reach the same target. Starting CFG counters can stop an active method probe for the selected class because both features temporarily transform the same definition.
+Confidence is an analysis aid, not a correctness guarantee. CFG target-block hits approximate taken branch counts when several edges can reach the same target. CFG and method probes can be active on the same class definition.
 
 </details>
 
@@ -420,7 +420,7 @@ In <strong>Loaded classes</strong>, select a class and click <strong>Class diff 
 
 The bottom table lists patches across all classes. Select a row to inspect its before / after definitions, then click <strong>Rollback selected patch</strong> to restore the class state before that operation. Later changes to that same class are replaced, not selectively undone. Other classes are unaffected. Rollback itself becomes another history entry. Use <strong>Refresh</strong> if a class changed after its preview was loaded.
 
-Original means the first bytecode captured by JPI, which may already include transformations made before attach. History is in-memory for the agent session, limited to the latest 100 operations and 64 MiB of before / after snapshots globally; evicted entries cannot be restored. Temporary tracer instrumentation and external agents' changes are not recorded as user patches. Bytecode comparisons omit debug lines and stack-map frames and are textual instruction comparisons, not semantic equivalence proofs. Alignment uses bounded lookahead rather than an unbounded minimal-edit algorithm. Diff inputs are limited to 2 million characters per side, disassembly to 2 MiB classes, and coloring to the first 20,000 displayed lines. Original / Current views can include active probe instrumentation; applying or rolling back a patch stops conflicting probes on that class. Desktop and target agent must both be updated to use the new preview/history operations.
+Original means the first bytecode captured by JPI, which may already include transformations made before attach. History is in-memory for the agent session, limited to the latest 100 operations and 64 MiB of before / after snapshots globally; evicted entries cannot be restored. Temporary JPI probes are not included in patch snapshots or in the normal Current view. Applying or rolling back a patch reapplies compatible active probes. If a probe cannot be reapplied, JPI rejects the change without disabling it. Bytecode comparisons omit debug lines and stack-map frames and are textual instruction comparisons, not semantic equivalence proofs. Alignment uses bounded lookahead rather than an unbounded minimal-edit algorithm. Diff inputs are limited to 2 million characters per side, disassembly to 2 MiB classes, and coloring to the first 20,000 displayed lines.
 
 </details>
 
@@ -444,7 +444,7 @@ Open <strong>Loaded classes</strong>, decompile a class, select a method in <str
 
 <strong>Hide common</strong> hides matched invocation counts only for methods with equal counts and no observed return or CFG differences. At 100% these common method rows disappear; changed and unique methods and all behavioral differences remain visible. Visible counts for common rows describe the remaining calls after filtering, not the original totals. The percentage applies to the total eligible call count, rounded down, with deterministic method-name ordering. It is a presentation filter, not target-side sampling. First divergence compares observed event order, not causality: concurrent scheduling, sampling, and bounded or missing evidence can affect the result.
 
-The selected method is used for ordered CFG evidence. Clear <strong>Capture ordered CFG branches</strong> when only method, return, exception, and API evidence is needed. CFG instrumentation temporarily replaces the selected class definition and can stop another active probe on that same class. Method and API counts describe the explicitly active probes and profiles, not every method executed by the JVM.
+The selected method is used for ordered CFG evidence. Clear <strong>Capture ordered CFG branches</strong> when only method, return, exception, and API evidence is needed. CFG block probes can run alongside method probes. Method and API counts describe the explicitly active probes and profiles, not every method executed by the JVM.
 
 </details>
 
@@ -524,7 +524,7 @@ Changing the engine immediately reloads the selected class and its selected meth
 - Combine filters with <code>&amp;&amp;</code>, for example <code>$1.contains("token") &amp;&amp; duration > 10ms</code>
 - Limit overhead with sampling, per-method rate limits, event caps, value limits, array limits, stack depth, and automatic expiration
 - Warn when a high-frequency method causes a large number of events to be dropped
-- Restore instrumented classes when a probe stops, expires, the session disconnects, or a class patch starts
+- Remove only the tracer's instrumentation when a probe stops or expires
 
 Open **Loaded classes**, select a modifiable class and method, then click **Trace method**. JPI opens the Live tracer with the exact classloader-specific definition selected. Choose capture fields and safety limits, optionally enter a condition, and start the probe. New calls appear in the Time Tunnel and call tree while the application continues running.
 
@@ -547,7 +547,7 @@ Bootstrap classes, constructors, class initializers, native methods, abstract me
 - Publish every captured transition to Runtime Timeline for correlation with API, network, class-load, and action-marker events
 - Limit events, rate per second, value length, stack depth, writer classes, and probe lifetime
 - Avoid calling application <code>toString()</code> methods while rendering values
-- Restore every instrumented writer class when the probe stops, expires, the session ends, or another transformation needs that class
+- Remove field-write instrumentation when the probe stops or expires without removing other active layers
 
 Open <strong>Static fields</strong>, inspect a narrow class filter, select a row, and click <strong>Trace writes</strong>. JPI opens the field-write workspace and performs the static scan automatically. Review the candidate methods, start the bounded probe, then perform the relevant action in the target application. Runtime writes show transitions such as <code>false -&gt; true</code> together with the method and stack that produced the new value.
 
@@ -582,7 +582,7 @@ Start a field-write or Live Tracer probe, exercise the target application, then 
 - Apply several selected profiles in one bytecode pass per class
 - Avoid capturing arguments, keys, payloads, file contents, or other target objects in the default mode
 - Bound capture with per-profile event caps, rate limits, maximum class and call-site counts, a scan deadline, and automatic expiration
-- Restore every changed class when hooks stop, expire, the session closes, tracing starts on that class, or a class patch begins
+- Remove only API hook instrumentation when hooks stop or expire
 - Double-click an event to open static and dynamic Xrefs for the application caller
 
 Open <strong>API hooks</strong>, select one or more profiles, adjust the safety limits, and click <strong>Start selected profiles</strong>. Perform the interesting action in the target application. JPI shows which application method reached the selected JDK API, even when the surrounding application names are obfuscated. Selecting Crypto, for example, reveals the application callers of Cipher.getInstance, Cipher.init, Cipher.doFinal, and MessageDigest.digest.
@@ -661,12 +661,14 @@ Dynamic edges are collected only inside methods instrumented by Live Tracer. The
 - Install optional low-allocation block counters in the running method
 - Display exact aggregated execution counts without capturing arguments, return values, or target objects
 - Highlight executed blocks in green, reachable zero-hit blocks in yellow, and statically dead blocks in red
-- Automatically stop tracing after a configurable 1 to 600 seconds and restore the original class definition
-- Remove CFG instrumentation before method tracing, API hooks, HotSwap, rollback, or session shutdown changes the same target
+- Automatically remove CFG instrumentation after a configurable 1 to 600 seconds
+- Keep the other probes active when CFG tracing stops
 
 Open <strong>Loaded classes</strong>, select any concrete method, and click <strong>CFG</strong>. Static analysis is available for methods in loaded read-only classes as long as their bytecode can be read. Click a block to inspect its dominators, predecessors, successors, and full instruction list.
 
 For runtime coverage, click <strong>Start block trace</strong>, perform the relevant action in the target application, and watch the graph update. A yellow block after at least one recorded hit means the block was reachable in the static graph but was not executed during this trace window. A red block is unreachable from the method entry according to the bytecode graph. Block tracing requires a modifiable non-bootstrap class whose classloader can access the JPI agent runtime.
+
+See [Class transformation coordination](docs/class-transformations.md) for probe composition, patch conflicts, and verification.
 
 </details>
 <details>
