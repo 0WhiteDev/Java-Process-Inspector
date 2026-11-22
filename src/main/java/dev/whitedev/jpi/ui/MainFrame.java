@@ -23,6 +23,7 @@ import dev.whitedev.jpi.protocol.Operation;
 import dev.whitedev.jpi.ui.analysis.BytecodeCfgPanel;
 import dev.whitedev.jpi.ui.analysis.DifferenceTracingPanel;
 import dev.whitedev.jpi.ui.analysis.InvestigationPanel;
+import dev.whitedev.jpi.ui.cases.InvestigationCasePanel;
 import dev.whitedev.jpi.ui.browser.ClassesPanel;
 import dev.whitedev.jpi.ui.callgraph.CallGraphHeatmapPanel;
 import dev.whitedev.jpi.ui.commands.CommandContext;
@@ -129,7 +130,7 @@ public final class MainFrame extends JFrame {
         this.pluginManager = pluginManager;
         this.mcp = mcp;
         setIconImage(new FlatSVGIcon("assets/logo.svg", 64, 64).getImage());
-        setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
+        setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
         setMinimumSize(new Dimension(1024, 700));
         Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
         setSize(Math.min(1280, screen.width - 70), Math.min(820, screen.height - 90));
@@ -278,11 +279,13 @@ public final class MainFrame extends JFrame {
             }
         });
         searchEverything.setContextActions(contextActions);
+        InvestigationCasePanel cases = new InvestigationCasePanel(mappingWorkspace, timelineStore,
+                investigation::caseReport, cfg::caseEvidence);
         views = new ArrayList<>(Arrays.asList(overview, timeline, profiler, exceptions, threadAnalyzer, debugger, classes, tracer, callGraph, apiHooks, fileMonitor, xrefs,
                 cfg, differences,
                 investigation, deobfuscation, fingerprint,
                 constantSearch, executor, fields, fieldWrites, valueTrace, loaders, environment, network, heapObjects, nativeSymbols,
-                memory, dll, plugins, nativeJvmti, searchEverything));
+                memory, dll, plugins, nativeJvmti, searchEverything, cases));
 
         addCard("Overview", overview);
         addCard("Search Everything", searchEverything);
@@ -302,6 +305,7 @@ public final class MainFrame extends JFrame {
         addCard("Bytecode CFG", cfg);
         addCard("Difference tracing", differences);
         addCard("Investigation", investigation);
+        addCard("Investigation Cases", cases);
         addCard("Deobfuscation", deobfuscation);
         addCard("Constant search", constantSearch);
         addCard("Code executor", executor);
@@ -344,7 +348,13 @@ public final class MainFrame extends JFrame {
         disconnect.addActionListener(e -> disconnect());
         addWindowListener(new WindowAdapter() {
             @Override
+            public void windowClosing(WindowEvent event) {
+                if (cases.confirmClose()) dispose();
+            }
+
+            @Override
             public void windowClosed(WindowEvent event) {
+                cases.close();
                 disconnect();
                 debugger.close();
                 pluginManager.close();
@@ -531,6 +541,7 @@ public final class MainFrame extends JFrame {
         addNavigation(sidebar, "Bytecode CFG");
         addNavigation(sidebar, "Difference tracing");
         addNavigation(sidebar, "Investigation");
+        addNavigation(sidebar, "Investigation Cases");
         addNavigation(sidebar, "Deobfuscation");
         addNavigation(sidebar, "Constant search");
         addNavigation(sidebar, "Code executor");

@@ -813,6 +813,10 @@ public final class InvestigationPanel extends JPanel implements SessionAware {
         return model < probeTargets.size() ? probeTargets.get(model) : null;
     }
 
+    public String caseReport() {
+        return assistantReport == null ? "" : assistantReport.text();
+    }
+
     private void exportAssistant() {
         AssistantReport current = assistantReport;
         if (current == null) return;

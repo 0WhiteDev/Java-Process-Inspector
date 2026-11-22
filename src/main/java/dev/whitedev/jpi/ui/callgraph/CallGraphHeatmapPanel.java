@@ -40,6 +40,19 @@ import java.util.Comparator;
 import java.util.List;
 
 public final class CallGraphHeatmapPanel extends JPanel implements SessionAware {
+    public static String offlineSummary(String raw) {
+        var graph = CallGraphModel.parse(raw);
+        StringBuilder text = new StringBuilder("Saved cumulative call graph\n\n");
+        graph.nodes.stream().sorted(Comparator.comparingLong((CallGraphModel.Node node) -> node.calls).reversed())
+                .limit(300).forEach(node -> text.append(node.id()).append(" | ").append(node.calls)
+                        .append(" calls | ").append(node.exceptions).append(" exceptions\n"));
+        text.append("\nEdges\n");
+        graph.edges.stream().sorted(Comparator.comparingLong((CallGraphModel.Edge edge) -> edge.calls).reversed())
+                .limit(300).forEach(edge -> text.append(edge.callerId()).append(" -> ").append(edge.calleeId())
+                        .append(" | ").append(edge.calls).append(" calls\n"));
+        return text.toString();
+    }
+
     public void filterTarget(String value) {
         search.setText(value);
         refresh();

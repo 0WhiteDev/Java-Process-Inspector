@@ -1,6 +1,7 @@
 package dev.whitedev.jpi.ui.analysis;
 
 import dev.whitedev.jpi.attach.InspectorSession;
+import dev.whitedev.jpi.cases.InvestigationCase.Evidence;
 import dev.whitedev.jpi.deobfuscation.DeobfuscationWorkspace;
 import dev.whitedev.jpi.protocol.Operation;
 import dev.whitedev.jpi.ui.Async;
@@ -139,6 +140,23 @@ public final class BytecodeCfgPanel extends JPanel implements SessionAware {
 
     public void selectTarget(String identifier, String owner, String method, String methodDescriptor) {
         selectTarget(identifier, owner, method, methodDescriptor, false);
+    }
+
+    public Evidence caseEvidence() {
+        if (session == null || model == null) return null;
+        String title = model.className + "." + model.methodName + model.descriptor;
+        StringBuilder text = new StringBuilder(title).append("\nComplexity: ").append(model.complexity)
+                .append(" | Dead blocks: ").append(model.deadBlocks).append(" | Total hits: ")
+                .append(model.totalExecutions).append("\n\n");
+        for (var block : model.blocks) {
+            if (text.length() >= 11_000) {
+                text.append("Additional blocks omitted.\n");
+                break;
+            }
+            text.append(block.id).append(" | ").append(block.executions).append(" hits | lines ")
+                    .append(block.lineRange()).append('\n');
+        }
+        return new Evidence("CFG coverage", title, classIdentifier, model.methodName, model.descriptor, text.toString());
     }
 
     public boolean canStartBlockTrace() {

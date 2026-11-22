@@ -163,6 +163,7 @@ This message commonly appears when a Java 21 agent is loaded into a target runni
 | ClassLoader Explorer | Defining-loader tree, loaded classes, URLs and code sources, duplicate definitions, package overlaps, weak collection history, and HPROF memory navigation |
 | VM environment | VM arguments, redacted system properties, command line, and classloader inventory |
 | Session snapshot | One ZIP containing metrics, environment, class and classloader inventories, load events, thread analysis, and a thread dump |
+| Investigation Cases | Portable `.jpisession` recordings with selected bytecode, runtime observations, notes, and offline analysis |
 | Network activity | Live process-owned TCP/UDP IPv4/IPv6 endpoints, states, filtering, and open/close timeline |
 | Native symbols | Offline PE, ELF, PDB, DWARF, and MAP analysis with C++ demangling, source locations, RTTI, and virtual-table discovery |
 | Plugins | Versioned Java API for trusted JAR extensions that add tabs, bytecode tools, deobfuscators, exporters, hook profiles, and decompilers |
@@ -299,6 +300,12 @@ The profiler runs independently from Live Tracer, API Hooks, File Monitor, field
 - Prepare the selected method directly in Live Tracer, Xrefs, or Bytecode CFG without searching for it again
 - Install an explicit 30-second CFG probe and correlate branch blocks with live target-block hit counts
 - Limit automatic expansion to 5 seeds, 16 Xrefs requests, depth 3, 80 graph nodes, 200 edges, and a 30-second soft deadline
+
+### Investigation Cases
+
+Open **Investigation Cases**, choose **New investigation**, name the case, and click **Start recording**. Run the action you want to observe, and use **Capture selected classes** to save bytecode for the exact class definitions you want to inspect later. **Stop recording** collects the final runtime snapshots. Click **Save case** and reopen the `.jpisession` file with **Open offline**.
+
+An opened case can be searched and inspected without a target JVM. Saved classes support read-only decompilation, static Xrefs, and CFG. The case also keeps recorded observations, mappings, editable notes and bookmarks, and reports you add explicitly. Recording does not start probes or run application code. Sensitive runtime details are off by default. See [Investigation Cases](docs/investigation-cases.md) for privacy, coverage, and limits.
 
 ### Automatic Investigation Assistant
 

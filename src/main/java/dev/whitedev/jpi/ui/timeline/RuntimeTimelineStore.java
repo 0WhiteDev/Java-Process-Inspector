@@ -6,6 +6,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Consumer;
 
 public final class RuntimeTimelineStore {
     private static final int DEFAULT_LIMIT = 20_000;
@@ -14,6 +15,7 @@ public final class RuntimeTimelineStore {
     private final int limit;
     private final LinkedHashMap<String, TimelineEvent> events = new LinkedHashMap<>();
     private final List<Runnable> listeners = new CopyOnWriteArrayList<>();
+    private final List<Consumer<TimelineEvent>> eventListeners = new CopyOnWriteArrayList<>();
     private String sessionId = "";
 
     public RuntimeTimelineStore() {
@@ -44,7 +46,10 @@ public final class RuntimeTimelineStore {
                 while (events.size() > limit) events.remove(events.keySet().iterator().next());
             }
         }
-        if (changed) notifyListeners();
+        if (changed) {
+            for (Consumer<TimelineEvent> listener : eventListeners) listener.accept(event);
+            notifyListeners();
+        }
     }
 
     public void clear() {
@@ -101,6 +106,14 @@ public final class RuntimeTimelineStore {
 
     public void removeListener(Runnable listener) {
         listeners.remove(listener);
+    }
+
+    public void addEventListener(Consumer<TimelineEvent> listener) {
+        eventListeners.add(listener);
+    }
+
+    public void removeEventListener(Consumer<TimelineEvent> listener) {
+        eventListeners.remove(listener);
     }
 
     private String directCorrelation(TimelineEvent event, Map<String, TimelineEvent> calls,
