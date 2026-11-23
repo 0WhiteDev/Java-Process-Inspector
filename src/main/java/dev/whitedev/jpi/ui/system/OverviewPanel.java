@@ -17,17 +17,21 @@ public final class OverviewPanel extends JPanel implements SessionAware {
     private final JTextArea threads = Ui.outputArea();
     private final JLabel targetInfo = new JLabel("Attach to a JVM to begin");
     private final JButton threadDump = Ui.primaryButton("Capture thread dump");
+    private final JButton refresh = Ui.secondaryButton("Refresh now");
+    private final JPanel actions = new JPanel(new FlowLayout(FlowLayout.LEADING, 4, 2));
+    private final CardLayout layout = new CardLayout();
+    private final JPanel pages = new JPanel(layout);
     private InspectorSession session;
     private boolean loading;
 
-    public OverviewPanel() {
+    public OverviewPanel(Runnable openCases) {
         super(new BorderLayout(0, 16));
         setBorder(new EmptyBorder(4, 0, 0, 0));
         setOpaque(false);
 
-        JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
         actions.setOpaque(false);
-        JButton refresh = Ui.secondaryButton("Refresh now");
+        refresh.setToolTipText("Read the current heap, class, thread and GC counters");
+        threadDump.setToolTipText("Capture thread stacks and lock ownership from the connected JVM");
         refresh.addActionListener(e -> refresh());
         threadDump.addActionListener(e -> loadThreads());
         actions.add(refresh);
@@ -66,7 +70,28 @@ public final class OverviewPanel extends JPanel implements SessionAware {
         threadCard.add(threadHeader, BorderLayout.NORTH);
         threadCard.add(Ui.scroll(threads), BorderLayout.CENTER);
         body.add(threadCard, BorderLayout.CENTER);
-        add(body, BorderLayout.CENTER);
+        JPanel welcome = new JPanel(new BorderLayout());
+        JPanel guide = Ui.card(new GridLayout(0, 1, 0, 8));
+        JLabel live = new JLabel("Inspect a running JVM");
+        live.setFont(live.getFont().deriveFont(Font.BOLD, 18f));
+        guide.add(live);
+        guide.add(new JLabel("Select a process in the target bar, then choose Attach to see its live metrics."));
+        guide.add(new JSeparator());
+        JLabel offline = new JLabel("Review a saved investigation");
+        offline.setFont(live.getFont());
+        guide.add(offline);
+        guide.add(new JLabel("Browse recorded classes, traces and notes without connecting to a process."));
+        JPanel links = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        links.setOpaque(false);
+        JButton cases = Ui.secondaryButton("Open Investigation Cases");
+        cases.setToolTipText("Go to the workspace for recording and opening .jpisession files");
+        cases.addActionListener(event -> openCases.run());
+        links.add(cases);
+        guide.add(links);
+        welcome.add(guide, BorderLayout.NORTH);
+        pages.add(welcome, "welcome");
+        pages.add(body, "metrics");
+        add(pages, BorderLayout.CENTER);
 
         new Timer(2000, e -> refresh()).start();
         resetValues();
@@ -87,6 +112,9 @@ public final class OverviewPanel extends JPanel implements SessionAware {
     @Override
     public void setSession(InspectorSession session) {
         this.session = session;
+        actions.setVisible(session != null);
+        layout.show(pages, session == null ? "welcome" : "metrics");
+        refresh.setEnabled(session != null);
         threadDump.setEnabled(session != null);
         if (session == null) {
             targetInfo.setText("Attach to a JVM to begin");
@@ -102,11 +130,11 @@ public final class OverviewPanel extends JPanel implements SessionAware {
         if (current == null || loading) return;
         loading = true;
         Async.run(() -> current.requestText(Operation.METRICS, ""), raw -> {
-            renderMetrics(parse(raw));
             loading = false;
+            if (current == session) renderMetrics(parse(raw));
         }, error -> {
             loading = false;
-            targetInfo.setText("Metrics unavailable: " + error.getMessage());
+            if (current == session) targetInfo.setText("Metrics unavailable: " + error.getMessage());
         });
     }
 
@@ -116,10 +144,12 @@ public final class OverviewPanel extends JPanel implements SessionAware {
         threadDump.setEnabled(false);
         threads.setText("Capturing thread dump...");
         Async.run(() -> current.requestText(Operation.THREAD_DUMP, ""), value -> {
+            if (current != session) return;
             threads.setText(value);
             threads.setCaretPosition(0);
             threadDump.setEnabled(true);
         }, error -> {
+            if (current != session) return;
             threadDump.setEnabled(true);
             Ui.error(this, error);
         });

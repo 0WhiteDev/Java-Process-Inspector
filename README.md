@@ -80,10 +80,12 @@ permission to instrument the process.
 
 1. Start JPI from `target/jpi.jar`.
 2. Select an attachable JVM in the top bar and click **Attach**.
-3. Work in the Overview, Classes, Executor, Fields, or Native tools tabs.
+3. Pick a tool from the sidebar. Its groups scroll independently of the logo and footer. Use **Ctrl+P** to jump to a tool or **Ctrl+Shift+F** to search the workspace.
 4. Click **Disconnect** before closing the target when possible.
 
 No files need to be copied to the target directory. The same `jpi.jar` is both the desktop controller and the Java agent.
+
+The target bar keeps the common connection actions visible. Additional connection modes are under **More...**. To review a saved session without connecting, choose **Open Investigation Cases** on the Overview screen.
 
 The shaded JAR intentionally contains two bytecode levels. Desktop and GUI classes use Java 21, while the `dev.whitedev.jpi.agent` package tree and `dev.whitedev.jpi.protocol` are rebuilt as Java 8 bytecode before packaging. This allows the Java 21 desktop application to attach to targets such as older app installations running Java 8 or Java 17.
 

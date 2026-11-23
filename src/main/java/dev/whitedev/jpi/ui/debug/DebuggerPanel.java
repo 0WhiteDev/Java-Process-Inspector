@@ -20,6 +20,7 @@ import dev.whitedev.jpi.ui.SessionAware;
 import dev.whitedev.jpi.ui.Ui;
 import dev.whitedev.jpi.ui.context.AnalysisTarget;
 import dev.whitedev.jpi.ui.context.ContextActions;
+import dev.whitedev.jpi.ui.layout.WrappingFlowLayout;
 import dev.whitedev.jpi.ui.timeline.RuntimeTimelineStore;
 import dev.whitedev.jpi.ui.timeline.TimelineEvent;
 import dev.whitedev.jpi.ui.timeline.TimelineSource;
@@ -206,7 +207,7 @@ public final class DebuggerPanel extends JPanel implements SessionAware {
         add(Ui.sectionHeader("Interactive debugger",
                 "Control a JVM through JDWP with breakpoints, stepping, frames, and live values", headerActions), BorderLayout.NORTH);
 
-        JPanel control = Ui.card(new BorderLayout(12, 0));
+        JPanel control = Ui.card(new BorderLayout(0, 6));
         JPanel labels = new JPanel();
         labels.setOpaque(false);
         labels.setLayout(new BoxLayout(labels, BoxLayout.Y_AXIS));
@@ -214,7 +215,7 @@ public final class DebuggerPanel extends JPanel implements SessionAware {
         instrumentation.setForeground(Ui.MUTED);
         labels.add(state);
         labels.add(instrumentation);
-        JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+        JPanel actions = new JPanel(new WrappingFlowLayout(FlowLayout.LEADING, 4, 2));
         actions.setOpaque(false);
         actions.add(pause);
         actions.add(resume);
@@ -226,8 +227,11 @@ public final class DebuggerPanel extends JPanel implements SessionAware {
         actions.add(stepOut);
         actions.add(traceMethod);
         actions.add(forceReturn);
-        control.add(labels, BorderLayout.WEST);
-        control.add(actions, BorderLayout.EAST);
+        control.add(labels, BorderLayout.NORTH);
+        control.add(actions, BorderLayout.CENTER);
+        stepInto.setToolTipText("Enter the next method call (F7)");
+        stepOver.setToolTipText("Advance without entering the next method (F8)");
+        stepOut.setToolTipText("Run to the caller of the current frame (Shift+F8)");
 
         threads.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         frames.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
@@ -265,13 +269,9 @@ public final class DebuggerPanel extends JPanel implements SessionAware {
         JTabbedPane inspectionTabs = new JTabbedPane();
         inspectionTabs.addTab("Source / evaluate", source);
         inspectionTabs.addTab("Watches", watches);
-        JSplitPane lower = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, inspectionTabs, breakpointPanel);
-        lower.setResizeWeight(.48);
-        lower.setDividerLocation(500);
-        lower.setBorder(null);
-        JSplitPane center = new JSplitPane(JSplitPane.VERTICAL_SPLIT, stack, lower);
-        center.setResizeWeight(.52);
-        center.setDividerLocation(300);
+        inspectionTabs.addTab("Breakpoints", breakpointPanel);
+        JSplitPane center = new JSplitPane(JSplitPane.VERTICAL_SPLIT, stack, inspectionTabs);
+        center.setResizeWeight(.42);
         center.setBorder(null);
         JPanel body = new JPanel(new BorderLayout(0, 10));
         body.setOpaque(false);

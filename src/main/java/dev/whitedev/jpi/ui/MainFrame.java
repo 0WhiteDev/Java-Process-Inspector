@@ -137,7 +137,7 @@ public final class MainFrame extends JFrame {
         setLocationRelativeTo(null);
 
         DeobfuscationWorkspace mappingWorkspace = new DeobfuscationWorkspace();
-        OverviewPanel overview = new OverviewPanel();
+        OverviewPanel overview = new OverviewPanel(() -> selectView("Investigation Cases"));
         RuntimeTimelinePanel timeline = new RuntimeTimelinePanel(timelineStore);
         DebuggerPanel debugger = new DebuggerPanel(timelineStore);
         LiveTracerPanel tracer = new LiveTracerPanel(mappingWorkspace, timelineStore);
@@ -492,8 +492,7 @@ public final class MainFrame extends JFrame {
     private JComponent sidebar() {
         JPanel sidebar = new JPanel();
         sidebar.setBackground(Ui.SIDEBAR);
-        sidebar.setPreferredSize(new Dimension(184, 0));
-        sidebar.setBorder(new EmptyBorder(16, 6, 16, 6));
+        sidebar.setBorder(new EmptyBorder(0, 8, 12, 8));
         sidebar.setLayout(new BoxLayout(sidebar, BoxLayout.Y_AXIS));
 
         JPanel brand = new JPanel(new BorderLayout(12, 0));
@@ -513,35 +512,31 @@ public final class MainFrame extends JFrame {
         brandText.add(inspector);
         brand.add(mark, BorderLayout.WEST);
         brand.add(brandText, BorderLayout.CENTER);
-        sidebar.add(brand);
-        sidebar.add(Box.createVerticalStrut(12));
-
-        JLabel workspace = new JLabel("WORKSPACE");
-        workspace.setForeground(Ui.MUTED);
-        workspace.setFont(workspace.getFont().deriveFont(Font.BOLD, 11f));
-        workspace.setBorder(new EmptyBorder(0, 10, 8, 0));
-        workspace.setAlignmentX(Component.LEFT_ALIGNMENT);
-        sidebar.add(workspace);
+        brand.setBorder(new EmptyBorder(12, 12, 12, 12));
+        addGroup(sidebar, "Workspace", SectionIcon.Kind.WORKSPACE);
         addNavigation(sidebar, "Overview");
         addNavigation(sidebar, "Command Palette");
         addNavigation(sidebar, "Search Everything");
+        addNavigation(sidebar, "Investigation Cases");
         addNavigation(sidebar, "Target fingerprint");
+        addGroup(sidebar, "Runtime", SectionIcon.Kind.RUNTIME);
         addNavigation(sidebar, "Runtime timeline");
         addNavigation(sidebar, "Profiler");
         addNavigation(sidebar, "Exception Analyzer");
         addNavigation(sidebar, "Thread Analyzer");
         addNavigation(sidebar, "Debugger");
-        addNavigation(sidebar, "Loaded classes");
-        addNavigation(sidebar, "ClassLoader Explorer");
         addNavigation(sidebar, "Live tracer");
         addNavigation(sidebar, "Call graph");
         addNavigation(sidebar, "API hooks");
         addNavigation(sidebar, "File Monitor");
+        addNavigation(sidebar, "Network activity");
+        addGroup(sidebar, "Code analysis", SectionIcon.Kind.CODE);
+        addNavigation(sidebar, "Loaded classes");
+        addNavigation(sidebar, "ClassLoader Explorer");
         addNavigation(sidebar, "Xrefs");
         addNavigation(sidebar, "Bytecode CFG");
         addNavigation(sidebar, "Difference tracing");
         addNavigation(sidebar, "Investigation");
-        addNavigation(sidebar, "Investigation Cases");
         addNavigation(sidebar, "Deobfuscation");
         addNavigation(sidebar, "Constant search");
         addNavigation(sidebar, "Code executor");
@@ -549,16 +544,9 @@ public final class MainFrame extends JFrame {
         addNavigation(sidebar, "Field writes");
         addNavigation(sidebar, "Trace value");
         addNavigation(sidebar, "VM environment");
-        addNavigation(sidebar, "Network activity");
         configurePluginNavigation(workspacePluginNavigation);
         sidebar.add(workspacePluginNavigation);
-        sidebar.add(Box.createVerticalStrut(10));
-        JLabel advanced = new JLabel("ADVANCED");
-        advanced.setForeground(Ui.MUTED);
-        advanced.setFont(advanced.getFont().deriveFont(Font.BOLD, 11f));
-        advanced.setBorder(new EmptyBorder(0, 10, 8, 0));
-        advanced.setAlignmentX(Component.LEFT_ALIGNMENT);
-        sidebar.add(advanced);
+        addGroup(sidebar, "Advanced", SectionIcon.Kind.ADVANCED);
         addNavigation(sidebar, "Heap objects");
         addNavigation(sidebar, "Native symbols");
         addNavigation(sidebar, "Native JVMTI");
@@ -572,14 +560,9 @@ public final class MainFrame extends JFrame {
         JPanel footer = new JPanel();
         footer.setOpaque(false);
         footer.setLayout(new BoxLayout(footer, BoxLayout.Y_AXIS));
-        footer.setBorder(new EmptyBorder(0, 10, 0, 0));
+        footer.setBorder(new EmptyBorder(10, 18, 12, 8));
         footer.setAlignmentX(Component.LEFT_ALIGNMENT);
         footer.setMaximumSize(new Dimension(Integer.MAX_VALUE, 42));
-
-        JLabel protocol = new JLabel("Protocol v1");
-        protocol.setForeground(Ui.MUTED);
-        protocol.setAlignmentX(Component.LEFT_ALIGNMENT);
-        footer.add(protocol);
 
         JPanel authorRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
         authorRow.setOpaque(false);
@@ -599,14 +582,29 @@ public final class MainFrame extends JFrame {
         authorRow.add(createdBy);
         authorRow.add(author);
         footer.add(authorRow);
-        sidebar.add(footer);
         JScrollPane scroll = new JScrollPane(sidebar, ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
                 ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
-        scroll.setPreferredSize(new Dimension(184, 0));
         scroll.setBorder(null);
         scroll.getViewport().setBackground(Ui.SIDEBAR);
         scroll.getVerticalScrollBar().setUnitIncrement(18);
-        return scroll;
+        JPanel rail = new JPanel(new BorderLayout());
+        rail.setBackground(Ui.SIDEBAR);
+        rail.setPreferredSize(new Dimension(194, 0));
+        rail.setBorder(BorderFactory.createMatteBorder(0, 0, 0, 1, Ui.BORDER));
+        rail.add(brand, BorderLayout.NORTH);
+        rail.add(scroll, BorderLayout.CENTER);
+        rail.add(footer, BorderLayout.SOUTH);
+        return rail;
+    }
+
+    private void addGroup(JPanel sidebar, String name, SectionIcon.Kind icon) {
+        JLabel label = new JLabel(name, new SectionIcon(icon), SwingConstants.LEADING);
+        label.setIconTextGap(8);
+        label.setForeground(Ui.MUTED);
+        label.setFont(label.getFont().deriveFont(Font.BOLD, 12f));
+        label.setBorder(new EmptyBorder(12, 10, 5, 0));
+        label.setAlignmentX(Component.LEFT_ALIGNMENT);
+        sidebar.add(label);
     }
 
     private void openAuthorProfile() {
@@ -816,11 +814,12 @@ public final class MainFrame extends JFrame {
             boolean selected = entry.getKey().equals(name);
             entry.getValue().setBackground(selected ? Ui.SURFACE_LIGHT : Ui.SIDEBAR);
             entry.getValue().setForeground(selected ? Color.WHITE : Ui.MUTED);
+            entry.getValue().setSelected(selected);
         }
     }
 
     private JPanel connectionBar() {
-        JPanel bar = Ui.card(new BorderLayout(0, 10));
+        JPanel bar = Ui.card(new BorderLayout(10, 0));
         bar.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createLineBorder(Ui.BORDER),
                 new EmptyBorder(10, 14, 10, 14)));
@@ -831,38 +830,56 @@ public final class MainFrame extends JFrame {
         label.setLayout(new BoxLayout(label, BoxLayout.Y_AXIS));
         JLabel heading = new JLabel("Target JVM");
         heading.setFont(heading.getFont().deriveFont(Font.BOLD, 14f));
-        JLabel hint = new JLabel("Select a local Java process and start an inspection session");
-        hint.setForeground(Ui.MUTED);
         label.add(heading);
-        label.add(hint);
 
         targets.setPreferredSize(new Dimension(360, 36));
-        targets.putClientProperty("JComponent.roundRect", true);
+        targets.setToolTipText("Select the local Java process to inspect");
+        targets.getAccessibleContext().setAccessibleName("Target JVM");
         JButton refresh = Ui.secondaryButton("Refresh");
+        refresh.setToolTipText("Scan again for running local JVMs");
         refresh.addActionListener(e -> refreshTargets());
+        attach.setToolTipText("Start an inspection session for the selected JVM");
+        disconnect.setToolTipText("End the inspection session without stopping the target");
 
         status.setOpaque(true);
         status.setHorizontalAlignment(SwingConstants.CENTER);
         status.setBorder(new EmptyBorder(7, 12, 7, 12));
         status.putClientProperty("FlatLaf.style", "arc: 999");
-        top.add(label, BorderLayout.WEST);
-        top.add(status, BorderLayout.EAST);
+        top.add(label, BorderLayout.NORTH);
+        top.add(status, BorderLayout.CENTER);
 
         JPanel selector = new JPanel(new BorderLayout(10, 0));
         selector.setOpaque(false);
-        selector.add(targets, BorderLayout.CENTER);
+        JPanel process = new JPanel(new GridBagLayout());
+        process.setOpaque(false);
+        GridBagConstraints fill = new GridBagConstraints();
+        fill.weightx = 1;
+        fill.fill = GridBagConstraints.HORIZONTAL;
+        process.add(targets, fill);
+        selector.add(process, BorderLayout.CENTER);
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
         actions.setOpaque(false);
         actions.add(refresh);
-        actions.add(tunnelAgent);
-        actions.add(manualEarly);
-        actions.add(launchEarly);
         actions.add(attach);
-        actions.add(nativeAttach);
         actions.add(disconnect);
-        selector.add(actions, BorderLayout.EAST);
-        bar.add(top, BorderLayout.NORTH);
-        bar.add(selector, BorderLayout.SOUTH);
+        JButton options = Ui.secondaryButton("More...");
+        options.setToolTipText("Show additional connection and launch options");
+        options.addActionListener(event -> {
+            JPopupMenu menu = new JPopupMenu();
+            for (JButton action : List.of(tunnelAgent, manualEarly, launchEarly, nativeAttach)) {
+                JMenuItem item = menu.add(action.getText());
+                item.setEnabled(action.isEnabled());
+                item.addActionListener(selected -> action.doClick());
+            }
+            menu.show(options, 0, options.getHeight());
+        });
+        actions.add(options);
+        JPanel aligned = new JPanel(new GridBagLayout());
+        aligned.setOpaque(false);
+        aligned.add(actions);
+        selector.add(aligned, BorderLayout.EAST);
+        bar.add(top, BorderLayout.WEST);
+        bar.add(selector, BorderLayout.CENTER);
         return bar;
     }
 

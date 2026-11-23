@@ -28,6 +28,11 @@ public final class CodeEditors {
         editor.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 14));
         editor.setMargin(new Insets(12, 14, 12, 14));
         applyTheme(editor);
+        editor.setBackground(Ui.SIDEBAR);
+        editor.setForeground(Ui.TEXT);
+        editor.setCaretColor(Ui.TEXT);
+        editor.setCurrentLineHighlightColor(Ui.SURFACE);
+        editor.setSelectionColor(Ui.BORDER);
         return editor;
     }
 
@@ -35,6 +40,9 @@ public final class CodeEditors {
         RTextScrollPane scroll = new RTextScrollPane(editor);
         scroll.setLineNumbersEnabled(true);
         scroll.setFoldIndicatorEnabled(true);
+        scroll.getGutter().setBackground(Ui.SIDEBAR);
+        scroll.getGutter().setLineNumberColor(Ui.MUTED);
+        scroll.getGutter().setBorderColor(Ui.BORDER);
         scroll.setBorder(BorderFactory.createLineBorder(Ui.BORDER));
         return scroll;
     }

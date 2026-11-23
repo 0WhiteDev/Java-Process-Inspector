@@ -59,7 +59,7 @@ public final class TargetFingerprintPanel extends JPanel implements SessionAware
         setOpaque(false);
         JPanel top = new JPanel(new BorderLayout(0, 8));
         top.setOpaque(false);
-        top.add(Ui.sectionHeader("Target fingerprint", "Compare target builds, selected bytecode, mappings, and saved breakpoint locations", new JPanel()), BorderLayout.NORTH);
+        top.add(Ui.sectionHeader("Target fingerprint", "Compare target builds, selected bytecode, mappings, and saved breakpoint locations", null), BorderLayout.NORTH);
         JPanel actions = new JPanel(new WrappingFlowLayout(FlowLayout.LEFT, 8, 3));
         JButton load = Ui.secondaryButton("Import baseline...");
         JButton forget = Ui.secondaryButton("Forget baseline");

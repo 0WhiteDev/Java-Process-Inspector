@@ -1,35 +1,41 @@
 package dev.whitedev.jpi.ui;
 
 import com.formdev.flatlaf.FlatDarkLaf;
+import com.formdev.flatlaf.FlatLaf;
+import dev.whitedev.jpi.ui.layout.WrappingFlowLayout;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
 
 public final class Ui {
-    public static final Color BACKGROUND = new Color(28, 28, 30);
-    public static final Color SIDEBAR = new Color(34, 34, 37);
-    public static final Color SURFACE = new Color(42, 42, 45);
-    public static final Color SURFACE_LIGHT = new Color(57, 57, 62);
-    public static final Color BORDER = new Color(76, 76, 82);
-    public static final Color ACCENT = new Color(113, 113, 122);
+    public static final Color BACKGROUND = new Color(0x202020);
+    public static final Color SIDEBAR = new Color(0x161616);
+    public static final Color SURFACE = new Color(0x252525);
+    public static final Color SURFACE_LIGHT = new Color(0x393939);
+    public static final Color BORDER = new Color(0x454545);
+    public static final Color ACCENT = new Color(0xc4c4c4);
     public static final Color SUCCESS = new Color(52, 199, 137);
     public static final Color WARNING = new Color(245, 174, 66);
-    public static final Color TEXT = new Color(235, 240, 248);
-    public static final Color MUTED = new Color(144, 158, 180);
+    public static final Color TEXT = new Color(0xf4f4f4);
+    public static final Color MUTED = new Color(0xa9a9a9);
 
     private Ui() {
     }
 
     public static void install() {
+        FlatLaf.registerCustomDefaultsSource("dev.whitedev.jpi.ui");
+        FlatLaf.setUseNativeWindowDecorations(true);
         FlatDarkLaf.setup();
-        UIManager.put("Component.arc", 10);
-        UIManager.put("Button.arc", 10);
-        UIManager.put("TextComponent.arc", 9);
+        UIManager.put("TitlePane.closeIcon", new WindowControl(WindowControl.Action.CLOSE));
+        UIManager.put("TitlePane.iconifyIcon", new WindowControl(WindowControl.Action.MINIMIZE));
+        UIManager.put("TitlePane.maximizeIcon", new WindowControl(WindowControl.Action.MAXIMIZE));
+        UIManager.put("TitlePane.restoreIcon", new WindowControl(WindowControl.Action.RESTORE));
+        UIManager.put("Component.arc", 6);
+        UIManager.put("Button.arc", 6);
+        UIManager.put("TextComponent.arc", 6);
         UIManager.put("Component.focusWidth", 1);
         UIManager.put("Component.innerFocusWidth", 0);
-        UIManager.put("Component.focusColor", new Color(161, 161, 170));
-        UIManager.put("Component.focusedBorderColor", new Color(161, 161, 170));
         UIManager.put("ScrollBar.width", 11);
         UIManager.put("ScrollBar.thumbArc", 999);
         UIManager.put("TabbedPane.showTabSeparators", false);
@@ -52,16 +58,15 @@ public final class Ui {
 
     public static JButton primaryButton(String text) {
         JButton button = button(text);
-        button.setBackground(ACCENT);
-        button.setForeground(Color.WHITE);
-        button.putClientProperty("JButton.buttonType", "roundRect");
+        button.setBackground(TEXT);
+        button.setForeground(SIDEBAR);
+        button.putClientProperty("FlatLaf.style", "hoverBackground: #dddddd; pressedBackground: #bdbdbd");
         return button;
     }
 
     public static JButton secondaryButton(String text) {
         JButton button = button(text);
         button.setBackground(SURFACE_LIGHT);
-        button.putClientProperty("JButton.buttonType", "roundRect");
         return button;
     }
 
@@ -72,20 +77,26 @@ public final class Ui {
         button.setMaximumSize(new Dimension(Integer.MAX_VALUE, 34));
         button.setPreferredSize(new Dimension(176, 34));
         button.setBackground(SIDEBAR);
-        button.setBorder(new EmptyBorder(0, 9, 0, 9));
+        button.setMargin(new Insets(2, 10, 2, 10));
+        button.putClientProperty("JButton.buttonType", "toolBarButton");
+        button.setToolTipText(switch (text) {
+            case "Command Palette" -> "Find a command by name (Ctrl+P)";
+            case "Search Everything" -> "Search across the workspace (Ctrl+Shift+F)";
+            case "Investigation Cases" -> "Record evidence or open a saved case offline";
+            default -> "Open " + text;
+        });
         return button;
     }
 
     private static JButton button(String text) {
         JButton button = new JButton(text);
-        button.setFocusPainted(false);
         button.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        button.setBorder(new EmptyBorder(8, 15, 8, 15));
+        button.setMargin(new Insets(5, 10, 5, 10));
         return button;
     }
 
     public static JPanel sectionHeader(String title, String subtitle, JComponent actions) {
-        JPanel header = new JPanel(new BorderLayout(16, 0));
+        JPanel header = new JPanel(new BorderLayout(0, 6));
         header.setOpaque(false);
         JPanel labels = new JPanel();
         labels.setOpaque(false);
@@ -97,8 +108,14 @@ public final class Ui {
         description.setBorder(new EmptyBorder(4, 0, 0, 0));
         labels.add(heading);
         labels.add(description);
-        header.add(labels, BorderLayout.CENTER);
-        if (actions != null) header.add(actions, BorderLayout.EAST);
+        description.setToolTipText(subtitle);
+        header.add(labels, BorderLayout.NORTH);
+        if (actions != null) {
+            if (actions instanceof JPanel && actions.getLayout() instanceof FlowLayout) {
+                actions.setLayout(new WrappingFlowLayout(FlowLayout.LEADING, 4, 2));
+            }
+            header.add(actions, BorderLayout.CENTER);
+        }
         return header;
     }
 
