@@ -1,5 +1,7 @@
 package dev.whitedev.jpi.ui.tracing;
 
+import dev.whitedev.jpi.evidence.EvidenceStore.Symbol;
+
 import dev.whitedev.jpi.attach.InspectorSession;
 import dev.whitedev.jpi.deobfuscation.DeobfuscationWorkspace;
 import dev.whitedev.jpi.protocol.Operation;
@@ -537,7 +539,8 @@ public final class LiveTracerPanel extends JPanel implements SessionAware {
                 + "\nCaller:\n" + empty(event.stack);
         timeline.publish(new TimelineEvent("trace:0:start:" + callId, event.timestamp, TimelineSource.TRACE,
                 event.thread, callId, parent, method + " entered", common,
-                event.className + "." + event.methodName + event.descriptor, "ENTER", ""));
+                event.className + "." + event.methodName + event.descriptor, "ENTER", "",
+                new Symbol(event.targetIdentifier, event.className, event.methodName, event.descriptor)));
         long finished = event.duration < 0L ? event.timestamp
                 : event.timestamp + Math.max(1L, (event.duration + 999_999L) / 1_000_000L);
         String result = event.exception.isEmpty() ? compact(event.result) : compact(event.exception);

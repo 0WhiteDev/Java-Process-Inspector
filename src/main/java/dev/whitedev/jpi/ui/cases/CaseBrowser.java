@@ -8,11 +8,13 @@ import dev.whitedev.jpi.cases.InvestigationCase.Bookmark;
 import dev.whitedev.jpi.cases.InvestigationCase.Definition;
 import dev.whitedev.jpi.cases.InvestigationCase.Evidence;
 import dev.whitedev.jpi.decompile.DecompilerService;
+import dev.whitedev.jpi.evidence.EvidenceGraphBuilder;
 import dev.whitedev.jpi.search.SearchHit;
 import dev.whitedev.jpi.ui.Async;
 import dev.whitedev.jpi.ui.Ui;
 import dev.whitedev.jpi.ui.analysis.OfflineCfg;
 import dev.whitedev.jpi.ui.callgraph.CallGraphHeatmapPanel;
+import dev.whitedev.jpi.ui.evidence.EvidenceGraphPanel;
 
 import javax.swing.DefaultComboBoxModel;
 import javax.swing.DefaultListCellRenderer;
@@ -47,6 +49,8 @@ final class CaseBrowser extends JPanel {
     private static final int MAX_NOTE_LENGTH = 16_000;
     private final DecompilerService decompiler = new DecompilerService();
     private final JTabbedPane tabs = new JTabbedPane();
+    private final EvidenceGraphPanel graph = new EvidenceGraphPanel(symbol ->
+            navigate(symbol.definitionId(), symbol.member(), symbol.descriptor()));
     private final DefaultListModel<Definition> classModel = new DefaultListModel<>();
     private final JList<Definition> classes = plainList(classModel, Definition::toString);
     private final JComboBox<Method> methods = new JComboBox<>();
@@ -90,6 +94,10 @@ final class CaseBrowser extends JPanel {
         tabs.addTab("Search", searchTab());
         tabs.addTab("Timeline and traces", split(Ui.scroll(observations), Ui.scroll(observationDetails)));
         tabs.addTab("Notes and bookmarks", notesTab());
+        tabs.addTab("Evidence Graph", graph);
+        tabs.addChangeListener(event -> {
+            if (tabs.getSelectedComponent() == graph) graph.loadIfNeeded();
+        });
         add(tabs);
 
         classes.addListSelectionListener(event -> {
@@ -221,7 +229,15 @@ final class CaseBrowser extends JPanel {
         }
         notes.setEditable(value != null);
         dirty = false;
+        updateGraph();
         updateActions();
+    }
+
+    private void updateGraph() {
+        InvestigationCase current = data == null ? null : snapshot();
+        graph.setLoader(current == null ? null : () -> current.evidenceGraph() == null
+                ? EvidenceGraphBuilder.saved(current) : current.evidenceGraph());
+        if (tabs.getSelectedComponent() == graph) graph.loadIfNeeded();
     }
 
     private void addObservations(InvestigationCase value) {
@@ -409,6 +425,7 @@ final class CaseBrowser extends JPanel {
         if (!pinned.contains(bounded)) {
             pinned.add(bounded);
             showEvidence(bounded);
+            updateGraph();
             changed();
         }
     }
@@ -438,7 +455,8 @@ final class CaseBrowser extends JPanel {
         List<Bookmark> saved = new ArrayList<>();
         for (int i = 0; i < bookmarkModel.size(); i++) saved.add(bookmarkModel.get(i));
         return new InvestigationCase(data.manifest(), data.fingerprint(), data.catalog(), data.bytecode(), data.timeline(),
-                data.traces(), data.exceptions(), data.callGraph(), data.mappings(), notes.getText(), saved, pinned);
+                data.traces(), data.exceptions(), data.callGraph(), data.mappings(), notes.getText(), saved, pinned,
+                pinned.equals(data.evidence()) ? data.evidenceGraph() : null);
     }
 
     private void updateActions() {

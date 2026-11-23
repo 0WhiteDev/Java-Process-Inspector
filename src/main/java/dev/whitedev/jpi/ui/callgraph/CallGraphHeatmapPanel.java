@@ -77,7 +77,7 @@ public final class CallGraphHeatmapPanel extends JPanel implements SessionAware 
     private final JTextArea details = Ui.outputArea();
     private final Timer pollTimer = new Timer(1_000, event -> refresh());
     private InspectorSession session;
-    private CallGraphModel model = CallGraphModel.parse("");
+    private volatile CallGraphModel model = CallGraphModel.parse("");
     private CallGraphModel.Node selected;
     private boolean loading;
 
@@ -190,6 +190,10 @@ public final class CallGraphHeatmapPanel extends JPanel implements SessionAware 
 
     public void setContextActions(ContextActions actions) {
         graph.setContextActions(actions);
+    }
+
+    public List<CallGraphModel.ObservedCall> evidenceSnapshot() {
+        return model.observedCalls();
     }
 
     @Override

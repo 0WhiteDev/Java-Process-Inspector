@@ -64,7 +64,7 @@ public final class ExceptionAnalyzerPanel extends JPanel implements SessionAware
         if (isShowing()) request(Operation.EXCEPTION_SNAPSHOT);
     });
     private InspectorSession session;
-    private ExceptionSnapshot snapshot;
+    private volatile ExceptionSnapshot snapshot;
     private List<ExceptionSnapshot.Location> selectedLocations = List.of();
     private boolean loading;
     private boolean rendering;

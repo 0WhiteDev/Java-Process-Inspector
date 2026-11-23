@@ -12,6 +12,8 @@ import dev.whitedev.jpi.cases.InvestigationCase.Fingerprint;
 import dev.whitedev.jpi.cases.InvestigationCase.Manifest;
 import dev.whitedev.jpi.cases.InvestigationCase.Trace;
 import dev.whitedev.jpi.deobfuscation.MappingEntry;
+import dev.whitedev.jpi.evidence.EvidenceGraphBuilder;
+import dev.whitedev.jpi.evidence.EvidenceStore.Graph;
 import dev.whitedev.jpi.exceptions.ExceptionSnapshot;
 import dev.whitedev.jpi.ui.timeline.TimelineEvent;
 import org.objectweb.asm.ClassReader;
@@ -37,7 +39,7 @@ import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
 
 public final class CaseArchive {
-    public static final int VERSION = 1;
+    public static final int VERSION = 2;
     public static final int CLASS_BYTES = 4 * 1024 * 1024;
     public static final int BYTECODE_BUDGET = 48 * 1024 * 1024;
     public static final int MAX_SAVED_CLASSES = 512;
@@ -47,9 +49,10 @@ public final class CaseArchive {
     private static final int SECTION_BYTES = 8 * 1024 * 1024;
     private static final int ARCHIVE_BYTES = 96 * 1024 * 1024;
     private static final Gson JSON = new GsonBuilder().setStrictness(Strictness.STRICT).disableHtmlEscaping().create();
+    private static final String EVIDENCE_GRAPH = "analysis/evidence-graph.json";
     private static final Set<String> SECTIONS = Set.of("manifest.json", "target/fingerprint.json", "classes/catalog.json",
             "runtime/timeline.jsonl", "runtime/traces.jsonl", "runtime/exceptions.json", "analysis/callgraph.json",
-            "analysis/evidence.json", "workspace/mappings.json", "workspace/notes.json", "workspace/bookmarks.json");
+            "analysis/evidence.json", EVIDENCE_GRAPH, "workspace/mappings.json", "workspace/notes.json", "workspace/bookmarks.json");
 
     private CaseArchive() {
     }
@@ -64,7 +67,9 @@ public final class CaseArchive {
         try {
             try (ZipOutputStream stream = new ZipOutputStream(Files.newOutputStream(temporary))) {
                 Writer writer = new Writer(stream);
-                writer.section("manifest.json", data.manifest());
+                Manifest manifest = data.manifest();
+                writer.section("manifest.json", new Manifest(VERSION, manifest.title(), manifest.startedAt(), manifest.endedAt(),
+                        manifest.runtimeDetails(), manifest.notices()));
                 writer.section("target/fingerprint.json", data.fingerprint());
                 writer.section("classes/catalog.json", data.catalog());
                 writer.lines("runtime/timeline.jsonl", data.timeline());
@@ -72,6 +77,7 @@ public final class CaseArchive {
                 writer.section("runtime/exceptions.json", data.exceptions());
                 writer.section("analysis/callgraph.json", data.callGraph());
                 writer.section("analysis/evidence.json", data.evidence());
+                writer.section(EVIDENCE_GRAPH, data.evidenceGraph() == null ? EvidenceGraphBuilder.saved(data) : data.evidenceGraph());
                 writer.section("workspace/mappings.json", data.mappings());
                 writer.section("workspace/notes.json", data.notes());
                 writer.section("workspace/bookmarks.json", data.bookmarks());
@@ -105,7 +111,8 @@ public final class CaseArchive {
             if (zip.size() > SECTIONS.size() + MAX_SAVED_CLASSES) throw new IOException("Too many case entries");
             Reader reader = new Reader(zip);
             Manifest manifest = reader.section("manifest.json", Manifest.class);
-            if (manifest == null || manifest.version() != VERSION) throw new IOException("Unsupported case version");
+            if (manifest == null || manifest.version() < 1 || manifest.version() > VERSION)
+                throw new IOException("Unsupported case version");
             if (manifest.title() == null || manifest.endedAt() < manifest.startedAt()) {
                 throw new IOException("Invalid case manifest");
             }
@@ -133,11 +140,14 @@ public final class CaseArchive {
                     reader.list("workspace/mappings.json", MappingEntry.class, 1500),
                     reader.section("workspace/notes.json", String.class),
                     reader.list("workspace/bookmarks.json", Bookmark.class, MAX_ANNOTATIONS),
-                    reader.list("analysis/evidence.json", Evidence.class, MAX_ANNOTATIONS));
+                    reader.list("analysis/evidence.json", Evidence.class, MAX_ANNOTATIONS),
+                    manifest.version() == 1 ? null : reader.section(EVIDENCE_GRAPH, Graph.class));
             if (!reader.entries.isEmpty() || data.notes() == null || data.notes().length() > 16_000 || data.callGraph() == null) {
                 throw new IOException("Unexpected or incomplete case contents");
             }
             validateReports(data);
+            if (manifest.version() == VERSION && data.evidenceGraph() == null)
+                throw new IOException("Missing evidence graph");
             return data;
         } catch (RuntimeException error) {
             throw new IOException("Invalid case contents", error);

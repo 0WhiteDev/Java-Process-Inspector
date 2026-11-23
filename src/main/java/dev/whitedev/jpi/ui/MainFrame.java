@@ -9,6 +9,7 @@ import dev.whitedev.jpi.attach.JvmDiscovery;
 import dev.whitedev.jpi.attach.ProcessInjector;
 import dev.whitedev.jpi.attach.jvmti.NativeAgentArtifact;
 import dev.whitedev.jpi.deobfuscation.DeobfuscationWorkspace;
+import dev.whitedev.jpi.evidence.EvidenceGraphBuilder;
 import dev.whitedev.jpi.investigation.InvestigationTarget;
 import dev.whitedev.jpi.loader.ClassLoaderSnapshot;
 import dev.whitedev.jpi.mcp.JpiMcpRuntime;
@@ -37,6 +38,7 @@ import dev.whitedev.jpi.ui.context.ContextAction;
 import dev.whitedev.jpi.ui.context.ContextActions;
 import dev.whitedev.jpi.ui.debug.DebuggerPanel;
 import dev.whitedev.jpi.ui.exceptions.ExceptionAnalyzerPanel;
+import dev.whitedev.jpi.ui.evidence.EvidenceGraphPanel;
 import dev.whitedev.jpi.ui.file.FileMonitorPanel;
 import dev.whitedev.jpi.ui.fingerprint.TargetFingerprintPanel;
 import dev.whitedev.jpi.ui.inspection.ConstantSearchPanel;
@@ -107,6 +109,9 @@ public final class MainFrame extends JFrame {
     private final JPanel advancedPluginNavigation = new JPanel();
     private final PluginManager pluginManager;
     private final RuntimeTimelineStore timelineStore = new RuntimeTimelineStore();
+    private final EvidenceGraphPanel evidenceGraph = new EvidenceGraphPanel(null);
+    private final ExceptionAnalyzerPanel exceptionEvidence;
+    private final CallGraphHeatmapPanel callGraphEvidence;
     private final JpiMcpRuntime mcp;
     private final SearchEverythingPanel searchEverything;
     private final CommandRegistry commands = new CommandRegistry();
@@ -145,6 +150,7 @@ public final class MainFrame extends JFrame {
         BytecodeCfgPanel cfg = new BytecodeCfgPanel(mappingWorkspace);
         DifferenceTracingPanel differences = new DifferenceTracingPanel(mappingWorkspace, timelineStore);
         CallGraphHeatmapPanel callGraph = new CallGraphHeatmapPanel(mappingWorkspace);
+        callGraphEvidence = callGraph;
         InvestigationPanel investigation = new InvestigationPanel(mappingWorkspace,
                 target -> {
                     xrefs.selectTarget(target.classIdentifier(), target.className(), target.methodName(), target.descriptor());
@@ -165,6 +171,7 @@ public final class MainFrame extends JFrame {
         ProfilerPanel profiler = new ProfilerPanel(timelineStore);
         ExceptionAnalyzerPanel exceptions = new ExceptionAnalyzerPanel((action, selection) ->
                 openExceptionAnalysis(action, selection, tracer, cfg, debugger));
+        exceptionEvidence = exceptions;
         ThreadAnalyzerPanel threadAnalyzer = new ThreadAnalyzerPanel(timelineStore);
         fileMonitor.setNavigation((target, event) -> {
             switch (target) {
@@ -291,6 +298,7 @@ public final class MainFrame extends JFrame {
         addCard("Search Everything", searchEverything);
         addCard("Target fingerprint", fingerprint);
         addCard("Runtime timeline", timeline);
+        addCard("Evidence Graph", evidenceGraph);
         addCard("Profiler", profiler);
         addCard("Exception Analyzer", exceptions);
         addCard("Thread Analyzer", threadAnalyzer);
@@ -521,6 +529,7 @@ public final class MainFrame extends JFrame {
         addNavigation(sidebar, "Target fingerprint");
         addGroup(sidebar, "Runtime", SectionIcon.Kind.RUNTIME);
         addNavigation(sidebar, "Runtime timeline");
+        addNavigation(sidebar, "Evidence Graph");
         addNavigation(sidebar, "Profiler");
         addNavigation(sidebar, "Exception Analyzer");
         addNavigation(sidebar, "Thread Analyzer");
@@ -810,6 +819,7 @@ public final class MainFrame extends JFrame {
         activeView = name;
         if (name.equals("Search Everything")) SwingUtilities.invokeLater(searchEverything::focusSearch);
         cardLayout.show(cards, name);
+        if (name.equals("Evidence Graph")) evidenceGraph.loadIfNeeded();
         for (Map.Entry<String, JButton> entry : navigation.entrySet()) {
             boolean selected = entry.getKey().equals(name);
             entry.getValue().setBackground(selected ? Ui.SURFACE_LIGHT : Ui.SIDEBAR);
@@ -1056,6 +1066,9 @@ public final class MainFrame extends JFrame {
         session = value;
         mcp.sessions().setSession(value);
         timelineStore.beginSession(value == null ? "" : value.target().id());
+        evidenceGraph.setLoader(value == null ? null
+                : () -> EvidenceGraphBuilder.live(timelineStore.events(), exceptionEvidence.snapshotForSearch(),
+                callGraphEvidence.evidenceSnapshot()));
         pluginManager.setSession(value);
         for (SessionAware view : views) view.setSession(value);
         for (SessionAware view : pluginViews) view.setSession(value);

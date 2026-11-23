@@ -17,3 +17,16 @@ Recordings expire after 15 minutes and store at most 25,000 catalog entries, 512
 ## Privacy
 
 By default JPI omits runtime arguments, return values, exception text and stacks, thread names, and free-form timeline details. With **Include sensitive runtime details**, bounded portions of these values can be saved. Class and method metadata, scalar timing and call IDs, the target fingerprint, and customized mappings (including mapping comments) can still be present by default. Selected class files and reports you add explicitly can contain secrets. The archive is not encrypted, so review it before sharing.
+
+## Evidence Graph
+
+Open **Evidence Graph** in the sidebar for evidence already available in the current session. **Refresh graph** does not start recordings or probes. For a saved case, use **Investigation Cases > Open offline > Evidence Graph**. Search for a method, event, or ID, select a node to reveal incoming and outgoing connections, then select a connection to see its source and basis. Double-click or press Enter to follow it. Definitions with saved bytecode can be opened from the graph.
+
+- **STATIC:** An instruction in saved bytecode references a method or field. This does not establish the runtime target or loader.
+- **OBSERVED:** Recorded trace parent or call ID, field writer, exception location, aggregate call-graph edge, or the explicit scope of a saved report. An aggregate edge does not identify a particular invocation.
+- **TIME_CORRELATED:** The nearest recorded call start, within 2 seconds on the same recorded thread or 350 ms with no thread identity. Ties are not linked. This does not establish causation.
+- **INFERRED:** A candidate, for example when a JFR exception site has one matching owner in the saved catalog but JFR did not identify the loader.
+
+Live mode uses the existing Timeline and the most recently fetched Exception Analyzer and Call Graph snapshots. Saved cases also use retained trace history, saved bytecode, and pinned reports. CFG transitions, Field Writes and Trace Value enter through their existing timeline publishers; pinned CFG and Investigation reports are report nodes, not proof of data flow. The graph is a bounded view, with at most 5,000 nodes and 8,000 links, plus byte and scan-time budgets. Earlier timeline entries may have aged out before you refresh.
+
+New archives store the graph in `analysis/evidence-graph.json` (case version 2). JPI still opens version 1 cases and builds their graph from the material they contain. No offline graph action runs application code. The graph follows the case's runtime privacy settings and can still contain sensitive data from selected bytecode or explicitly included evidence.

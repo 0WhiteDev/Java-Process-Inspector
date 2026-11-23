@@ -1,5 +1,7 @@
 package dev.whitedev.jpi.ui.callgraph;
 
+import dev.whitedev.jpi.evidence.EvidenceStore.Symbol;
+
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -13,7 +15,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 
-final class CallGraphModel {
+public final class CallGraphModel {
     final long capturedAt;
     final List<Node> nodes;
     final List<Edge> edges;
@@ -58,6 +60,20 @@ final class CallGraphModel {
             }
         }
         return new CallGraphModel(capturedAt, nodes, edges);
+    }
+
+    public static List<ObservedCall> observedCalls(String raw) {
+        return parse(raw).observedCalls();
+    }
+
+    List<ObservedCall> observedCalls() {
+        return edges.stream().filter(edge -> edge.calls > 0)
+                .map(edge -> new ObservedCall(new Symbol("", edge.callerClass, edge.callerMethod, edge.callerDescriptor),
+                        new Symbol("", edge.calleeClass, edge.calleeMethod, edge.calleeDescriptor), edge.calls))
+                .toList();
+    }
+
+    public record ObservedCall(Symbol caller, Symbol callee, long count) {
     }
 
     View view(String query, long minimumCalls, int maximumNodes, HeatMetric metric) {

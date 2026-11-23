@@ -10,6 +10,7 @@ import dev.whitedev.jpi.exceptions.ExceptionSnapshot;
 import dev.whitedev.jpi.fingerprint.TargetFingerprint;
 import dev.whitedev.jpi.protocol.Operation;
 import dev.whitedev.jpi.ui.timeline.TimelineEvent;
+import dev.whitedev.jpi.ui.timeline.TimelineSource;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -106,7 +107,9 @@ public final class CaseRecorder {
         TimelineEvent observation = new TimelineEvent(key, event.timestamp(), event.source(),
                 details ? clip(event.thread(), 64) : "", numericId(event.callId()), numericId(event.parentCallId()), summary,
                 details ? clip(event.details(), 256) : "", details ? clip(event.subject(), 96) : "",
-                details ? clip(event.phase(), 32) : "", details ? clip(event.value(), 96) : "");
+                details || event.source() == TimelineSource.TRACE ? clip(event.phase(), 32) : "",
+                details ? clip(event.value(), 96) : "",
+                event.symbol() != null && CaseArchive.jsonLength(event.symbol()) <= 768 ? event.symbol() : null);
         int cost = CaseArchive.jsonLength(observation) + 1;
         if (timelineBytes + cost > RECORD_BUDGET) {
             droppedTimeline++;

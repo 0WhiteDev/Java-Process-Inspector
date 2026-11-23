@@ -1,8 +1,16 @@
 package dev.whitedev.jpi.ui.timeline;
 
+import dev.whitedev.jpi.evidence.EvidenceStore.Symbol;
+
 public record TimelineEvent(String key, long timestamp, TimelineSource source, String thread,
                             String callId, String parentCallId, String summary, String details,
-                            String subject, String phase, String value) {
+                            String subject, String phase, String value, Symbol symbol) {
+    public TimelineEvent(String key, long timestamp, TimelineSource source, String thread,
+                         String callId, String parentCallId, String summary, String details,
+                         String subject, String phase, String value) {
+        this(key, timestamp, source, thread, callId, parentCallId, summary, details, subject, phase, value, null);
+    }
+
     public TimelineEvent(String key, long timestamp, TimelineSource source, String thread,
                          String callId, String parentCallId, String summary, String details) {
         this(key, timestamp, source, thread, callId, parentCallId, summary, details, "", "", "");

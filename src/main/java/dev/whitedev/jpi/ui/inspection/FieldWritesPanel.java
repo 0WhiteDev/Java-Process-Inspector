@@ -1,5 +1,7 @@
 package dev.whitedev.jpi.ui.inspection;
 
+import dev.whitedev.jpi.evidence.EvidenceStore.Symbol;
+
 import dev.whitedev.jpi.attach.InspectorSession;
 import dev.whitedev.jpi.deobfuscation.DeobfuscationWorkspace;
 import dev.whitedev.jpi.protocol.Operation;
@@ -346,7 +348,8 @@ public final class FieldWritesPanel extends JPanel implements SessionAware {
         timeline.publish(new TimelineEvent("field-write:" + event.sequence, event.timestamp,
                 TimelineSource.FIELD_WRITE, event.thread, callId, "",
                 fieldName + "  " + compact(event.previous) + " -> " + compact(event.current),
-                event.details()));
+                event.details(), "", "", "",
+                new Symbol("", event.writerClass, event.writerMethod, event.writerDescriptor)));
     }
 
     private void showSelected() {

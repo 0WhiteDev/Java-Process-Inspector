@@ -7,6 +7,8 @@ import dev.whitedev.jpi.cases.InvestigationCase.Fingerprint;
 import dev.whitedev.jpi.cases.InvestigationCase.Manifest;
 import dev.whitedev.jpi.deobfuscation.MappingEntry;
 import dev.whitedev.jpi.deobfuscation.MappingKind;
+import dev.whitedev.jpi.evidence.EvidenceGraphBuilder;
+import dev.whitedev.jpi.evidence.EvidenceStore.Kind;
 import dev.whitedev.jpi.search.SearchCategory;
 import dev.whitedev.jpi.ui.analysis.OfflineCfg;
 import dev.whitedev.jpi.ui.timeline.TimelineEvent;
@@ -16,12 +18,14 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -49,7 +53,7 @@ class CaseArchiveTest {
         var evidence = new Evidence("CFG", "Saved evidence", second.id(), "marker", "()Ljava/lang/String;", "Inspect this");
         var annotation = new MappingEntry(MappingKind.CLASS, name, name, "", -1, 0, "Alias", "Mapping note", "", "", true);
         var event = new TimelineEvent("recorded", 1, TimelineSource.MARKER, "", "", "", "Recorded marker", "");
-        InvestigationCase data = new InvestigationCase(new Manifest(1, "Case", 1, 3, false, List.of()),
+        InvestigationCase data = new InvestigationCase(new Manifest(CaseArchive.VERSION, "Case", 1, 3, false, List.of()),
                 new Fingerprint("JPI-test", name, "21", 2), List.of(first, second), Map.of(first.id(), bytes, second.id(), bytes),
                 List.of(event), List.of(), null, "", List.of(annotation), "My case note", List.of(bookmark), List.of(evidence));
         Path file = directory.resolve("roundtrip.jpisession");
@@ -63,6 +67,31 @@ class CaseArchiveTest {
         assertEquals(List.of(evidence), opened.evidence());
         assertEquals("Mapping note", opened.mappings().getFirst().comment());
         assertEquals(List.of(event), opened.timeline());
+        assertTrue(opened.evidenceGraph().edges().stream().anyMatch(edge -> edge.kind() == Kind.STATIC));
+        assertEquals(Set.of(first.id(), second.id()), opened.evidenceGraph().nodes().stream()
+                .filter(node -> node.symbol() != null && node.symbol().member().equals("marker"))
+                .map(node -> node.symbol().definitionId()).collect(Collectors.toSet()));
+        Path copied = directory.resolve("copied.jpisession");
+        CaseArchive.save(copied, opened);
+        assertEquals(opened.evidenceGraph(), CaseArchive.open(copied).evidenceGraph());
+        Path legacy = directory.resolve("legacy.jpisession");
+        try (ZipFile source = new ZipFile(file.toFile());
+             ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(legacy))) {
+            for (var entry : source.stream().toList()) {
+                if (entry.getName().equals("analysis/evidence-graph.json")) continue;
+                output.putNextEntry(new ZipEntry(entry.getName()));
+                try (var input = source.getInputStream(entry)) {
+                    if (entry.getName().equals("manifest.json")) {
+                        String manifest = new String(input.readAllBytes(), StandardCharsets.UTF_8);
+                        output.write(manifest.replace("\"version\":2", "\"version\":1").getBytes(StandardCharsets.UTF_8));
+                    } else {
+                        input.transferTo(output);
+                    }
+                }
+                output.closeEntry();
+            }
+        }
+        assertEquals(opened.evidenceGraph(), EvidenceGraphBuilder.saved(CaseArchive.open(legacy)));
         assertEquals(Set.of(first.id(), second.id()), CaseAnalysis.search(opened, "portable-marker").hits().stream()
                 .filter(hit -> hit.category() == SearchCategory.STRINGS).map(hit -> hit.classId()).collect(Collectors.toSet()));
         var method = new CaseAnalysis.Method("marker", "()Ljava/lang/String;");

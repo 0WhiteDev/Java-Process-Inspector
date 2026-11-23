@@ -1,6 +1,7 @@
 package dev.whitedev.jpi.cases;
 
 import dev.whitedev.jpi.deobfuscation.MappingEntry;
+import dev.whitedev.jpi.evidence.EvidenceStore.Graph;
 import dev.whitedev.jpi.exceptions.ExceptionSnapshot;
 import dev.whitedev.jpi.ui.timeline.TimelineEvent;
 
@@ -11,7 +12,15 @@ import java.util.Objects;
 public record InvestigationCase(Manifest manifest, Fingerprint fingerprint, List<Definition> catalog,
                                 Map<String, byte[]> bytecode, List<TimelineEvent> timeline, List<Trace> traces,
                                 ExceptionSnapshot exceptions, String callGraph, List<MappingEntry> mappings,
-                                String notes, List<Bookmark> bookmarks, List<Evidence> evidence) {
+                                String notes, List<Bookmark> bookmarks, List<Evidence> evidence, Graph evidenceGraph) {
+    public InvestigationCase(Manifest manifest, Fingerprint fingerprint, List<Definition> catalog,
+                             Map<String, byte[]> bytecode, List<TimelineEvent> timeline, List<Trace> traces,
+                             ExceptionSnapshot exceptions, String callGraph, List<MappingEntry> mappings,
+                             String notes, List<Bookmark> bookmarks, List<Evidence> evidence) {
+        this(manifest, fingerprint, catalog, bytecode, timeline, traces, exceptions, callGraph, mappings, notes, bookmarks,
+                evidence, null);
+    }
+
     public InvestigationCase {
         catalog = List.copyOf(catalog);
         bytecode = Map.copyOf(bytecode);
